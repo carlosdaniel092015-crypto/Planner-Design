@@ -1,6 +1,6 @@
 import type { Currency, Estimate, ProjectData, ValidationIssue } from '@core';
 import { useEffect, useState } from 'react';
-import { fmtMoney, Icon, MUTED, toUsd } from '../ui';
+import { fmtMoney, Icon, MUTED } from '../ui';
 
 const ICON = { ok: ['circle-check', '#2f7d4f'], warn: ['triangle-alert', '#a86a00'], err: ['circle-x', 'var(--color-accent-700)'] } as const;
 const ORD = { err: 0, warn: 1, ok: 2 } as const;
@@ -32,6 +32,8 @@ export function BottomBar(props: {
   currency: Currency;
   rate: number;
   readOnly: boolean;
+  /** Organisation tax rate (priceAdj.taxRate null falls back to it). */
+  orgTaxRate: number;
   onPick: (id: number) => void;
   onPriceAdj: (patch: Partial<ProjectData['priceAdj']>) => void;
   onResetPrices: () => void;
@@ -127,8 +129,39 @@ export function BottomBar(props: {
                       </div>
                     </div>
                     <div className="field">
+                      <label>{e.taxName}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', flex: 1 }}>
+                          <input
+                            type="checkbox"
+                            checked={e.taxRate > 0}
+                            onChange={(ev) => props.onPriceAdj({ taxRate: ev.target.checked ? (props.orgTaxRate > 0 ? null : 0.18) : 0 })}
+                            style={{ accentColor: 'var(--color-accent)' }}
+                          />
+                          {e.taxRate > 0 ? 'Aplicar a este proyecto' : `Sin ${e.taxName}`}
+                        </label>
+                        <div style={{ position: 'relative', width: 90 }}>
+                          <Num
+                            label={`${e.taxName} %`}
+                            step={0.5}
+                            max={100}
+                            value={+(e.taxRate * 100).toFixed(2)}
+                            onCommit={(v) => {
+                              const pct = Math.max(0, Math.min(100, v ?? 0));
+                              props.onPriceAdj({ taxRate: Math.abs(pct / 100 - props.orgTaxRate) < 1e-9 ? null : pct / 100 });
+                            }}
+                            style={{ paddingRight: 24, width: '100%' }}
+                          />
+                          <span style={{ position: 'absolute', right: 8, top: 9, fontSize: 12, opacity: 0.6 }}>%</span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 11, color: MUTED }}>
+                        {data.priceAdj.taxRate == null ? `Usa el ${Math.round(props.orgTaxRate * 100)} % de tu organización.` : 'Ajustado solo para este proyecto.'}
+                      </span>
+                    </div>
+                    <div className="field">
                       <label>Encimera ({label})</label>
-                      <Num label="Encimera" value={Math.round(e.counter.total)} onCommit={(v) => props.onPriceAdj({ counter: v == null ? null : toUsd(v, currency, rate) })} />
+                      <Num label="Encimera" value={Math.round(e.counter.total)} onCommit={(v) => props.onPriceAdj({ counter: v == null ? null : v })} />
                     </div>
                     <div className="field">
                       <label>Precio final ({label})</label>
@@ -139,7 +172,7 @@ export function BottomBar(props: {
                           if (v == null) return props.onPriceAdj({ final: null });
                           // Same rule as the prototype: typing the computed total back clears the manual price.
                           const calc = data.priceAdj.final != null ? null : e.total;
-                          props.onPriceAdj({ final: calc != null && Math.abs(v - calc) < 1 ? null : toUsd(v, currency, rate) });
+                          props.onPriceAdj({ final: calc != null && Math.abs(v - calc) < 1 ? null : v });
                         }}
                         style={{ fontWeight: 800, fontSize: 16 }}
                       />
@@ -153,7 +186,7 @@ export function BottomBar(props: {
                     </button>
                   </>
                 )}
-                <span style={{ fontSize: 11, color: MUTED }}>Tasa: 1 US$ = RD${rate.toFixed(2)} · precios del catálogo de tu organización.</span>
+                <span style={{ fontSize: 11, color: MUTED }}>Precios del catálogo de tu organización{currency === 'USD' ? ` · 1 US$ = RD${rate.toFixed(2)}` : ''}.</span>
               </div>
             </>
           )}

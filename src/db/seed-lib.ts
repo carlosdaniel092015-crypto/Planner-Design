@@ -10,6 +10,8 @@ export interface SeedOptions {
   slug: string;
   admin: { name: string; email: string; password: string };
   rate?: number;
+  /** Base currency of a new organisation. Catalogue prices (USD in src/core) are converted at `rate` for DOP. */
+  currency?: 'USD' | 'DOP';
 }
 
 /**
@@ -18,6 +20,8 @@ export interface SeedOptions {
  */
 export async function seedOrganization(db: Db, o: SeedOptions) {
   const rate = o.rate ?? 60;
+  const currency = o.currency ?? 'USD';
+  const price = (usd: number) => (currency === 'DOP' ? Math.round(usd * rate * 100) / 100 : usd);
   return db.transaction(async (tx) => {
     let [org] = await tx.select().from(organizations).where(eq(organizations.slug, o.slug)).limit(1);
     if (!org) {
@@ -27,7 +31,7 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
           name: o.orgName,
           slug: o.slug,
           brandColor: '#ec3013',
-          baseCurrency: 'USD',
+          baseCurrency: currency,
           exchangeRateDopPerUsd: rate,
           rateUpdatedAt: new Date(),
           taxName: 'ITBIS',
@@ -53,15 +57,15 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
 
     await tx
       .insert(moduleDefinitions)
-      .values(DEFAULT_MODULES.map((d, i) => ({ ...moduleDefToRow(d), organizationId: orgId, sort: i })))
+      .values(DEFAULT_MODULES.map((d, i) => ({ ...moduleDefToRow(d), unitPrice: price(d.unitPrice), priceCurrency: currency, organizationId: orgId, sort: i })))
       .onConflictDoNothing();
     await tx
       .insert(materials)
-      .values(DEFAULT_MATERIALS.map((d, i) => ({ ...materialDefToRow(d), organizationId: orgId, sort: i, source: 'estandar' as const })))
+      .values(DEFAULT_MATERIALS.map((d, i) => ({ ...materialDefToRow(d), priceM2: price(d.priceM2), priceCurrency: currency, organizationId: orgId, sort: i, source: 'estandar' as const })))
       .onConflictDoNothing();
     await tx
       .insert(hardwarePrices)
-      .values(DEFAULT_HARDWARE.map((d) => ({ organizationId: orgId, code: d.code, name: d.name, unitPrice: d.unitPrice, priceCurrency: d.priceCurrency, active: d.active })))
+      .values(DEFAULT_HARDWARE.map((d) => ({ organizationId: orgId, code: d.code, name: d.name, unitPrice: price(d.unitPrice), priceCurrency: currency, active: d.active })))
       .onConflictDoNothing();
 
     return { org: org!, admin: admin! };

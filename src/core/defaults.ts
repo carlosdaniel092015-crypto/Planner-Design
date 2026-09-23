@@ -34,10 +34,10 @@ export function newProject(ptype: ProjectKind, name?: string): ProjectData {
     room: closet ? { A: 360, B: 240, H: 250 } : { A: 360, B: 300, H: 250 },
     ops: closet ? [{ id: 1, t: 'puerta', wall: 'D', pos: 250, w: 80, h: 210 }] : structuredClone(KITCHEN_OPS),
     pts: closet ? [{ id: 1, t: 'elec', wall: 'B', pos: 200, z: 110 }] : structuredClone(KITCHEN_PTS),
-    prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: 'Jaladera', zocalo: '10 cm', presupuesto: 180000 },
+    prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: 'Jaladera', zocalo: '10 cm', presupuesto: 400000 },
     mods: closet ? (ptype === 'vestidor' ? TEMPLATES.VESTIDOR() : TEMPLATES.CLOSET()) : TEMPLATES.KITCHEN(),
     mats: { ...ESTILOS[0].m },
-    priceAdj: { inst: 8, desc: 0, final: null, counter: null },
+    priceAdj: { inst: 8, desc: 0, final: null, counter: null, taxRate: null },
   };
 }
 

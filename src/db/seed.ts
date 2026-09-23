@@ -19,7 +19,8 @@ try {
     orgName: process.env.SEED_ORG_NAME ?? 'Stephanny Planner',
     slug: process.env.SEED_ORG_SLUG ?? 'stephanny',
     admin: { name: process.env.SEED_ADMIN_NAME ?? 'Administrador', email, password },
-    rate: 60,
+    rate: Number(process.env.SEED_RATE ?? 60),
+    currency: process.env.SEED_CURRENCY === 'USD' ? 'USD' : 'DOP',
   });
   console.info(`Semilla lista: organización "${org.name}" (${org.slug}), admin ${admin.email}.`);
 } finally {

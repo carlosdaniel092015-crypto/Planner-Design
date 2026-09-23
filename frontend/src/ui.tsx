@@ -1,6 +1,5 @@
 // Shared UI pieces that mirror the prototype markup (Modernist design system classes).
 import type { Currency, Drawing, DrawItem } from '@core';
-import { convert } from '@core';
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -69,8 +68,6 @@ export function Svg({ drawing, onPick, style, title = 'Dibujo del proyecto' }: {
 export function fmtMoney(amount: number, currency: Currency) {
   return (currency === 'USD' ? 'US$' : 'RD$') + Math.round(amount).toLocaleString('en-US');
 }
-export const fromUsd = (usd: number, cur: Currency, rate: number) => convert(usd, 'USD', cur, rate);
-export const toUsd = (v: number, cur: Currency, rate: number) => convert(v, cur, 'USD', rate);
 
 export const STATUS: Record<string, { label: string; tag: string }> = {
   borrador: { label: 'Borrador', tag: 'tag tag-neutral' },

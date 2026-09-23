@@ -28,7 +28,7 @@ import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
 import { UserMenu } from '../UserMenu';
-import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, toUsd, useToast } from '../ui';
+import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, useToast } from '../ui';
 
 type View = '3d' | 'planta' | 'alzado';
 type SaveState = { kind: 'saved'; at: string } | { kind: 'dirty' } | { kind: 'saving' } | { kind: 'error'; message: string };
@@ -64,7 +64,6 @@ export function EditorPage() {
   const [cat, setCat] = useState('Todos');
   const [applyTo, setApplyTo] = useState<'todo' | 'modulo'>('todo');
   const [replaceMode, setReplaceMode] = useState(false);
-  const [curOpen, setCurOpen] = useState(false);
   const [tip, setTip] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ kind: 'saved', at: new Date().toISOString() });
   const [conflict, setConflict] = useState<number | null>(null);
@@ -84,7 +83,8 @@ export function EditorPage() {
         setProject(p);
         setData(p.data);
         setName(p.name);
-        setCurrency(p.currency);
+        // Everything is shown in the organisation's base currency (RD$).
+        setCurrency(c.pricing.baseCurrency);
         version.current = p.version;
         setSave({ kind: 'saved', at: p.updatedAt });
       })
@@ -306,51 +306,6 @@ export function EditorPage() {
             <Icon name={save.kind === 'saved' ? 'cloud-check' : save.kind === 'error' ? 'cloud-alert' : 'cloud-upload'} size={14} />
             {readOnly ? 'Solo lectura' : saveLabel}
           </span>
-          <div style={{ position: 'relative' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setCurOpen(!curOpen)} title="Moneda y tipo de cambio" aria-expanded={curOpen} style={{ height: 38, padding: '0 10px' }}>
-              <Icon name="banknote" />
-              {currency === 'USD' ? 'US$' : 'RD$'}
-              <Icon name="chevron-down" size={14} />
-            </button>
-            {curOpen && (
-              <>
-                <div style={{ position: 'fixed', inset: 0, zIndex: 89 }} onClick={() => setCurOpen(false)} />
-                <div style={{ position: 'absolute', right: 0, top: 46, width: 280, background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-divider)', padding: 14, zIndex: 90, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <h6 style={{ margin: 0 }}>Moneda</h6>
-                  <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--color-divider)' }}>
-                    {(
-                      [
-                        ['USD', 'Dólar estadounidense', 'US$'],
-                        ['DOP', 'Peso dominicano', 'RD$'],
-                      ] as const
-                    ).map(([c, l, sym]) => (
-                      <label key={c} className="radio" style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-divider)' }}>
-                        <input
-                          type="radio"
-                          name="moneda"
-                          checked={currency === c}
-                          onChange={() => {
-                            setCurrency(c);
-                            if (!readOnly) {
-                              dirty.current = true;
-                              setSave({ kind: 'dirty' });
-                            }
-                            flash(c === 'USD' ? 'Precios en dólares estadounidenses (US$)' : 'Precios en pesos dominicanos (RD$)');
-                          }}
-                        />
-                        <span className="dot" />
-                        <span style={{ flex: 1 }}>{l}</span>
-                        <strong>{sym}</strong>
-                      </label>
-                    ))}
-                  </div>
-                  <span style={{ fontSize: 12, color: MUTED }}>
-                    1 US$ = RD${rate.toFixed(2)} · {project.pricesFrozen ? 'tasa congelada al aprobar.' : 'la tasa la define un administrador para toda la organización.'}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
           <button type="button" className="btn btn-icon" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" onClick={undo} disabled={readOnly || !hist.current.length}>
             <Icon name="undo-2" size={18} />
           </button>
@@ -522,7 +477,7 @@ export function EditorPage() {
               onFronts={(n) => sel && commit(setFrontCount(data, sel, n))}
               onPatch={patchSel}
               onHerraje={(v) => sel && commit({ ...data, herr: { ...(data.herr ?? {}), [String(sel)]: v } })}
-              onPrice={(v) => patchSel({ pOv: v == null ? undefined : Math.max(0, toUsd(v, currency, rate)) })}
+              onPrice={(v) => patchSel({ pOv: v == null ? undefined : Math.max(0, v) })}
               onDuplicate={() => {
                 if (!sel) return;
                 const r = duplicateModule(data, sel);
@@ -559,9 +514,10 @@ export function EditorPage() {
           currency={currency}
           rate={rate}
           readOnly={readOnly}
+          orgTaxRate={catalog.pricing.taxRate}
           onPick={(i) => (setSel(i), setRightOpen(true))}
           onPriceAdj={(patch) => commit({ ...data, priceAdj: { ...data.priceAdj, ...patch } })}
-          onResetPrices={() => commit({ ...data, priceAdj: { inst: 8, desc: 0, final: null, counter: null }, mods: data.mods.map(({ pOv: _p, ...m }) => m as ModuleInstance) })}
+          onResetPrices={() => commit({ ...data, priceAdj: { ...data.priceAdj, inst: 8, desc: 0, final: null, counter: null }, mods: data.mods.map(({ pOv: _p, ...m }) => m as ModuleInstance) })}
           onApproval={() => flash('La pantalla de aprobación y el envío al cliente llegan en la etapa 3.')}
         />
       </div>
