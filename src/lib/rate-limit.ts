@@ -32,6 +32,10 @@ export function memoryRateLimiter(now: () => number = Date.now): RateLimiter {
 }
 
 export function clientIp(c: Context): string {
+  // Behind a Cloudflare Tunnel every request reaches Traefik from cloudflared, so the real client is only in
+  // CF-Connecting-IP (set by Cloudflare, not forwardable by the client).
+  const cf = c.req.header('cf-connecting-ip')?.trim();
+  if (cf) return cf;
   // The reverse proxy (Traefik on Easypanel) appends the address it saw; earlier entries are client-controlled.
   const fwd = c.req.header('x-forwarded-for')?.split(',').pop()?.trim();
   if (fwd) return fwd;
