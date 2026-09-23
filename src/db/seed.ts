@@ -8,8 +8,8 @@ if (!url || !email || !password) {
   console.error('Faltan DATABASE_URL, SEED_ADMIN_EMAIL o SEED_ADMIN_PASSWORD.');
   process.exit(1);
 }
-if (password.length < 10) {
-  console.error('SEED_ADMIN_PASSWORD debe tener al menos 10 caracteres.');
+if (password.length < 8) {
+  console.error('SEED_ADMIN_PASSWORD debe tener al menos 8 caracteres.');
   process.exit(1);
 }
 

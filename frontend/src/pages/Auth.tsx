@@ -149,7 +149,7 @@ export function SetPasswordPage({ mode }: { mode: 'reset' | 'invite' }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < 10) return setError('La contraseña debe tener al menos 10 caracteres.');
+    if (password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.');
     if (password !== confirm) return setError('Las contraseñas no coinciden.');
     setBusy(true);
     setError(null);
@@ -194,7 +194,7 @@ export function SetPasswordPage({ mode }: { mode: 'reset' | 'invite' }) {
           <div className="field">
             <label htmlFor="pw">Contraseña</label>
             <input id="pw" className="input" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <span style={{ fontSize: 12, color: MUTED }}>Mínimo 10 caracteres.</span>
+            <span style={{ fontSize: 12, color: MUTED }}>Mínimo 8 caracteres.</span>
           </div>
           <div className="field">
             <label htmlFor="pw2">Repite la contraseña</label>
