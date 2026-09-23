@@ -94,7 +94,7 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
   const floorM = p.mods.filter((m) => m.type !== 'upper' && m.type !== 'hood');
   const upM = opts.altos === false ? [] : p.mods.filter((m) => m.type === 'upper' || m.type === 'hood');
   for (const m of [...floorM, ...upM]) {
-    const g = geo(m);
+    const g = geo(m, p.room);
     const w = g.x1 - g.x0;
     const h = g.y1 - g.y0;
     const up = m.type === 'upper' || m.type === 'hood';
@@ -219,9 +219,9 @@ export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: n
   }
 }
 
-export function elev(p: ProjectData, wall: 'A' | 'B', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null } = {}): Drawing {
+export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null } = {}): Drawing {
   const it: DrawItem[] = [];
-  const len = wall === 'A' ? p.room.A : p.room.B;
+  const len = wall === 'A' || wall === 'D' ? p.room.A : p.room.B;
   const H = p.room.H;
   const zoc = zocaloCm(p.prefs.zocalo);
   const hstyle = handleOf(p.prefs.apertura);

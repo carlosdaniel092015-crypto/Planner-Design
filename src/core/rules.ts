@@ -8,7 +8,7 @@ export function validateProject(s: ProjectData, ctx?: PricingContext): Validatio
   const mods = s.mods;
   const out: ValidationIssue[] = [];
   const center = (m: ModuleInstance) => {
-    const g = geo(m);
+    const g = geo(m, s.room);
     return [(g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2] as const;
   };
   const ptXY = (p: ProjectData['pts'][number]) => wallPt(p.wall, p.pos, 0, s.room.A, s.room.B);
@@ -35,10 +35,18 @@ export function validateProject(s: ProjectData, ctx?: PricingContext): Validatio
     } else out.push({ st: 'err', code: 'SIN_TOMA_AGUA', text: 'No hay toma de agua definida para el fregadero' });
   }
 
-  const aCorner = mods.find((m) => m.wall === 'A' && isFloor(m) && m.pos === 0);
+  // Corner ownership: A takes the A–B and A–C corners, B the B–D corner and C the C–D corner.
+  const floorAt = (w: string, at: 'start' | 'end', len: number) =>
+    mods.find((m) => m.wall === w && isFloor(m) && (at === 'start' ? m.pos === 0 : Math.abs((m.pos ?? 0) + m.w - len) < 0.5));
+  const aCorner = floorAt('A', 'start', s.room.A);
+  const aCornerC = floorAt('A', 'end', s.room.A);
+  const bCornerD = floorAt('B', 'end', s.room.B);
+  const cCornerD = floorAt('C', 'end', s.room.B);
   for (const [w, len, start] of [
     ['A', s.room.A, 0],
     ['B', s.room.B, aCorner ? aCorner.d : 0],
+    ['C', s.room.B, aCornerC ? aCornerC.d : 0],
+    ['D', s.room.A - (cCornerD ? cCornerD.d : 0), bCornerD ? bCornerD.d : 0],
   ] as const) {
     const list = mods.filter((m) => m.wall === w && isFloor(m)).sort((a, b) => a.pos! - b.pos!);
     if (!list.length) continue;
@@ -123,10 +131,6 @@ function structuralIssues(s: ProjectData, ctx?: PricingContext): ValidationIssue
       out.push({ st: 'err', code: 'ANCHO_FUERA_DE_RANGO', text: `El módulo ${m.id} (${m.name}) mide ${m.w} cm; su rango es ${rw[0]}–${rw[1]} cm`, id: m.id });
     const top = zr(m, zoc)[1] + (m.type === 'base' ? 4 : 0);
     if (top > s.room.H + 0.05) out.push({ st: 'err', code: 'EXCEDE_ALTURA', text: `El módulo ${m.id} (${m.name}) supera la altura del muro (${top} > ${s.room.H} cm)`, id: m.id });
-    if (m.wall === 'C' || m.wall === 'D') {
-      const len = m.wall === 'C' ? s.room.B : s.room.A;
-      if ((m.pos ?? 0) + m.w > len + 0.05) out.push({ st: 'err', code: 'EXCEDE_MURO', text: `El módulo ${m.id} excede la longitud del muro ${m.wall}`, id: m.id });
-    }
     if (ctx) {
       const def = ctx.modules[m.code];
       if (!def && m.pBase === undefined && m.pOv === undefined)

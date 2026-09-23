@@ -1,14 +1,8 @@
 // New-project defaults — the prototype's initial state and startProject()/generate().
 import { TEMPLATES } from './catalog';
-import type { ModuleInstance, ProjectData } from './schema';
+import type { ProjectData } from './schema';
+import { DEFAULT_CLOSET, defaultAppl, ESTILOS } from './spec';
 import type { ProjectKind } from './types';
-
-export const ESTILOS = [
-  { name: 'Contemporáneo', m: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' } },
-  { name: 'Nórdico', m: { cuerpo: 'blanco', frentes: 'fresno', encimera: 'macizo', jaladeras: 'inox' } },
-  { name: 'Industrial', m: { cuerpo: 'grafito', frentes: 'grafito', encimera: 'granito', jaladeras: 'negro' } },
-  { name: 'Natural', m: { cuerpo: 'arena', frentes: 'salvia', encimera: 'cuarzo', jaladeras: 'laton' } },
-] as const;
 
 const KITCHEN_OPS: ProjectData['ops'] = [
   { id: 1, t: 'ventana', wall: 'A', pos: 100, w: 70, h: 100, z: 110 },
@@ -37,19 +31,10 @@ export function newProject(ptype: ProjectKind, name?: string): ProjectData {
     prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: 'Jaladera', zocalo: '10 cm', presupuesto: 400000 },
     mods: closet ? (ptype === 'vestidor' ? TEMPLATES.VESTIDOR() : TEMPLATES.CLOSET()) : TEMPLATES.KITCHEN(),
     mats: { ...ESTILOS[0].m },
+    appl: defaultAppl(ptype),
+    ...(closet ? { closet: { ...DEFAULT_CLOSET } } : {}),
     priceAdj: { inst: 8, desc: 0, final: null, counter: null, taxRate: null },
   };
-}
-
-/** The prototype's generate(): template by layout, upper height from prefs, materials from style. */
-export function generateLayout(p: ProjectData): Pick<ProjectData, 'mods' | 'mats'> {
-  let mods: ModuleInstance[];
-  if (p.ptype === 'cocina') mods = p.layout === 'isla' ? TEMPLATES.ISLAND() : p.layout === 'lineal' ? TEMPLATES.LINEAL() : TEMPLATES.KITCHEN();
-  else mods = p.layout === 'abierto' || p.ptype === 'vestidor' ? TEMPLATES.VESTIDOR() : TEMPLATES.CLOSET();
-  const uh = p.prefs.alacena === '90 cm' ? 90 : 70;
-  mods = mods.map((m) => (m.type === 'upper' ? { ...m, h: uh } : m));
-  const est = ESTILOS.find((e) => e.name === p.prefs.estilo);
-  return { mods, mats: est ? { ...est.m } : p.mats };
 }
 
 /** "Cocina por defecto" used by the acceptance tests: the prototype's initial kitchen. */

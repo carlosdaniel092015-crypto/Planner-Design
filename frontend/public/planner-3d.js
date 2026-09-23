@@ -312,23 +312,30 @@ function addCooktop(g, W, D, top) {
     me.position.set((W - cw) / 2 + cw * u, top + .0065, cz + .5 * w); g.add(me);
   });
 }
+// Walls C (x = A) and D (y = B) added for U-shaped and galley layouts: fronts face into the room.
+function roomSize() { const r = window.SPEngine.room || { A: 0, B: 0 }; return { A: r.A / 100, B: r.B / 100 }; }
 function place(g, m) {
-  const E = window.SPEngine, geo = E.geo(m);
+  const E = window.SPEngine, geo = E.geo(m), R = roomSize();
   if (m.wall === 'B') { g.rotation.y = Math.PI / 2; g.position.set(0, 0, (m.pos + m.w) / 100); }
+  else if (m.wall === 'C') { g.rotation.y = -Math.PI / 2; g.position.set(R.A, 0, m.pos / 100); }
+  else if (m.wall === 'D') { g.rotation.y = Math.PI; g.position.set((m.pos + m.w) / 100, 0, R.B); }
   else g.position.set(geo.x0 / 100, 0, geo.y0 / 100);
 }
 function toWorld(m, lx, lz) {
-  const E = window.SPEngine, geo = E.geo(m);
+  const E = window.SPEngine, geo = E.geo(m), R = roomSize();
   if (m.wall === 'B') return [lz, (m.pos + m.w) / 100 - lx];
+  if (m.wall === 'C') return [R.A - lz, m.pos / 100 + lx];
+  if (m.wall === 'D') return [(m.pos + m.w) / 100 - lx, R.B - lz];
   return [geo.x0 / 100 + lx, geo.y0 / 100 + lz];
 }
+const alongZ = wall => wall === 'B' || wall === 'C';
 function slab(root, wall, a0, a1, d0, d1, y, th, holes, matId) {
   const cuts = [a0, a1]; holes.forEach(h => cuts.push(h.a0, h.a1));
   const pts = [...new Set(cuts)].filter(p => p >= a0 && p <= a1).sort((a, b) => a - b);
   const put = (p, q, e0, e1) => {
     if (q - p < .001 || e1 - e0 < .001) return;
     const mat = texMat(matId, q - p, e1 - e0, false, Math.round(p * 1000));
-    if (wall === 'B') bx(root, e1 - e0, th, q - p, mat, e0, y, p); else bx(root, q - p, th, e1 - e0, mat, p, y, e0);
+    if (alongZ(wall)) bx(root, e1 - e0, th, q - p, mat, e0, y, p); else bx(root, q - p, th, e1 - e0, mat, p, y, e0);
   };
   for (let i = 0; i < pts.length - 1; i++) {
     const p = pts[i], q = pts[i + 1], h = holes.find(h => h.a0 <= p + 1e-4 && h.a1 >= q - 1e-4);
@@ -341,6 +348,8 @@ function counters(root, mods, ctx, groups) {
   const by = {};
   bases.forEach(m => { const k = m.wall === 'F' ? 'F' + m.id : m.wall; (by[k] = by[k] || []).push(m); });
   const aCorner = bases.find(m => m.wall === 'A' && m.pos === 0);
+  const R = roomSize(), atEnd = (w, len) => bases.find(m => m.wall === w && Math.abs((m.pos + m.w) / 100 - len) < .006);
+  const aEnd = atEnd('A', R.A), bEnd = atEnd('B', R.B), cEnd = atEnd('C', R.B);
   Object.keys(by).forEach(k => {
     const list = by[k].sort((a, b) => (a.pos || a.x) - (b.pos || b.x)), wall = list[0].wall;
     const runs = [];
@@ -350,16 +359,18 @@ function counters(root, mods, ctx, groups) {
       let a0 = r.s, a1 = r.e, d0 = 0, d1 = D + .02;
       if (wall === 'F') { const m = r.ms[0]; d0 = m.y / 100 - .02; d1 = (m.y + m.d) / 100 + .02; a0 -= .02; a1 += .02; }
       if (wall === 'B' && aCorner) a0 = Math.max(a0, aCorner.d / 100 + .02);
+      if (wall === 'C') { d0 = R.A - D - .02; d1 = R.A; if (aEnd) a0 = Math.max(a0, aEnd.d / 100 + .02); }
+      if (wall === 'D') { d0 = R.B - D - .02; d1 = R.B; if (bEnd) a0 = Math.max(a0, bEnd.d / 100 + .02); if (cEnd) a1 = Math.min(a1, R.A - cEnd.d / 100 - .02); }
       const holes = [];
       r.ms.filter(m => m.sink).forEach(m => {
         const W = m.w / 100, Dm = m.d / 100, hw = Math.min(W - .14, .74), hx = (W - hw) / 2, hz0 = Dm - .08 - .42;
         const p1 = toWorld(m, hx, hz0), p2 = toWorld(m, hx + hw, hz0 + .42);
-        if (wall === 'B') holes.push({ a0: Math.min(p1[1], p2[1]), a1: Math.max(p1[1], p2[1]), d0: Math.min(p1[0], p2[0]), d1: Math.max(p1[0], p2[0]) });
+        if (alongZ(wall)) holes.push({ a0: Math.min(p1[1], p2[1]), a1: Math.max(p1[1], p2[1]), d0: Math.min(p1[0], p2[0]), d1: Math.max(p1[0], p2[0]) });
         else holes.push({ a0: Math.min(p1[0], p2[0]), a1: Math.max(p1[0], p2[0]), d0: Math.min(p1[1], p2[1]), d1: Math.max(p1[1], p2[1]) });
       });
       slab(root, wall, a0, a1, d0, d1, top, th, holes, ctx.mats.encimera);
       r.ms.forEach(m => { const g = groups[m.id]; if (!g) return; if (m.sink) addSink(g, m.w / 100, m.d / 100, top + th); if (m.cook) addCooktop(g, m.w / 100, m.d / 100, top + th); });
-      if (wall !== 'F') out.push({ wall, a0, a1, top: top + th });
+      if (wall === 'A' || wall === 'B') out.push({ wall, a0, a1, top: top + th });
     });
   });
   return out;

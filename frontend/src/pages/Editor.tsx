@@ -5,6 +5,7 @@ import {
   type Currency,
   duplicateModule,
   elev,
+  generateDesign,
   iso,
   type ModuleDefinition,
   type ModuleInstance,
@@ -27,10 +28,13 @@ import { installEngine, sceneCfg, type Viewer } from '../editor/engine';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
+import { SpecWizard } from '../spec/SpecWizard';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, useToast } from '../ui';
 
 type View = '3d' | 'planta' | 'alzado';
+type Wall = 'A' | 'B' | 'C' | 'D';
+const GEN_STEPS = ['Analizando medidas y aberturas', 'Ubicando fregadero junto a la toma de agua', 'Colocando electrodomésticos', 'Optimizando triángulo de trabajo y rellenos'];
 type SaveState = { kind: 'saved'; at: string } | { kind: 'dirty' } | { kind: 'saving' } | { kind: 'error'; message: string };
 
 export function EditorPage() {
@@ -52,7 +56,12 @@ export function EditorPage() {
 
   const [sel, setSel] = useState<number | null>(null);
   const [view, setView] = useState<View>('3d');
-  const [wall, setWall] = useState<'A' | 'B'>('A');
+  const [wall, setWall] = useState<Wall>('A');
+  // 1 = Especificaciones, 2 = Diseño (stored in projects.phase).
+  const [phase, setPhase] = useState(2);
+  const [specStep, setSpecStep] = useState(1);
+  const [genStep, setGenStep] = useState<number | null>(null);
+  const [suggest, setSuggest] = useState(false);
   const [cotas, setCotas] = useState(true);
   const [altos, setAltos] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -83,6 +92,7 @@ export function EditorPage() {
         setProject(p);
         setData(p.data);
         setName(p.name);
+        setPhase(p.phase <= 1 && p.status !== 'aprobado' ? 1 : 2);
         // Everything is shown in the organisation's base currency (RD$).
         setCurrency(c.pricing.baseCurrency);
         version.current = p.version;
@@ -143,7 +153,7 @@ export function EditorPage() {
       dirty.current = false;
       setSave({ kind: 'saving' });
       try {
-        const res = await api.saveProject(project.id, { version: overrideVersion ?? version.current, name: name.trim() || data.pname, currency, data: { ...data, pname: name.trim() || data.pname } });
+        const res = await api.saveProject(project.id, { version: overrideVersion ?? version.current, name: name.trim() || data.pname, currency, phase, data: { ...data, pname: name.trim() || data.pname } });
         version.current = res.version;
         setProject((p) => (p ? { ...p, ...res, data: p.data } : res));
         setSave(dirty.current ? { kind: 'dirty' } : { kind: 'saved', at: res.updatedAt });
@@ -160,7 +170,7 @@ export function EditorPage() {
         saving.current = false;
       }
     },
-    [project, data, name, currency, readOnly],
+    [project, data, name, currency, phase, readOnly],
   );
 
   // Autosave 2 s after the last change.
@@ -245,6 +255,54 @@ export function EditorPage() {
   };
   const onMaterial = (group: 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras', code: string) => commit(applyMaterial(data, group, code, applyTo === 'modulo' ? sel : null));
   const patchSel = (patch: Partial<ModuleInstance>) => sel && commit(updateModule(data, sel, patch));
+  const markDirty = () => {
+    if (readOnly) return;
+    dirty.current = true;
+    setSave({ kind: 'dirty' });
+  };
+  const goPhase = (n: number) => {
+    if (n === 3) return flash('La pantalla de aprobación y el envío al cliente llegan en la etapa 3.');
+    if (n === phase) return;
+    setPhase(n);
+    markDirty();
+  };
+  const generate = () => {
+    if (readOnly || genStep != null) return;
+    const base = data;
+    const tick = 450;
+    setGenStep(0);
+    for (let i = 0; i < GEN_STEPS.length; i++) setTimeout(() => setGenStep(i + 1), tick * (i + 1));
+    setTimeout(() => {
+      const g = generateDesign(base, catalog.context.modules);
+      commit({ ...base, mods: g.mods, mats: g.mats });
+      setPhase(2);
+      setGenStep(null);
+      setSel(null);
+      setView('3d');
+      flash(g.notes.length ? `Distribución generada con ${g.mods.length} módulos · ${g.notes[0]}` : `Distribución generada con ${g.mods.length} módulos · Ctrl+Z para deshacer`);
+    }, tick * GEN_STEPS.length + 350);
+  };
+  const sig = (mods: ModuleInstance[]) => mods.map((m) => `${m.code}${m.wall}${m.pos ?? m.x}${m.w}`).join();
+  const alts = suggest
+    ? (data.ptype === 'cocina'
+        ? ([
+            ['En L optimizada', 'L'],
+            ['En L con isla', 'isla'],
+            ['Lineal con columnas', 'lineal'],
+          ] as const)
+        : ([
+            ['Puertas abatibles', 'lineal'],
+            ['Vestidor abierto', 'abierto'],
+            ['Mixto', 'U'],
+          ] as const)
+      ).map(([label, layout]) => {
+        const g = generateDesign({ ...data, layout }, catalog.context.modules);
+        const next: ProjectData = { ...data, layout, mods: g.mods, mats: g.mats };
+        const ml = g.mods.filter((m) => m.type !== 'upper' && m.type !== 'hood').reduce((a, m) => a + m.w, 0) / 100;
+        return { label, next, current: sig(g.mods) === sig(data.mods), ml, total: computeEstimate(next, catalog.context, currency).total, art: iso(next, materialsByCode as never, { cotas: false, altos: true }) };
+      })
+    : [];
+  const usedWalls: Wall[] = ['A', 'B', ...(['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w))];
   const is3d = view === '3d';
   const phases = [
     { n: 1, label: 'Especificaciones' },
@@ -284,11 +342,11 @@ export function EditorPage() {
         </div>
         <nav className="phases" style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '0 auto', flex: 'none' }}>
           {phases.map((p, i) => {
-            const cur = p.n === 2;
-            const done = p.n === 1 || (p.n === 3 && project.status === 'aprobado');
+            const cur = p.n === phase;
+            const done = p.n < phase || (p.n === 3 && project.status === 'aprobado');
             return (
               <div key={p.n} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button type="button" onClick={() => !cur && flash(`${p.label}: disponible en la siguiente etapa del frontend.`)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: 8, cursor: 'pointer', color: cur ? 'var(--color-text)' : MUTED, font: 'inherit', fontSize: 13, fontWeight: cur ? 800 : 600 }}>
+                <button type="button" onClick={() => goPhase(p.n)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: 8, cursor: 'pointer', color: cur ? 'var(--color-text)' : MUTED, font: 'inherit', fontSize: 13, fontWeight: cur ? 800 : 600 }}>
                   <span style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, background: cur ? 'var(--color-accent)' : done ? 'var(--color-text)' : 'transparent', color: cur || done ? '#fff' : 'var(--color-text)', border: `2px solid ${cur ? 'var(--color-accent)' : done ? 'var(--color-text)' : 'var(--color-divider)'}` }}>
                     {done && !cur ? <Icon name="check" size={13} /> : p.n}
                   </span>
@@ -331,6 +389,9 @@ export function EditorPage() {
         </div>
       )}
 
+      {phase === 1 ? (
+        <SpecWizard data={data} step={specStep} setStep={setSpecStep} commit={commit} onGenerate={generate} currency={currency} readOnly={readOnly} flash={flash} />
+      ) : (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
           {leftOpen ? (
@@ -353,6 +414,7 @@ export function EditorPage() {
               setApplyTo={setApplyTo}
               onMaterial={onMaterial}
               readOnly={readOnly}
+              onPick={(i) => (setSel(i), setRightOpen(true))}
             />
           ) : (
             <div style={{ width: 48, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 8 }}>
@@ -363,6 +425,7 @@ export function EditorPage() {
                 [
                   ['modulos', 'layout-grid', 'Módulos'],
                   ['materiales', 'palette', 'Materiales'],
+                  ['electro', 'refrigerator', 'Electro'],
                 ] as const
               ).map(([k, ic, l]) => (
                 <button type="button" key={k} className="btn btn-icon" onClick={() => (setLeftTab(k), setLeftOpen(true))} title={l} aria-label={l}>
@@ -397,12 +460,18 @@ export function EditorPage() {
               </div>
               {view === 'alzado' && (
                 <div style={{ display: 'flex', background: 'var(--color-bg)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-sm)' }}>
-                  {(['A', 'B'] as const).map((w) => (
+                  {usedWalls.map((w) => (
                     <button type="button" key={w} onClick={() => setWall(w)} style={{ padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 800, border: 0, cursor: 'pointer', background: wall === w ? 'var(--color-text)' : 'transparent', color: wall === w ? 'var(--color-bg)' : 'var(--color-text)' }}>
                       Muro {w}
                     </button>
                   ))}
                 </div>
+              )}
+              {!readOnly && (
+                <button type="button" className="btn btn-primary" onClick={() => setSuggest(true)} style={{ height: 38, boxShadow: 'var(--shadow-md)' }}>
+                  <Icon name="layout-dashboard" size={16} />
+                  <span className="phase-label">Sugerir distribución automática</span>
+                </button>
               )}
             </div>
 
@@ -521,6 +590,7 @@ export function EditorPage() {
           onApproval={() => flash('La pantalla de aprobación y el envío al cliente llegan en la etapa 3.')}
         />
       </div>
+      )}
 
       {conflict != null && (
         <Dialog
@@ -571,6 +641,69 @@ export function EditorPage() {
           Si sales ahora perderás los cambios que aún no se guardaron.
         </Dialog>
       )}
+      {genStep != null && (
+        <div style={{ position: 'absolute', inset: 0, background: 'color-mix(in srgb,var(--color-bg) 92%,transparent)', display: 'grid', placeItems: 'center', zIndex: 40 }}>
+          <div style={{ width: 'min(440px,90%)', display: 'flex', flexDirection: 'column', gap: 16 }} role="status" aria-live="polite">
+            <span style={{ width: 40, height: 40, border: '3px solid var(--color-neutral-300)', borderTopColor: 'var(--color-accent)', borderRadius: '50%', animation: 'spspin .9s linear infinite' }} />
+            <div style={{ fontSize: 26, fontWeight: 800 }}>Generando distribución…</div>
+            <div style={{ height: 4, background: 'var(--color-neutral-300)' }}>
+              <div style={{ height: 4, background: 'var(--color-accent)', width: `${(genStep / GEN_STEPS.length) * 100}%`, transition: 'width .5s' }} />
+            </div>
+            {GEN_STEPS.map((label, i) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: i <= genStep ? 'var(--color-text)' : MUTED }}>
+                <Icon name={i < genStep ? 'circle-check' : i === genStep ? 'loader' : 'circle'} size={16} />
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {suggest && (
+        <Dialog title="Distribuciones sugeridas" onClose={() => setSuggest(false)} width={960}>
+          <p style={{ margin: '0 0 16px' }}>Calculadas con tus medidas, instalaciones y electrodomésticos. Elige una para reemplazar la escena actual (puedes deshacer).</p>
+          <div className="alts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 14 }}>
+            {alts.map((a) => (
+              <div key={a.label} style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', border: `2px solid ${a.current ? 'var(--color-accent)' : 'var(--color-divider)'}` }}>
+                <div style={{ height: 190, background: 'var(--sp-canvas)', padding: 8 }}>
+                  <Svg drawing={a.art} title={a.label} />
+                </div>
+                <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--color-text)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 800, fontSize: 16 }}>{a.label}</span>
+                    {a.current && <span className="tag tag-accent">Actual</span>}
+                  </div>
+                  {(
+                    [
+                      ['Módulos', String(a.next.mods.length)],
+                      ['Metros lineales', `${a.ml.toFixed(1).replace('.', ',')} m`],
+                      ['Precio estimado', fmtMoney(a.total, currency)],
+                    ] as const
+                  ).map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: MUTED }}>{k}</span>
+                      <strong>{v}</strong>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      commit(a.next);
+                      setSuggest(false);
+                      setSel(null);
+                      flash(`Distribución "${a.label}" aplicada · Ctrl+Z para deshacer`);
+                    }}
+                    style={{ justifyContent: 'space-between', marginTop: 4 }}
+                  >
+                    Usar esta distribución
+                    <Icon name="arrow-right" size={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Dialog>
+      )}
       {toast}
       <style>{`
         .pname:hover{border-color:var(--color-divider)!important}
@@ -578,7 +711,8 @@ export function EditorPage() {
         .lib-card:hover{border-color:var(--color-accent)!important}
         .tab-btn:hover,.val-btn:hover{background:color-mix(in srgb,var(--color-text) 5%,transparent)!important}
         @media (max-width: 1200px){.phase-label,.save-state{display:none!important}}
-        @media (max-width: 900px){.phases,.minimap{display:none!important}}
+        @media (max-width: 900px){.phases,.minimap{display:none!important}.alts{grid-template-columns:minmax(0,1fr)!important}}
+        @keyframes spspin{to{transform:rotate(360deg)}}
       `}</style>
       <span hidden>{fmtMoney(0, currency)}</span>
     </div>

@@ -4,7 +4,7 @@ import type { Catalog, CatalogMaterial } from '../api';
 import { Icon, MUTED, Svg } from '../ui';
 import { frontThumb } from './engine';
 
-export type LeftTab = 'modulos' | 'materiales';
+export type LeftTab = 'modulos' | 'materiales' | 'electro';
 
 export function LeftPanel(props: {
   tab: LeftTab;
@@ -25,6 +25,7 @@ export function LeftPanel(props: {
   setApplyTo: (a: 'todo' | 'modulo') => void;
   onMaterial: (group: 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras', code: string) => void;
   readOnly: boolean;
+  onPick: (id: number) => void;
 }) {
   const { data, catalog, materialsByCode } = props;
   const defs = useMemo(() => {
@@ -40,7 +41,10 @@ export function LeftPanel(props: {
   const tabs: { k: LeftTab; label: string; icon: string }[] = [
     { k: 'modulos', label: 'Módulos', icon: 'layout-grid' },
     { k: 'materiales', label: 'Materiales', icon: 'palette' },
+    { k: 'electro', label: 'Electro', icon: 'refrigerator' },
   ];
+  // Prototype elecList: modules that hold an appliance, sink or cooktop.
+  const elec = data.mods.filter((m) => m.appl || m.oven || m.sink || m.cook || m.type === 'fridge' || m.type === 'hood');
 
   return (
     <aside style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
@@ -165,6 +169,29 @@ export function LeftPanel(props: {
               </div>
             );
           })}
+        </div>
+      )}
+      {props.tab === 'electro' && (
+        <div style={{ flex: 1, overflow: 'auto', padding: '6px 14px 14px' }}>
+          {elec.length === 0 && <p style={{ fontSize: 13, color: MUTED }}>{data.ptype === 'cocina' ? 'La escena aún no tiene electrodomésticos.' : 'Este proyecto no lleva electrodomésticos.'}</p>}
+          {elec.map((m) => (
+            <button
+              type="button"
+              key={m.id}
+              className="val-btn"
+              onClick={() => props.onPick(m.id)}
+              style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 0', width: '100%', border: 0, borderBottom: '1px solid var(--color-divider)', background: props.sel?.id === m.id ? 'var(--color-accent-100)' : 'transparent', cursor: 'pointer', font: 'inherit', color: 'var(--color-text)', textAlign: 'left' }}
+            >
+              <span style={{ width: 26, height: 26, display: 'grid', placeItems: 'center', background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 12, fontWeight: 800, flex: 'none' }}>{m.id}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{m.oven ? `Horno (en ${m.name.toLowerCase()})` : m.sink ? `Fregadero (en ${m.name.toLowerCase()})` : m.cook ? `Parrilla (en ${m.name.toLowerCase()})` : m.name}</span>
+                <span style={{ display: 'block', fontSize: 12, color: MUTED }}>
+                  {m.w} × {m.h} × {m.d} cm · Muro {m.wall === 'F' ? 'isla' : m.wall}
+                </span>
+              </span>
+              <span className="tag tag-neutral">{m.type === 'fridge' ? 'Libre' : m.oven ? 'En columna' : m.sink || m.cook ? 'Bajo encimera' : 'Empotrado'}</span>
+            </button>
+          ))}
         </div>
       )}
     </aside>

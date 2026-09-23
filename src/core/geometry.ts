@@ -12,12 +12,25 @@ interface Placeable {
   type: ModuleType;
 }
 
-/** Footprint in plan coordinates (cm): wall A runs along x at y=0, wall B along y at x=0, F is free. */
-export function geo(m: Placeable) {
+export interface RoomSize {
+  A: number;
+  B: number;
+}
+
+/**
+ * Footprint in plan coordinates (cm): wall A runs along x at y=0, wall B along y at x=0,
+ * wall C along y at x=A, wall D along x at y=B (C and D need the room size); F is free-standing.
+ */
+export function geo(m: Placeable, room?: RoomSize) {
   if (m.wall === 'A') return { x0: m.pos!, x1: m.pos! + m.w, y0: 0, y1: m.d };
   if (m.wall === 'B') return { x0: 0, x1: m.d, y0: m.pos!, y1: m.pos! + m.w };
+  if (m.wall === 'C') return { x0: (room?.A ?? 0) - m.d, x1: room?.A ?? 0, y0: m.pos!, y1: m.pos! + m.w };
+  if (m.wall === 'D') return { x0: m.pos!, x1: m.pos! + m.w, y0: (room?.B ?? 0) - m.d, y1: room?.B ?? 0 };
   return { x0: m.x!, x1: m.x! + m.w, y0: m.y!, y1: m.y! + m.d };
 }
+
+/** Length of a wall (A and D run along x, B and C along y). */
+export const wallLength = (wall: 'A' | 'B' | 'C' | 'D', room: RoomSize) => (wall === 'A' || wall === 'D' ? room.A : room.B);
 
 /** Vertical range [z0, z1] in cm; `zoc` is the plinth height. */
 export function zr(m: Pick<Placeable, 'type' | 'h'>, zoc: number): [number, number] {

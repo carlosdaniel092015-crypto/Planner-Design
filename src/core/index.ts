@@ -12,6 +12,8 @@ export * from './drawing';
 export * from './iso';
 export * from './editing';
 export * from './defaults';
+export * from './spec';
+export * from './autolayout';
 
 /** Bump when the core's public contract changes. */
 export const CORE_VERSION = '1.0.0';

@@ -28,7 +28,7 @@ interface ProtoMat {
 
 declare global {
   interface Window {
-    SPEngine?: { MATS: Record<string, ProtoMat>; geo: typeof geo; zr: typeof zr };
+    SPEngine?: { MATS: Record<string, ProtoMat>; geo: (m: Parameters<typeof geo>[0]) => ReturnType<typeof geo>; zr: typeof zr; room: { A: number; B: number } };
     __resources?: Record<string, string>;
   }
 }
@@ -46,7 +46,9 @@ export function installEngine(materials: CatalogMaterial[]) {
     };
   }
   if (!MATS.blanco) MATS.blanco = { name: 'Blanco', type: 'Melamina', c: '#eeebe6' };
-  window.SPEngine = { MATS, geo, zr };
+  const room = window.SPEngine?.room ?? { A: 360, B: 300 };
+  // geo() needs the room size for walls C and D; sceneCfg() keeps it current.
+  window.SPEngine = { MATS, geo: (m) => geo(m, window.SPEngine?.room), zr, room };
   window.__resources = Object.fromEntries(THREE_FILES.map((p) => [`th_${p.replace(/[^a-z0-9]/gi, '_')}`, `/vendor/three/${p}`]));
 }
 
@@ -72,6 +74,7 @@ export const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 
 
 /** Scene config the renderer expects (prototype sceneCfg()). */
 export function sceneCfg(p: ProjectData, extra: { sel: number | null; cotas: boolean; altos: boolean; dark: boolean }) {
+  if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
     mods: p.mods,
     mats: p.mats,
