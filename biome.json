@@ -1,15 +1,58 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "files": { "includes": ["src/**", "tests/**", "scripts/**", "api/**", "!src/core"] },
-  "formatter": { "enabled": false },
+  "files": {
+    "includes": [
+      "src/**",
+      "tests/**",
+      "scripts/**",
+      "frontend/src/**",
+      "api/**",
+      "!src/core"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
-      "style": { "noNonNullAssertion": "off", "useTemplate": "off" },
-      "suspicious": { "noExplicitAny": "off" },
-      "complexity": { "useLiteralKeys": "off" }
+      "style": {
+        "noNonNullAssertion": "off",
+        "useTemplate": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off"
+      },
+      "complexity": {
+        "useLiteralKeys": "off"
+      }
     }
   },
-  "assist": { "enabled": false }
+  "assist": {
+    "enabled": false
+  },
+  "overrides": [
+    {
+      "includes": [
+        "frontend/src/**"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useKeyWithClickEvents": "off",
+            "noLabelWithoutControl": "off",
+            "useSemanticElements": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    }
+  ]
 }

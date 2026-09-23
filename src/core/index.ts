@@ -9,6 +9,8 @@ export * from './rules';
 export * from './cutlist';
 export * from './budget';
 export * from './drawing';
+export * from './iso';
+export * from './editing';
 export * from './defaults';
 
 /** Bump when the core's public contract changes. */

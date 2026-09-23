@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from '../src/app';
 import { setup, type Ctx } from './helpers';
 
@@ -73,14 +76,19 @@ describe('documentación', () => {
   });
 
   it('sirve el frontend en / sin tapar los 404 de la API', async () => {
-    const web = createApp({ db: t.db, storage: t.storage, mailer: t.mailer, config: t.config, webRoot: 'web' });
+    const root = mkdtempSync(join(tmpdir(), 'web-'));
+    writeFileSync(join(root, 'index.html'), '<!doctype html><div id="root"></div>');
+    writeFileSync(join(root, 'planner-3d.js'), 'export {}');
+    const web = createApp({ db: t.db, storage: t.storage, mailer: t.mailer, config: t.config, webRoot: root });
     const home = await web.request('/');
     expect(home.status).toBe(200);
-    expect(await home.text()).toContain('<x-dc>');
+    expect(await home.text()).toContain('id="root"');
     expect(home.headers.get('content-security-policy')).toContain('unpkg.com');
-    const js = await web.request('/planner-engine.js');
+    const js = await web.request('/planner-3d.js');
     expect(js.status).toBe(200);
-    expect((await web.request('/proyectos/123')).status).toBe(200);
+    const deep = await web.request('/proyectos/123');
+    expect(deep.status).toBe(200);
+    expect(await deep.text()).toContain('id="root"');
     const api404 = await web.request('/api/v1/no-existe');
     expect(api404.status).toBe(404);
     expect(((await api404.json()) as any).error.code).toBe('RUTA_NO_ENCONTRADA');

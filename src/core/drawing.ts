@@ -22,6 +22,8 @@ export interface DrawItem {
   cx?: number;
   cy?: number;
   r?: number;
+  /** Module id this shape belongs to (click to select). */
+  mid?: number;
 }
 
 export interface Drawing {
@@ -45,7 +47,7 @@ function cols(m: ModuleInstance, mats: ProjectData['mats'], materials: Record<st
 }
 const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 'none' : 'bar');
 
-export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; nums?: boolean } = {}): Drawing {
+export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; nums?: boolean; sel?: number | null } = {}): Drawing {
   const it: DrawItem[] = [];
   const T = 12;
   const { A, B } = p.room;
@@ -96,8 +98,9 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
     const w = g.x1 - g.x0;
     const h = g.y1 - g.y0;
     const up = m.type === 'upper' || m.type === 'hood';
-    if (up) rect(g.x0, g.y0, w, h, 'none', '#6d6a68', 0.8, { dash: '4 3' });
-    else rect(g.x0, g.y0, w, h, '#ffffff', INK, 1);
+    const sel = opts.sel === m.id;
+    if (up) rect(g.x0, g.y0, w, h, 'none', sel ? ACC : '#6d6a68', sel ? 1.8 : 0.8, { dash: '4 3', mid: m.id });
+    else rect(g.x0, g.y0, w, h, sel ? '#fff2ef' : '#ffffff', sel ? ACC : INK, sel ? 1.8 : 1, { mid: m.id });
     if (!up) {
       if (m.type === 'fridge' || m.type === 'tall') {
         ln(g.x0, g.y0, g.x1, g.y1, '#9b9797', 0.6);
@@ -111,7 +114,7 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
     if (opts.nums !== false && !up) {
       const cx = (g.x0 + g.x1) / 2;
       const cy = (g.y0 + g.y1) / 2;
-      it.push({ t: 'c', cx, cy, r: 8, fill: INK });
+      it.push({ t: 'c', cx, cy, r: 8, fill: sel ? ACC : INK, mid: m.id });
       tx(cx, cy + 0.5, String(m.id), { fill: '#ffffff', fs: 8.5, fw: 800 });
     }
   }
@@ -157,9 +160,9 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
   return { items: it, vb: ext };
 }
 
-function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, C: Colors, hstyle: string, it: DrawItem[]) {
+export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, C: Colors, hstyle: string, it: DrawItem[], mid?: number) {
   const rect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, sw?: number) =>
-    it.push({ d: `M${P(x, y)}L${P(x + w, y)}L${P(x + w, y + h)}L${P(x, y + h)}Z`, fill, stroke: stroke || shade(fill, -0.35), sw: sw == null ? 0.6 : sw });
+    it.push({ d: `M${P(x, y)}L${P(x + w, y)}L${P(x + w, y + h)}L${P(x, y + h)}Z`, fill, stroke: stroke || shade(fill, -0.35), sw: sw == null ? 0.6 : sw, mid });
   const ln = (x1: number, y1: number, x2: number, y2: number, stroke: string, sw: number) => it.push({ d: `M${P(x1, y1)}L${P(x2, y2)}`, stroke, sw });
   const g = 0.3;
   if (m.type === 'fridge') {
@@ -216,7 +219,7 @@ function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, 
   }
 }
 
-export function elev(p: ProjectData, wall: 'A' | 'B', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean } = {}): Drawing {
+export function elev(p: ProjectData, wall: 'A' | 'B', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null } = {}): Drawing {
   const it: DrawItem[] = [];
   const len = wall === 'A' ? p.room.A : p.room.B;
   const H = p.room.H;
@@ -242,12 +245,14 @@ export function elev(p: ProjectData, wall: 'A' | 'B', materials: Record<string, 
     const C = cols(m, p.mats, materials);
     const [z0, z1] = zr(m, zoc);
     if ((m.type === 'base' || m.type === 'tall') && zoc > 0) rect(m.pos!, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
-    front2D(m, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it);
+    front2D(m, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id);
     if (m.type === 'hood') rect(m.pos! + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
     if (m.type === 'base') rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
     const top = m.type === 'base' ? z1 + 4 : z1;
+    const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
+    if (opts.sel === m.id) rect(m.pos!, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {
-      it.push({ t: 'c', cx: m.pos! + m.w / 2, cy: Y(top) - 11, r: 7, fill: INK });
+      it.push({ t: 'c', cx: m.pos! + m.w / 2, cy: Y(top) - 11, r: 7, fill: opts.sel === m.id ? ACC : INK, mid: m.id });
       tx(m.pos! + m.w / 2, Y(top) - 10.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
     }
   }

@@ -8,6 +8,7 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY scripts ./scripts
 COPY src ./src
+COPY frontend ./frontend
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime
@@ -21,7 +22,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY drizzle ./drizzle
-COPY web ./web
 RUN mkdir -p /data/uploads && chown -R node:node /data
 USER node
 VOLUME ["/data"]

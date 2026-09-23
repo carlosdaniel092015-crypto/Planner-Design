@@ -15,7 +15,7 @@ export async function buildFromEnv(env: Record<string, string | undefined> = pro
     ? blobStorage(env.BLOB_READ_WRITE_TOKEN)
     : diskStorage(config.apiUrl, config.authSecret, resolve(config.uploadsDir));
   const mailer = env.RESEND_API_KEY ? resendMailer(env.RESEND_API_KEY, config.mailFrom) : consoleMailer();
-  const webRoot = env.WEB_ROOT ?? 'web';
+  const webRoot = env.WEB_ROOT ?? 'dist/web';
   const app = createApp({ db: handle.db, storage, mailer, config, webRoot: existsSync(webRoot) ? webRoot : undefined });
   return { app, handle, config };
 }

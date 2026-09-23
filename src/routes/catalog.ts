@@ -22,7 +22,7 @@ import {
   updateMaterial,
   updateModule,
 } from '../services/catalog-admin';
-import { settingsOf } from '../services/catalog';
+import { loadPricingContext, settingsOf } from '../services/catalog';
 import type { Db } from '../db/client';
 
 const Any = z.record(z.string(), z.unknown());
@@ -74,7 +74,7 @@ export function catalogRoutes() {
       security,
       request: { query: CurrencyQuery },
       responses: {
-        200: json(z.object({ modules: z.array(Any), materials: z.array(Any), hardware: z.array(Any), groups: z.array(Any), pricing: Any })),
+        200: json(z.object({ modules: z.array(Any), materials: z.array(Any), hardware: z.array(Any), groups: z.array(Any), pricing: Any, context: Any.openapi({ description: 'PricingContext de src/core (incluye inactivos para marcar descontinuados).' }) })),
         304: { description: 'Sin cambios' },
         ...authErrors,
       },
@@ -84,10 +84,11 @@ export function catalogRoutes() {
       assertCan(a.user, 'catalog:read');
       const { db } = c.var.deps;
       const cur = c.req.valid('query').currency;
-      const [mods, mats, hw] = await Promise.all([
+      const [mods, mats, hw, context] = await Promise.all([
         db.select().from(moduleDefinitions).where(and(eq(moduleDefinitions.organizationId, a.org.id), eq(moduleDefinitions.active, true))).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.name)),
         materialsWithMaps(db, a.org.id, true),
         db.select().from(hardwarePrices).where(and(eq(hardwarePrices.organizationId, a.org.id), eq(hardwarePrices.active, true))).orderBy(asc(hardwarePrices.code)),
+        loadPricingContext(db, a.org),
       ]);
       const payload = {
         modules: mods.map((m) => withPrice(serialize(m), 'unitPrice', a.org, cur)),
@@ -95,6 +96,8 @@ export function catalogRoutes() {
         hardware: hw.map((h) => withPrice(serialize(h), 'unitPrice', a.org, cur)),
         groups: GROUPS.map((g) => ({ k: g.k, label: g.label })),
         pricing: pricingJson(a.org),
+        // Exactly what the server feeds to src/core (computeEstimate / validateProject), so the editor matches it.
+        context,
       };
       const text = JSON.stringify(payload);
       const etag = `"${sha256(text).slice(0, 32)}"`;

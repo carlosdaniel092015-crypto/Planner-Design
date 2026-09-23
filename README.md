@@ -1,4 +1,4 @@
-# Planner-Design · API del planeador 3D de cocinas y closets
+# Planner-Design · Planeador 3D de cocinas y closets
 
 Backend del planeador de muebles (Stephanny Planner). Guarda proyectos, clientes y versiones. Administra el catálogo de módulos, materiales y precios, y las bibliotecas de texturas y modelos 3D de cada empresa. También almacena renders y PDF, y gestiona el enlace de aprobación que se envía al cliente final.
 
@@ -7,6 +7,29 @@ Backend del planeador de muebles (Stephanny Planner). Guarda proyectos, clientes
 - **Documentación interactiva:** `GET /api/v1/docs` (Scalar) y `GET /api/v1/openapi.json`
 
 ---
+
+## Frontend (`frontend/`)
+
+App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (sistema Modernist) y su visor 3D (`public/planner-3d.js`, con three.js local en `public/vendor`). Usa **el mismo `src/core`** que el servidor (alias `@core`). Por eso el presupuesto y la validación del editor son idénticos a los del servidor.
+
+**Etapa 1 (lista):**
+
+- **Acceso:** inicio de sesión, recuperación de contraseña e invitación.
+- **Inicio:** "Mis proyectos", donde se crean, abren, duplican y eliminan.
+- **Editor:**
+  - vistas 3D, planta y alzado;
+  - biblioteca de módulos, materiales, propiedades, validación y precio;
+  - guardado automático con control de versión, que avisa si alguien más guardó;
+  - deshacer y rehacer;
+  - precios en USD y DOP.
+
+**Siguientes etapas:** asistente de especificaciones, bibliotecas propias (texturas y GLB), pantalla de aprobación con PDF y enlace al cliente, y lista de corte.
+
+El prototipo original sigue disponible en `/prototipo/`.
+
+**Desarrollo:** `npm run dev` levanta la API en el puerto 3000. `npm run dev:web` levanta Vite en el 5173, con proxy de `/api` hacia la API.
+
+**Producción:** `npm run build` genera `dist/web`, y la API lo sirve en `/`.
 
 ## Requisitos
 
