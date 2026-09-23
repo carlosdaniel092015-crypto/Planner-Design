@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app';
 import { setup, type Ctx } from './helpers';
 
 let t: Ctx;
@@ -69,6 +70,21 @@ describe('documentación', () => {
     const r = await t.req('POST', '/clients', { user: t.adminA, body: { name: 'x', notes: 'x'.repeat(6 * 1024 * 1024) } });
     expect(r.status).toBe(413);
     expect(r.data.error.code).toBe('DEMASIADO_GRANDE');
+  });
+
+  it('sirve el frontend en / sin tapar los 404 de la API', async () => {
+    const web = createApp({ db: t.db, storage: t.storage, mailer: t.mailer, config: t.config, webRoot: 'web' });
+    const home = await web.request('/');
+    expect(home.status).toBe(200);
+    expect(await home.text()).toContain('<x-dc>');
+    expect(home.headers.get('content-security-policy')).toContain('unpkg.com');
+    const js = await web.request('/planner-engine.js');
+    expect(js.status).toBe(200);
+    expect((await web.request('/proyectos/123')).status).toBe(200);
+    const api404 = await web.request('/api/v1/no-existe');
+    expect(api404.status).toBe(404);
+    expect(((await api404.json()) as any).error.code).toBe('RUTA_NO_ENCONTRADA');
+    expect((await web.request('/api/v1/health')).headers.get('content-security-policy')).not.toContain('unpkg.com');
   });
 
   it('errores con la forma { error: { code, message } }', async () => {

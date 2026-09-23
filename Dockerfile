@@ -21,6 +21,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY drizzle ./drizzle
+COPY web ./web
 RUN mkdir -p /data/uploads && chown -R node:node /data
 USER node
 VOLUME ["/data"]

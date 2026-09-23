@@ -2,6 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { sql } from 'drizzle-orm';
 import { bodyLimit } from 'hono/body-limit';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
@@ -21,6 +22,8 @@ import { isDevStorage, type Storage } from './services/storage';
 import { registerProjectRoutes } from './routes/register';
 
 export interface CreateAppOptions {
+  /** Folder with the static frontend served at / (optional). */
+  webRoot?: string;
   db: Db;
   storage: Storage;
   mailer: Mailer;
@@ -52,7 +55,7 @@ export function createApp(opts: CreateAppOptions) {
     await next();
   });
   app.use(
-    '*',
+    '/api/*',
     secureHeaders({
       // The API serves JSON; /docs needs the Scalar CDN script.
       contentSecurityPolicy: {
@@ -137,7 +140,29 @@ export function createApp(opts: CreateAppOptions) {
     servers: [{ url: deps.config.apiUrl }],
   });
   app.get('/api/v1/docs', Scalar({ url: '/api/v1/openapi.json', pageTitle: 'Planeador API' }));
-  app.get('/', (c) => c.redirect('/api/v1/docs'));
+  // Frontend (Claude Design prototype) served from web/. It loads React, Babel and icons from unpkg and
+  // compiles its template in the browser, so it gets a looser CSP than the API.
+  if (opts.webRoot) {
+    const root = opts.webRoot;
+    const isApi = (path: string) => path === '/api' || path.startsWith('/api/');
+    const webHeaders = secureHeaders({
+        contentSecurityPolicy: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'data:', 'https://unpkg.com', 'https://fonts.gstatic.com'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+          connectSrc: ["'self'", 'blob:', 'data:', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
+          workerSrc: ["'self'", 'blob:'],
+        },
+    });
+    const files = serveStatic({ root });
+    const spa = serveStatic({ root, path: 'index.html' });
+    // Unknown /api paths must keep answering the JSON 404, never the HTML page.
+    app.get('*', (c, next) => (isApi(c.req.path) ? next() : webHeaders(c, next)));
+    app.get('*', (c, next) => (isApi(c.req.path) ? next() : files(c, next)));
+    app.get('*', (c, next) => (isApi(c.req.path) ? next() : spa(c, next)));
+  } else app.get('/', (c) => c.redirect('/api/v1/docs'));
 
   void pick;
   return app;

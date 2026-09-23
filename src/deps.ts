@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createApp } from './app';
 import { connect } from './db/client';
@@ -14,6 +15,7 @@ export async function buildFromEnv(env: Record<string, string | undefined> = pro
     ? blobStorage(env.BLOB_READ_WRITE_TOKEN)
     : diskStorage(config.apiUrl, config.authSecret, resolve(config.uploadsDir));
   const mailer = env.RESEND_API_KEY ? resendMailer(env.RESEND_API_KEY, config.mailFrom) : consoleMailer();
-  const app = createApp({ db: handle.db, storage, mailer, config });
+  const webRoot = env.WEB_ROOT ?? 'web';
+  const app = createApp({ db: handle.db, storage, mailer, config, webRoot: existsSync(webRoot) ? webRoot : undefined });
   return { app, handle, config };
 }

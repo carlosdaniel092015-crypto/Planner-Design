@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="ext-resource-dependency" content="./planner-3d.js" data-resource-id="planner3d" />
+<meta name="ext-resource-dependency" content="./vendor/jspdf.umd.min.js" data-resource-id="jspdf" />
+<meta name="ext-resource-dependency" content="./vendor/html2canvas.min.js" data-resource-id="html2canvas" />
+<meta name="ext-resource-dependency" content="./vendor/three/build/three.module.js" data-resource-id="th_build_three_module_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/build/three.core.js" data-resource-id="th_build_three_core_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/controls/OrbitControls.js" data-resource-id="th_examples_jsm_controls_OrbitControls_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/environments/RoomEnvironment.js" data-resource-id="th_examples_jsm_environments_RoomEnvironment_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/loaders/GLTFLoader.js" data-resource-id="th_examples_jsm_loaders_GLTFLoader_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/geometries/RoundedBoxGeometry.js" data-resource-id="th_examples_jsm_geometries_RoundedBoxGeometry_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/utils/BufferGeometryUtils.js" data-resource-id="th_examples_jsm_utils_BufferGeometryUtils_js" />
+<meta name="ext-resource-dependency" content="./vendor/three/examples/jsm/utils/SkeletonUtils.js" data-resource-id="th_examples_jsm_utils_SkeletonUtils_js" />
+
+<link rel="stylesheet" href="_ds/modernist-d7f813aa-a84f-4297-b322-a27147bba007/styles.css">
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.469.0/font/lucide.css">
+<script src="_ds/modernist-d7f813aa-a84f-4297-b322-a27147bba007/_ds_bundle.js"></script>
+<script src="planner-engine.js"></script>
+<script src="planner-library.js"></script>
+<style>
+html,body{margin:0;height:100%;overflow:hidden}
+:root{--sp-canvas:#e4e1dc}
+[data-theme="dark"]{--color-bg:#1d1c1b;--color-surface:#282726;--color-text:#eeecea;--color-divider:color-mix(in srgb,#eeecea 28%,transparent);--sp-canvas:#131211;--color-accent-100:#3a1c16;--color-accent-800:#ffc4b8;--color-accent-700:#ff9783;--color-neutral-100:#2d2b2b;--color-neutral-200:#343231;--color-neutral-800:#d7d3d3}
+a{color:var(--color-accent-700)}a:hover{color:var(--color-accent-600)}
+@keyframes spspin{to{transform:rotate(360deg)}}
+@keyframes sppulse{0%,100%{opacity:.45}50%{opacity:1}}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);overflow:hidden;position:relative">
+
+<header style="display:flex;align-items:center;gap:14px;height:60px;padding:0 16px;border-bottom:2px solid var(--color-divider);background:var(--color-bg);flex:none;min-width:0">
+  <button onClick="{{ goHome }}" title="Inicio" style="display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;color:var(--color-text);flex:none">
+    <span style="width:30px;height:30px;background:var(--color-accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:16px">S</span>
+    <span style="font-weight:800;font-size:15px;letter-spacing:-0.01em;white-space:nowrap">Stephanny Planner</span>
+  </button>
+  <sc-if value="{{ inProject }}" hint-placeholder-val="{{ false }}">
+    <div style="width:2px;height:28px;background:var(--color-divider);flex:none"></div>
+    <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:0 1 230px">
+      <input value="{{ pname }}" onChange="{{ setPname }}" aria-label="Nombre del proyecto" style="font:inherit;font-weight:600;font-size:14px;color:var(--color-text);background:transparent;border:1px solid transparent;padding:6px 8px;min-width:0;width:100%" style-hover="border-color:var(--color-divider)" style-focus="border-color:var(--color-accent);outline:none;background:var(--color-surface)">
+      <i class="icon-pencil" style="font-size:13px;opacity:.5"></i>
+    </div>
+    <nav style="display:flex;align-items:center;gap:4px;margin:0 auto;flex:none">
+      <sc-for list="{{ phases }}" as="p" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:4px">
+          <button onClick="{{ p.go }}" style="display:flex;align-items:center;gap:8px;background:none;border:0;padding:8px 8px;cursor:pointer;color:{{ p.lc }};font:inherit;font-size:13px;font-weight:{{ p.fw }}" style-hover="background:color-mix(in srgb,var(--color-text) 6%,transparent)">
+            <span style="width:24px;height:24px;display:grid;place-items:center;font-size:12px;font-weight:800;background:{{ p.cbg }};color:{{ p.cfg }};border:2px solid {{ p.cbd }}">
+              <sc-if value="{{ p.done }}"><i class="icon-check" style="font-size:13px"></i></sc-if>
+              <sc-if value="{{ p.notDone }}">{{ p.n }}</sc-if>
+            </span>
+            <sc-if value="{{ p.showLabel }}"><span style="white-space:nowrap">{{ p.label }}</span></sc-if>
+          </button>
+          <sc-if value="{{ p.notLast }}"><span style="width:28px;height:2px;background:var(--color-divider)"></span></sc-if>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="display:flex;align-items:center;gap:6px;flex:none">
+      <sc-if value="{{ showLabels }}"><span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent);white-space:nowrap;display:flex;align-items:center;gap:6px;margin-right:6px"><i class="icon-cloud-check" style="font-size:14px"></i>{{ saved }}</span></sc-if>
+      <button class="btn btn-secondary" onClick="{{ openLib }}" title="Bibliotecas de texturas y módulos" style="height:38px;padding:0 10px"><i class="icon-library" style="font-size:16px"></i><sc-if value="{{ showLabels }}">Bibliotecas</sc-if></button>
+      <div style="position:relative">
+        <button class="btn btn-secondary" onClick="{{ toggleCur }}" title="Moneda y tipo de cambio" aria-expanded="{{ curOpen }}" style="height:38px;padding:0 10px"><i class="icon-banknote" style="font-size:16px"></i>{{ curLabel }}<i class="icon-chevron-down" style="font-size:14px"></i></button>
+        <sc-if value="{{ curOpen }}">
+          <div style="position:fixed;inset:0;z-index:89" onClick="{{ closeCur }}"></div>
+          <div style="position:absolute;right:0;top:46px;width:280px;background:var(--color-surface);box-shadow:var(--shadow-lg);border:1px solid var(--color-divider);padding:14px;z-index:90;display:flex;flex-direction:column;gap:12px">
+            <h6 style="margin:0">Moneda</h6>
+            <div style="display:flex;flex-direction:column;border:1px solid var(--color-divider)">
+              <sc-for list="{{ curOpts }}" as="c">
+                <label class="radio" style="padding:10px 12px;border-bottom:1px solid var(--color-divider)"><input type="radio" name="moneda" checked="{{ c.on }}" onChange="{{ c.pick }}"><span class="dot"></span><span style="flex:1">{{ c.l }}</span><strong>{{ c.sym }}</strong></label>
+              </sc-for>
+            </div>
+            <div class="field">
+              <label>Tipo de cambio (RD$ por 1 US$)</label>
+              <input class="input" type="number" step="0.05" min="1" value="{{ rate }}" onChange="{{ setRate }}">
+            </div>
+            <span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ rateNote }} · se aplica a todos los precios del proyecto.</span>
+          </div>
+        </sc-if>
+      </div>
+      <button class="btn btn-icon" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" onClick="{{ undo }}" disabled="{{ undoDisabled }}"><i class="icon-undo-2" style="font-size:18px"></i></button>
+      <button class="btn btn-icon" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick="{{ redo }}" disabled="{{ redoDisabled }}"><i class="icon-redo-2" style="font-size:18px"></i></button>
+      <sc-if value="{{ isEditor }}"><button class="btn btn-icon" title="Modo oscuro del editor" aria-label="Modo oscuro" onClick="{{ toggleDark }}"><i class="{{ darkIcon }}" style="font-size:17px"></i></button></sc-if>
+      <div style="width:2px;height:28px;background:var(--color-divider);margin:0 4px"></div>
+      <button class="btn btn-secondary" onClick="{{ share }}" style="height:38px"><i class="icon-share-2" style="font-size:16px"></i><sc-if value="{{ showLabels }}">Compartir</sc-if></button>
+      <button class="btn btn-primary" onClick="{{ save }}" title="Guardar" style="height:38px"><i class="icon-save" style="font-size:16px"></i><sc-if value="{{ showLabels }}">Guardar</sc-if></button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
+      <button class="btn btn-secondary" onClick="{{ openLib }}"><i class="icon-library" style="font-size:16px"></i>Bibliotecas</button>
+      <button class="btn btn-ghost"><i class="icon-circle-help" style="font-size:16px"></i>Ayuda</button>
+      <span style="width:34px;height:34px;display:grid;place-items:center;background:var(--color-text);color:var(--color-bg);font-size:13px;font-weight:800">MR</span>
+    </div>
+  </sc-if>
+</header>
+
+<main style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;overflow:auto">
+  <div style="max-width:1240px;margin:0 auto;padding:44px 32px 72px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,380px);align-items:end;gap:32px;padding-bottom:24px;border-bottom:2px solid var(--color-divider)">
+      <div>
+        <div style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-700);margin-bottom:10px;font-weight:600">Nuevo proyecto</div>
+        <h1 style="margin:0;font-size:52px;line-height:1.02">¿Qué vamos a diseñar?</h1>
+      </div>
+      <p style="margin:0;font-size:15px;color:color-mix(in srgb,var(--color-text) 70%,transparent);text-wrap:pretty">Elige el tipo de mueble. Te guiamos por medidas, instalaciones y preferencias, y después generamos una propuesta en 3D con módulos a medida.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:28px">
+      <sc-for list="{{ types }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.pick }}" style="display:flex;flex-direction:column;text-align:left;background:var(--color-surface);border:2px solid transparent;padding:0;cursor:pointer;color:var(--color-text);font:inherit" style-hover="border-color:var(--color-accent)">
+          <div style="aspect-ratio:4/3;background:var(--sp-canvas);width:100%;overflow:hidden">{{ t.art }}</div>
+          <div style="padding:18px 20px 20px;display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--color-divider)">
+            <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-700);font-weight:600">{{ t.kicker }}</span>
+            <span style="font-size:26px;font-weight:800;letter-spacing:-.015em">{{ t.name }}</span>
+            <span style="font-size:14px;color:color-mix(in srgb,var(--color-text) 70%,transparent);min-height:44px">{{ t.desc }}</span>
+            <span style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:14px;color:var(--color-accent-700);margin-top:6px">Empezar<i class="icon-arrow-right" style="font-size:16px"></i></span>
+          </div>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:end;justify-content:space-between;margin-top:56px;padding-bottom:12px;border-bottom:2px solid var(--color-divider)">
+      <h2 style="margin:0;font-size:28px">Mis proyectos</h2>
+      <span style="font-size:13px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">4 proyectos</span>
+    </div>
+    <div style="display:grid;grid-template-columns:132px minmax(0,2fr) minmax(0,1fr) 130px 120px;gap:20px;padding:10px 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent);border-bottom:1px solid var(--color-divider)">
+      <span>Vista</span><span>Proyecto</span><span>Última edición</span><span>Estado</span><span></span>
+    </div>
+    <sc-for list="{{ projects }}" as="pr" hint-placeholder-count="4">
+      <div onClick="{{ pr.open }}" style="display:grid;grid-template-columns:132px minmax(0,2fr) minmax(0,1fr) 130px 120px;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 4%,transparent)">
+        <div style="height:84px;background:var(--sp-canvas);overflow:hidden">{{ pr.thumb }}</div>
+        <div style="min-width:0"><div style="font-weight:800;font-size:16px">{{ pr.name }}</div><div style="font-size:13px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ pr.meta }}</div></div>
+        <span style="font-size:14px">{{ pr.date }}</span>
+        <span><span class="{{ pr.tag }}">{{ pr.status }}</span></span>
+        <span class="btn btn-secondary" style="justify-content:flex-start">Abrir<i class="icon-arrow-right" style="font-size:15px"></i></span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+<sc-if value="{{ isSpec }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) {{ asideW }}">
+  <section style="display:flex;flex-direction:column;min-height:0;min-width:0">
+    <div style="padding:18px 40px 16px;border-bottom:2px solid var(--color-divider);flex:none">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
+        <span style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--color-accent-700)">Fase 1 · Especificaciones</span>
+        <span style="font-size:13px;font-weight:600">{{ stepLabel }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px">
+        <sc-for list="{{ specSteps }}" as="s" hint-placeholder-count="6">
+          <button onClick="{{ s.go }}" style="display:flex;flex-direction:column;gap:8px;background:none;border:0;padding:0;cursor:pointer;text-align:left;font:inherit;color:{{ s.lc }}">
+            <span style="height:4px;width:100%;background:{{ s.bar }}"></span>
+            <span style="font-size:12px;font-weight:{{ s.fw }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">{{ s.n }}. {{ s.label }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:32px 40px 40px">
+      <div style="max-width:1040px">
+        <h2 style="margin:0 0 6px;font-size:32px">{{ question }}</h2>
+        <p style="margin:0 0 28px;font-size:15px;color:color-mix(in srgb,var(--color-text) 68%,transparent);max-width:640px;text-wrap:pretty">{{ helper }}</p>
+
+        <sc-if value="{{ s1 }}">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+            <sc-for list="{{ layouts }}" as="l" hint-placeholder-count="6">
+              <button onClick="{{ l.pick }}" style="position:relative;display:flex;flex-direction:column;gap:12px;text-align:left;padding:16px;background:var(--color-surface);border:2px solid {{ l.bd }};cursor:pointer;font:inherit;color:var(--color-text)" style-hover="border-color:var(--color-accent-400)">
+                <div style="height:120px;background:var(--color-bg);padding:10px">{{ l.art }}</div>
+                <div><div style="font-weight:800;font-size:18px">{{ l.name }}</div><div style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ l.desc }}</div></div>
+                <sc-if value="{{ l.sel }}"><span style="position:absolute;top:10px;right:10px;width:24px;height:24px;background:var(--color-accent);color:#fff;display:grid;place-items:center"><i class="icon-check" style="font-size:14px"></i></span></sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s2 }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:28px;align-items:start">
+            <div style="background:var(--sp-canvas);height:460px;padding:12px;position:relative">
+              {{ planSpec }}
+              <span style="position:absolute;left:12px;bottom:10px;font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Planta · cotas en mm</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:24px">
+              <div>
+                <h6 style="margin:0 0 10px">Muros</h6>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                  <sc-for list="{{ walls }}" as="w" hint-placeholder-count="4">
+                    <div class="field">
+                      <label>{{ w.label }}</label>
+                      <div style="position:relative"><input class="input" type="number" value="{{ w.val }}" onChange="{{ w.set }}" disabled="{{ w.locked }}" style="padding-right:40px"><span style="position:absolute;right:10px;top:9px;font-size:12px;opacity:.6">cm</span></div>
+                    </div>
+                  </sc-for>
+                  <div class="field" style="grid-column:span 2">
+                    <label>Altura de techo</label>
+                    <div style="position:relative"><input class="input" type="number" value="{{ roomH }}" onChange="{{ setRoomH }}" style="padding-right:40px"><span style="position:absolute;right:10px;top:9px;font-size:12px;opacity:.6">cm</span></div>
+                  </div>
+                </div>
+                <p style="font-size:12px;margin:8px 0 0;color:color-mix(in srgb,var(--color-text) 62%,transparent);display:flex;gap:6px;align-items:center"><i class="icon-lock" style="font-size:12px"></i>Habitación rectangular: C y D siguen a B y A.</p>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <h6 style="margin:0">Puertas y ventanas</h6>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn-secondary" onClick="{{ addDoor }}" style="padding:6px 10px;font-size:13px"><i class="icon-plus" style="font-size:14px"></i>Puerta</button>
+                    <button class="btn btn-secondary" onClick="{{ addWindow }}" style="padding:6px 10px;font-size:13px"><i class="icon-plus" style="font-size:14px"></i>Ventana</button>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 64px repeat(3,minmax(0,1fr)) 36px;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent);padding-bottom:6px;border-bottom:2px solid var(--color-divider)">
+                  <span>Tipo</span><span>Muro</span><span>Posición</span><span>Ancho</span><span>Alto</span><span></span>
+                </div>
+                <sc-for list="{{ opsRows }}" as="o" hint-placeholder-count="2">
+                  <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 64px repeat(3,minmax(0,1fr)) 36px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--color-divider)">
+                    <span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600"><i class="{{ o.icon }}" style="font-size:16px"></i>{{ o.label }}</span>
+                    <select class="input" value="{{ o.wall }}" onChange="{{ o.setWall }}" style="padding:6px"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select>
+                    <input class="input" type="number" value="{{ o.pos }}" onChange="{{ o.setPos }}" aria-label="Posición en cm">
+                    <input class="input" type="number" value="{{ o.w }}" onChange="{{ o.setW }}" aria-label="Ancho en cm">
+                    <input class="input" type="number" value="{{ o.h }}" onChange="{{ o.setH }}" aria-label="Alto en cm">
+                    <button class="btn btn-icon" onClick="{{ o.del }}" aria-label="Eliminar" title="Eliminar"><i class="icon-trash-2" style="font-size:16px"></i></button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s3 }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:28px;align-items:start">
+            <div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                <sc-for list="{{ tools }}" as="tl" hint-placeholder-count="5">
+                  <button onClick="{{ tl.pick }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;background:{{ tl.bg }};color:{{ tl.fg }};border:1px solid {{ tl.bd }}">
+                    <span style="font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 4px;border:1.5px solid currentColor">{{ tl.code }}</span>{{ tl.label }}
+                  </button>
+                </sc-for>
+              </div>
+              <div style="background:var(--sp-canvas);height:440px;padding:12px;position:relative;cursor:crosshair">
+                {{ planPts }}
+                <span style="position:absolute;left:12px;bottom:10px;font-size:12px;color:color-mix(in srgb,var(--color-text) 65%,transparent);display:flex;align-items:center;gap:6px;cursor:default"><i class="icon-mouse-pointer-click" style="font-size:14px"></i>{{ toolHint }}</span>
+              </div>
+            </div>
+            <div>
+              <h6 style="margin:0 0 10px">Puntos ubicados</h6>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 36px;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent);padding-bottom:6px;border-bottom:2px solid var(--color-divider)"><span>Instalación</span><span>Altura del piso</span><span></span></div>
+              <sc-for list="{{ ptRows }}" as="p" hint-placeholder-count="5">
+                <div onClick="{{ p.pick }}" style="display:grid;grid-template-columns:minmax(0,1fr) 110px 36px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--color-divider);background:{{ p.bg }};cursor:pointer">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <span style="width:30px;height:30px;display:grid;place-items:center;background:var(--color-accent);color:#fff;font-size:10px;font-weight:800;flex:none">{{ p.code }}</span>
+                    <div style="min-width:0"><div style="font-size:14px;font-weight:600">{{ p.label }}</div><div style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ p.where }}</div></div>
+                  </div>
+                  <div style="position:relative"><input class="input" type="number" value="{{ p.z }}" onChange="{{ p.setZ }}" aria-label="Altura desde el piso" style="padding-right:34px"><span style="position:absolute;right:8px;top:9px;font-size:12px;opacity:.6">cm</span></div>
+                  <button class="btn btn-icon" onClick="{{ p.del }}" aria-label="Eliminar punto" title="Eliminar"><i class="icon-trash-2" style="font-size:16px"></i></button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s4 }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px">
+            <sc-for list="{{ applList }}" as="a" hint-placeholder-count="8">
+              <div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--color-surface);border:2px solid {{ a.bd }}">
+                <div style="display:flex;align-items:start;justify-content:space-between;gap:8px">
+                  <div style="display:flex;flex-direction:column;gap:8px"><i class="{{ a.icon }}" style="font-size:26px;opacity:{{ a.op }}"></i><span style="font-weight:800;font-size:16px;line-height:1.2">{{ a.name }}</span></div>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" checked="{{ a.on }}" onChange="{{ a.toggle }}" style="width:18px;height:18px;accent-color:var(--color-accent);margin:0">Incluir</label>
+                </div>
+                <div style="opacity:{{ a.op }};display:flex;flex-direction:column;gap:10px">
+                  <div>
+                    <div style="font-size:12px;margin-bottom:5px;color:color-mix(in srgb,var(--color-text) 70%,transparent)">Instalación</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px">
+                      <sc-for list="{{ a.insts }}" as="i">
+                        <button onClick="{{ i.pick }}" style="font:inherit;font-size:12px;padding:5px 8px;cursor:pointer;background:{{ i.bg }};color:{{ i.fg }};border:1px solid {{ i.bd }}">{{ i.l }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+                    <div class="field"><label>Ancho</label><input class="input" type="number" value="{{ a.w }}" onChange="{{ a.setW }}" style="padding:6px"></div>
+                    <div class="field"><label>Alto</label><input class="input" type="number" value="{{ a.h }}" onChange="{{ a.setH }}" style="padding:6px"></div>
+                    <div class="field"><label>Fondo</label><input class="input" type="number" value="{{ a.d }}" onChange="{{ a.setD }}" style="padding:6px"></div>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s5k }}">
+          <div style="display:flex;flex-direction:column;gap:28px">
+            <div>
+              <h6 style="margin:0 0 10px">Estilo</h6>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+                <sc-for list="{{ estilos }}" as="e" hint-placeholder-count="4">
+                  <button onClick="{{ e.pick }}" style="display:flex;flex-direction:column;gap:10px;text-align:left;padding:12px;background:var(--color-surface);border:2px solid {{ e.bd }};cursor:pointer;font:inherit;color:var(--color-text)">
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;height:56px"><span style="background:{{ e.c1 }}"></span><span style="background:{{ e.c2 }}"></span><span style="background:{{ e.c3 }}"></span></div>
+                    <span style="font-weight:800;font-size:15px">{{ e.name }}</span>
+                    <span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ e.desc }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;padding-top:24px;border-top:2px solid var(--color-divider)">
+              <sc-for list="{{ prefSegs }}" as="ps" hint-placeholder-count="3">
+                <div>
+                  <h6 style="margin:0 0 10px">{{ ps.title }}</h6>
+                  <div class="seg">
+                    <sc-for list="{{ ps.opts }}" as="o"><label class="seg-opt"><input type="radio" name="{{ ps.key }}" checked="{{ o.on }}" onChange="{{ o.pick }}">{{ o.l }}</label></sc-for>
+                  </div>
+                  <p style="font-size:12px;margin:8px 0 0;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ ps.note }}</p>
+                </div>
+              </sc-for>
+            </div>
+            <div style="padding-top:24px;border-top:2px solid var(--color-divider);max-width:560px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><h6 style="margin:0">Presupuesto aproximado</h6><span style="font-size:22px;font-weight:800">{{ presLabel }}</span></div>
+              <input type="range" min="80000" max="400000" step="5000" value="{{ pres }}" onChange="{{ setPres }}" aria-label="Presupuesto" style="width:100%;accent-color:var(--color-accent);margin-top:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)"><span>{{ presMin }}</span><span>{{ presMax }}</span></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s5c }}">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 40px;max-width:900px">
+            <sc-for list="{{ closetSliders }}" as="cs" hint-placeholder-count="3">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><h6 style="margin:0">{{ cs.title }}</h6><span style="font-size:20px;font-weight:800">{{ cs.label }}</span></div>
+                <input type="range" min="{{ cs.min }}" max="{{ cs.max }}" step="{{ cs.step }}" value="{{ cs.val }}" onChange="{{ cs.set }}" aria-label="{{ cs.title }}" style="width:100%;accent-color:var(--color-accent);margin-top:10px">
+                <p style="font-size:12px;margin:4px 0 0;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ cs.note }}</p>
+              </div>
+            </sc-for>
+            <div>
+              <h6 style="margin:0 0 10px">Cajoneras</h6>
+              <div style="display:flex;align-items:center;border:1px solid var(--color-divider);width:max-content">
+                <button class="btn btn-icon" onClick="{{ cajMinus }}" aria-label="Menos"><i class="icon-minus" style="font-size:16px"></i></button>
+                <span style="width:48px;text-align:center;font-weight:800;font-size:18px">{{ cajoneras }}</span>
+                <button class="btn btn-icon" onClick="{{ cajPlus }}" aria-label="Más"><i class="icon-plus" style="font-size:16px"></i></button>
+              </div>
+            </div>
+            <div>
+              <h6 style="margin:0 0 10px">Iluminación</h6>
+              <div class="seg"><sc-for list="{{ luzOpts }}" as="o"><label class="seg-opt"><input type="radio" name="luz" checked="{{ o.on }}" onChange="{{ o.pick }}">{{ o.l }}</label></sc-for></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ s6 }}">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+            <sc-for list="{{ resumen }}" as="r" hint-placeholder-count="6">
+              <div style="background:var(--color-surface);padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid var(--color-divider)"><span style="font-weight:800;font-size:15px">{{ r.n }}. {{ r.title }}</span><button class="btn btn-ghost" onClick="{{ r.edit }}" style="font-size:13px">Editar</button></div>
+                <sc-for list="{{ r.rows }}" as="row">
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px"><span style="color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ row.k }}</span><span style="font-weight:600;text-align:right">{{ row.v }}</span></div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:28px;display:flex;align-items:center;gap:24px;padding:24px;background:var(--color-accent);color:#fff">
+            <div style="flex:1"><div style="font-size:24px;font-weight:800;line-height:1.1">Todo listo para diseñar</div><div style="font-size:14px;margin-top:4px">Generaremos una distribución respetando tus instalaciones, electrodomésticos y presupuesto.</div></div>
+            <button onClick="{{ generate }}" style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#fff;color:var(--color-accent-700);border:0;font:inherit;font-weight:800;font-size:15px;cursor:pointer" style-hover="background:var(--color-accent-100)">Generar distribución propuesta<i class="icon-arrow-right" style="font-size:18px"></i></button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 40px;border-top:2px solid var(--color-divider);flex:none">
+      <button class="btn btn-secondary" onClick="{{ prev }}" disabled="{{ prevDisabled }}" style="height:44px;padding:0 18px"><i class="icon-arrow-left" style="font-size:16px"></i>Anterior</button>
+      <span style="flex:1"></span>
+      <span style="font-size:13px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ stepLabel }}</span>
+      <button class="btn btn-primary" onClick="{{ next }}" style="height:44px;padding:0 18px;min-width:160px;justify-content:space-between">{{ nextLabel }}<i class="icon-arrow-right" style="font-size:16px"></i></button>
+    </div>
+  </section>
+  <aside style="border-left:2px solid var(--color-divider);display:flex;flex-direction:column;min-height:0;background:var(--color-surface)">
+    <div style="padding:20px 20px 12px;border-bottom:2px solid var(--color-divider)"><div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--color-accent-700)">Resumen</div><div style="font-weight:800;font-size:18px">{{ pname }}</div></div>
+    <div style="flex:1;overflow:auto;padding:4px 20px 20px">
+      <sc-for list="{{ summary }}" as="sm" hint-placeholder-count="7">
+        <div style="padding:12px 0;border-bottom:1px solid var(--color-divider);display:flex;gap:10px;align-items:start">
+          <i class="{{ sm.icon }}" style="font-size:15px;margin-top:2px;color:{{ sm.ic }}"></i>
+          <div style="min-width:0"><div style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ sm.label }}</div><div style="font-size:14px;font-weight:600;color:{{ sm.vc }}">{{ sm.value }}</div></div>
+        </div>
+      </sc-for>
+    </div>
+  </aside>
+</div>
+</sc-if>
+<sc-if value="{{ generating }}">
+  <div style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-bg) 92%,transparent);display:grid;place-items:center;z-index:40">
+    <div style="width:min(440px,90%);display:flex;flex-direction:column;gap:16px">
+      <span style="width:40px;height:40px;border:3px solid var(--color-neutral-300);border-top-color:var(--color-accent);border-radius:50%;animation:spspin .9s linear infinite"></span>
+      <div style="font-size:26px;font-weight:800">Generando distribución…</div>
+      <div style="height:4px;background:var(--color-neutral-300)"><div style="height:4px;background:var(--color-accent);width:{{ genPct }};transition:width .5s"></div></div>
+      <sc-for list="{{ genSteps }}" as="g" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:{{ g.c }}"><i class="{{ g.icon }}" style="font-size:16px"></i>{{ g.label }}</div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+  <div style="flex:1;min-height:0;display:flex">
+    <sc-if value="{{ leftOpen }}">
+      <aside style="width:{{ leftW }};flex:none;border-right:2px solid var(--color-divider);display:flex;flex-direction:column;min-height:0;background:var(--color-bg)">
+        <div style="display:flex;align-items:stretch;border-bottom:2px solid var(--color-divider)">
+          <sc-for list="{{ leftTabs }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.pick }}" title="{{ t.label }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 4px;background:none;border:0;border-bottom:3px solid {{ t.bc }};margin-bottom:-2px;font:inherit;font-size:13px;font-weight:{{ t.fw }};color:var(--color-text);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 5%,transparent)"><i class="{{ t.icon }}" style="font-size:15px"></i>{{ t.label }}</button>
+          </sc-for>
+          <button class="btn btn-icon" onClick="{{ toggleLeft }}" title="Contraer panel" aria-label="Contraer panel" style="height:auto;width:40px"><i class="icon-panel-left-close" style="font-size:17px"></i></button>
+        </div>
+        <sc-if value="{{ tabMod }}">
+          <div style="padding:12px 14px 8px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--color-divider)">
+            <sc-if value="{{ replaceMode }}"><div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-accent-100);color:var(--color-accent-800);font-size:13px"><i class="icon-replace" style="font-size:15px"></i><span style="flex:1">Elige el módulo que reemplazará al {{ selNum }}</span><button class="btn btn-ghost" onClick="{{ cancelReplace }}" style="font-size:12px">Cancelar</button></div></sc-if>
+            <div style="position:relative"><i class="icon-search" style="position:absolute;left:10px;top:10px;font-size:15px;opacity:.55"></i><input class="input" placeholder="Buscar módulo o código" value="{{ q }}" onChange="{{ setQ }}" style="padding-left:32px"></div>
+            <button class="btn btn-secondary" onClick="{{ openLibMod }}" style="justify-content:flex-start;height:36px"><i class="icon-upload" style="font-size:15px"></i>Subir módulos (JSON / GLB)</button>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+              <sc-for list="{{ cats }}" as="c" hint-placeholder-count="7">
+                <button onClick="{{ c.pick }}" style="font:inherit;font-size:12px;padding:5px 9px;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.bd }}">{{ c.l }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:1;overflow:auto;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start">
+            <sc-for list="{{ lib }}" as="l" hint-placeholder-count="8">
+              <div draggable="true" onDragStart="{{ l.drag }}" onClick="{{ l.add }}" title="Arrastra al visor o haz clic para agregar" style="display:flex;flex-direction:column;background:var(--color-surface);cursor:grab;border:2px solid transparent" style-hover="border-color:var(--color-accent)">
+                <div style="height:88px;padding:{{ l.pad }};background:var(--sp-canvas);position:relative;overflow:hidden">{{ l.art }}<sc-if value="{{ l.user }}"><span style="position:absolute;top:4px;left:4px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--color-text);color:var(--color-bg);padding:2px 5px">Propio</span></sc-if></div>
+                <div style="padding:8px 10px 10px;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:13px;font-weight:800;line-height:1.2">{{ l.name }}</span>
+                  <span style="font-size:11px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ l.code }} · {{ l.range }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ libEmpty }}"><p style="grid-column:span 2;font-size:13px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Sin resultados para esa búsqueda.</p></sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabMat }}">
+          <div style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:18px">
+            <button class="btn btn-secondary" onClick="{{ openLibTex }}" style="justify-content:flex-start;height:36px"><i class="icon-upload" style="font-size:15px"></i>Subir texturas (JPG / PNG)</button>
+            <div>
+              <div style="font-size:12px;margin-bottom:6px;color:color-mix(in srgb,var(--color-text) 70%,transparent)">Aplicar a</div>
+              <div class="seg" style="display:flex">
+                <label class="seg-opt" style="flex:1"><input type="radio" name="apply" checked="{{ applyTodo }}" onChange="{{ setApplyTodo }}">Todo el proyecto</label>
+                <label class="seg-opt" style="flex:1;opacity:{{ applyModOp }}"><input type="radio" name="apply" checked="{{ applyMod }}" onChange="{{ setApplyMod }}" disabled="{{ noSel }}">Módulo {{ selNum }}</label>
+              </div>
+            </div>
+            <sc-for list="{{ matGroups }}" as="g" hint-placeholder-count="4">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;border-bottom:2px solid var(--color-divider);margin-bottom:10px"><h6 style="margin:0">{{ g.label }}</h6><span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ g.current }}</span></div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                  <sc-for list="{{ g.items }}" as="m">
+                    <button onClick="{{ m.pick }}" title="{{ m.name }} · {{ m.type }}" style="display:flex;flex-direction:column;gap:4px;padding:0;background:none;border:0;cursor:pointer;text-align:left;font:inherit;color:var(--color-text)">
+                      <span style="height:52px;width:100%;background:{{ m.bg }};outline:{{ m.ring }};outline-offset:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)"></span>
+                      <span style="font-size:11px;font-weight:600;line-height:1.2">{{ m.name }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabElec }}">
+          <div style="flex:1;overflow:auto;padding:6px 14px 14px">
+            <sc-for list="{{ elecList }}" as="e" hint-placeholder-count="4">
+              <div onClick="{{ e.pick }}" style="display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 4%,transparent)">
+                <span style="width:26px;height:26px;display:grid;place-items:center;background:var(--color-text);color:var(--color-bg);font-size:12px;font-weight:800;flex:none">{{ e.n }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">{{ e.name }}</div><div style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ e.dims }}</div></div>
+                <span class="tag tag-neutral">{{ e.inst }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </aside>
+    </sc-if>
+    <sc-if value="{{ leftClosed }}">
+      <div style="width:48px;flex:none;border-right:2px solid var(--color-divider);display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:8px">
+        <button class="btn btn-icon" onClick="{{ toggleLeft }}" title="Mostrar panel" aria-label="Mostrar panel"><i class="icon-panel-left-open" style="font-size:18px"></i></button>
+        <sc-for list="{{ leftTabs }}" as="t"><button class="btn btn-icon" onClick="{{ t.open }}" title="{{ t.label }}" aria-label="{{ t.label }}"><i class="{{ t.icon }}" style="font-size:17px"></i></button></sc-for>
+      </div>
+    </sc-if>
+
+    <div onDragOver="{{ dragOver }}" onDrop="{{ drop }}" style="flex:1;min-width:0;position:relative;background:var(--sp-canvas);overflow:hidden">
+      <div ref="{{ viewRef }}" style="position:absolute;inset:0;display:{{ d3 }}"></div>
+      <sc-if value="{{ show3dFallback }}"><div style="position:absolute;inset:56px 64px 24px 24px">{{ viewer3d }}</div></sc-if>
+      <sc-if value="{{ isPlan }}"><div style="position:absolute;inset:64px 72px 24px 32px">{{ viewerPlan }}</div></sc-if>
+      <sc-if value="{{ isElev }}"><div style="position:absolute;inset:64px 72px 24px 32px">{{ viewerElev }}</div></sc-if>
+
+      <div style="position:absolute;top:12px;left:12px;right:64px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;z-index:3">
+        <div style="display:flex;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm)">
+          <sc-for list="{{ viewOpts }}" as="v" hint-placeholder-count="3">
+            <button onClick="{{ v.pick }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;border:0;cursor:pointer;background:{{ v.bg }};color:{{ v.fg }}"><i class="{{ v.icon }}" style="font-size:15px"></i>{{ v.l }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ isElev }}">
+          <div style="display:flex;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm)">
+            <sc-for list="{{ wallOpts }}" as="w"><button onClick="{{ w.pick }}" style="padding:8px 12px;font:inherit;font-size:13px;font-weight:800;border:0;cursor:pointer;background:{{ w.bg }};color:{{ w.fg }}">Muro {{ w.l }}</button></sc-for>
+          </div>
+        </sc-if>
+        <button class="btn btn-primary" onClick="{{ openSuggest }}" style="height:38px;box-shadow:var(--shadow-md)"><i class="icon-layout-dashboard" style="font-size:16px"></i>{{ suggestLabel }}</button>
+      </div>
+
+      <div style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm)">
+        <sc-for list="{{ controls }}" as="c" hint-placeholder-count="7">
+          <div style="position:relative">
+            <button onClick="{{ c.act }}" onMouseEnter="{{ c.enter }}" onMouseLeave="{{ tipOff }}" onFocus="{{ c.enter }}" onBlur="{{ tipOff }}" aria-label="{{ c.tip }}" style="width:40px;height:40px;display:grid;place-items:center;border:0;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};border-top:{{ c.sep }}"><i class="{{ c.icon }}" style="font-size:17px"></i></button>
+            <sc-if value="{{ c.tipOn }}"><span role="tooltip" style="position:absolute;right:48px;top:8px;white-space:nowrap;background:var(--color-text);color:var(--color-bg);font-size:12px;padding:5px 9px;pointer-events:none;z-index:5">{{ c.tip }}<span style="opacity:.6;margin-left:8px">{{ c.key }}</span></span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ showMinimap }}">
+        <div style="position:absolute;left:12px;bottom:12px;width:190px;height:160px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm);padding:6px;display:flex;flex-direction:column">
+          <span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Planta</span>
+          <div style="flex:1;min-height:0">{{ minimap }}</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showSelChip }}">
+        <div style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm);padding:7px 12px;font-size:13px;display:flex;gap:10px;align-items:center;white-space:nowrap">
+          <span style="width:20px;height:20px;background:var(--color-accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800">{{ selNum }}</span><strong>{{ selName }}</strong><span style="opacity:.7">{{ selDims }}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isEmpty }}">
+        <div style="position:absolute;inset:0;display:grid;place-items:center;pointer-events:none">
+          <div style="width:min(440px,80%);border:2px dashed var(--color-divider);padding:32px;background:color-mix(in srgb,var(--color-bg) 85%,transparent);pointer-events:auto;display:flex;flex-direction:column;gap:12px">
+            <i class="icon-mouse-pointer-2" style="font-size:28px;color:var(--color-accent)"></i>
+            <div style="font-size:22px;font-weight:800;line-height:1.15">Arrastra tu primer módulo o usa la distribución automática</div>
+            <div style="font-size:14px;color:color-mix(in srgb,var(--color-text) 68%,transparent)">Tus medidas, instalaciones y electrodomésticos ya están cargados en la escena.</div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <button class="btn btn-primary" onClick="{{ openSuggest }}"><i class="icon-layout-dashboard" style="font-size:15px"></i>Distribución automática</button>
+              <button class="btn btn-secondary" onClick="{{ openLibPanel }}">Ver módulos</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ loading3d }}">
+        <div style="position:absolute;inset:0;background:var(--sp-canvas);display:grid;place-items:center;z-index:6">
+          <div style="width:260px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;height:56px"><span style="background:var(--color-neutral-300);animation:sppulse 1.2s infinite"></span><span style="background:var(--color-neutral-300);animation:sppulse 1.2s .15s infinite"></span><span style="background:var(--color-neutral-300);animation:sppulse 1.2s .3s infinite"></span><span style="background:var(--color-neutral-300);animation:sppulse 1.2s .45s infinite"></span></div>
+            <div style="font-weight:800;font-size:16px">Cargando escena 3D</div>
+            <div style="height:4px;background:var(--color-neutral-300)"><div style="height:4px;background:var(--color-accent);width:{{ loadPct }};transition:width .2s"></div></div>
+            <div style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Texturas de madera y sombras · {{ loadPct }}</div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ rightOpen }}">
+      <aside style="width:{{ rightW }};flex:none;border-left:2px solid var(--color-divider);display:flex;flex-direction:column;min-height:0;background:var(--color-bg)">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 10px 10px 16px;border-bottom:2px solid var(--color-divider)">
+          <span style="flex:1;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600">Propiedades</span>
+          <button class="btn btn-icon" onClick="{{ toggleRight }}" title="Contraer panel" aria-label="Contraer panel"><i class="icon-panel-right-close" style="font-size:17px"></i></button>
+        </div>
+        <sc-if value="{{ hasSel }}">
+          <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;gap:12px;align-items:start">
+              <div style="width:72px;height:84px;background:var(--sp-canvas);padding:6px;flex:none">{{ selThumb }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-700);font-weight:600">Módulo {{ selNum }}</div>
+                <div style="font-weight:800;font-size:18px;line-height:1.15">{{ selName }}</div>
+                <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><span class="tag tag-accent">{{ selCode }}</span><span class="tag tag-neutral">{{ selCat }}</span></div>
+              </div>
+              <button class="btn btn-icon" onClick="{{ closeSel }}" aria-label="Deseleccionar" title="Deseleccionar" style="width:30px;height:30px"><i class="icon-x" style="font-size:15px"></i></button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;padding-top:14px;border-top:2px solid var(--color-divider)">
+              <h6 style="margin:0">Medidas</h6>
+              <sc-for list="{{ dims }}" as="d" hint-placeholder-count="3">
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+                    <label style="font-size:13px;font-weight:600">{{ d.label }} <span style="font-weight:400;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ d.range }}</span></label>
+                    <div style="position:relative;width:86px"><input class="input" type="number" value="{{ d.val }}" min="{{ d.min }}" max="{{ d.max }}" onChange="{{ d.set }}" disabled="{{ d.fixed }}" aria-label="{{ d.label }}" style="padding:4px 28px 4px 8px;min-height:32px"><span style="position:absolute;right:8px;top:7px;font-size:12px;opacity:.6">cm</span></div>
+                  </div>
+                  <input type="range" min="{{ d.min }}" max="{{ d.max }}" step="1" value="{{ d.val }}" onChange="{{ d.set }}" disabled="{{ d.fixed }}" aria-label="{{ d.label }}" style="width:100%;accent-color:var(--color-accent)">
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ showFronts }}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:14px;border-top:2px solid var(--color-divider)">
+                <div>
+                  <div style="font-size:12px;margin-bottom:5px;color:color-mix(in srgb,var(--color-text) 70%,transparent)">{{ frLabel }}</div>
+                  <div style="display:flex;align-items:center;border:1px solid var(--color-divider);width:max-content">
+                    <button class="btn btn-icon" onClick="{{ frMinus }}" aria-label="Menos" style="width:34px;height:34px"><i class="icon-minus" style="font-size:15px"></i></button>
+                    <span style="width:34px;text-align:center;font-weight:800">{{ frCount }}</span>
+                    <button class="btn btn-icon" onClick="{{ frPlus }}" aria-label="Más" style="width:34px;height:34px"><i class="icon-plus" style="font-size:15px"></i></button>
+                  </div>
+                </div>
+                <sc-if value="{{ showOpen }}">
+                  <div>
+                    <div style="font-size:12px;margin-bottom:5px;color:color-mix(in srgb,var(--color-text) 70%,transparent)">Apertura</div>
+                    <div class="seg"><sc-for list="{{ openOpts }}" as="o"><label class="seg-opt" style="padding:7px 9px"><input type="radio" name="apertura-mod" checked="{{ o.on }}" onChange="{{ o.pick }}">{{ o.l }}</label></sc-for></div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showMatSel }}">
+              <div style="display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:2px solid var(--color-divider)">
+                <h6 style="margin:0">Materiales y herrajes</h6>
+                <div class="field"><label>Cuerpo</label><select class="input" value="{{ cueVal }}" onChange="{{ setCue }}"><option value="">Según proyecto</option><option value="blanco">Blanco mate · Melamina</option><option value="arena">Arena · Melamina</option><option value="roble">Roble natural · Melamina</option><option value="grafito">Gris grafito · Lacado</option></select></div>
+                <div class="field"><label>Frente</label><select class="input" value="{{ freVal }}" onChange="{{ setFre }}"><option value="">Según proyecto</option><option value="roble">Roble natural · Melamina</option><option value="nogal">Nogal americano · Chapa</option><option value="fresno">Fresno claro · Chapa</option><option value="blanco">Blanco mate · Lacado</option><option value="grafito">Gris grafito · Lacado</option><option value="salvia">Verde salvia · Lacado</option></select></div>
+                <div class="field"><label>Herrajes</label><select class="input" value="{{ herrVal }}" onChange="{{ setHerr }}"><option>Bisagra cierre suave 110°</option><option>Bisagra push-to-open</option><option>Corredera oculta cierre suave</option><option>Carrusel esquinero 3/4</option></select></div>
+              </div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:6px;padding-top:14px;border-top:2px solid var(--color-divider)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px">Precio del módulo</span><sc-if value="{{ selPriceOv }}"><span class="tag tag-accent" style="font-size:10px">Manual</span></sc-if></div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <div style="position:relative;flex:1"><span style="position:absolute;left:10px;top:9px;font-size:13px;font-weight:700;opacity:.65">{{ curLabel }}</span><input class="input" type="number" min="0" step="1" value="{{ selPriceVal }}" onChange="{{ setSelPrice }}" style="padding-left:44px;font-weight:800;font-size:16px;width:100%"></div>
+                <sc-if value="{{ selPriceOv }}"><button class="btn btn-icon" onClick="{{ resetSelPrice }}" title="Volver al precio calculado" aria-label="Volver al precio calculado"><i class="icon-rotate-ccw" style="font-size:16px"></i></button></sc-if>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:12px 16px;border-top:2px solid var(--color-divider)">
+            <button class="btn btn-secondary" onClick="{{ duplicate }}" style="flex-direction:column;gap:4px;padding:8px 4px;font-size:12px"><i class="icon-copy" style="font-size:16px"></i>Duplicar</button>
+            <button class="btn btn-secondary" onClick="{{ replace }}" style="flex-direction:column;gap:4px;padding:8px 4px;font-size:12px"><i class="icon-replace" style="font-size:16px"></i>Reemplazar</button>
+            <button class="btn btn-secondary" onClick="{{ remove }}" style="flex-direction:column;gap:4px;padding:8px 4px;font-size:12px;color:var(--color-accent-700)"><i class="icon-trash-2" style="font-size:16px"></i>Eliminar</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noSel }}">
+          <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+            <div style="padding:16px;border:2px dashed var(--color-divider);font-size:14px;color:color-mix(in srgb,var(--color-text) 70%,transparent);display:flex;gap:10px"><i class="icon-mouse-pointer-click" style="font-size:18px"></i>Selecciona un módulo en el visor para editar sus propiedades.</div>
+            <div>
+              <h6 style="margin:0 0 6px">Proyecto</h6>
+              <sc-for list="{{ projStats }}" as="s"><div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px"><span style="color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ s.k }}</span><strong>{{ s.v }}</strong></div></sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </aside>
+    </sc-if>
+    <sc-if value="{{ rightClosed }}">
+      <div style="width:48px;flex:none;border-left:2px solid var(--color-divider);display:flex;flex-direction:column;align-items:center;padding-top:8px">
+        <button class="btn btn-icon" onClick="{{ toggleRight }}" title="Mostrar propiedades" aria-label="Mostrar propiedades"><i class="icon-panel-right-open" style="font-size:18px"></i></button>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="border-top:2px solid var(--color-divider);background:var(--color-bg);flex:none">
+    <sc-if value="{{ valOpen }}">
+      <div style="max-height:200px;overflow:auto;padding:8px 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;border-bottom:1px solid var(--color-divider)">
+        <sc-for list="{{ valItems }}" as="v" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid color-mix(in srgb,var(--color-divider) 50%,transparent);font-size:13px">
+            <i class="{{ v.icon }}" style="font-size:17px;color:{{ v.c }};flex:none"></i>
+            <span style="flex:1;min-width:0">{{ v.text }}</span>
+            <sc-if value="{{ v.hasAct }}"><button class="btn btn-ghost" onClick="{{ v.act }}" style="font-size:12px;white-space:nowrap">{{ v.actLabel }}</button></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <div style="display:flex;align-items:center;gap:16px;padding:8px 16px;min-height:56px">
+      <button onClick="{{ toggleVal }}" aria-expanded="{{ valOpen }}" style="display:flex;align-items:center;gap:12px;background:none;border:1px solid var(--color-divider);padding:7px 12px;font:inherit;font-size:13px;color:var(--color-text);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 6%,transparent)">
+        <strong>Validación</strong>
+        <span style="display:flex;align-items:center;gap:4px"><i class="icon-circle-check" style="font-size:15px;color:#2f7d4f"></i>{{ okCount }}</span>
+        <span style="display:flex;align-items:center;gap:4px"><i class="icon-triangle-alert" style="font-size:15px;color:#a86a00"></i>{{ warnCount }}</span>
+        <span style="display:flex;align-items:center;gap:4px"><i class="icon-circle-x" style="font-size:15px;color:var(--color-accent-700)"></i>{{ errCount }}</span>
+        <i class="{{ valChevron }}" style="font-size:15px"></i>
+      </button>
+      <span style="flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ firstColor }}">{{ firstIssue }}</span>
+      <div style="position:relative">
+        <button onClick="{{ togglePrice }}" title="Editar precio" style="display:flex;align-items:center;gap:8px;background:none;border:0;padding:4px 6px;font:inherit;color:var(--color-text);cursor:pointer"><span style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.15"><span style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ priceCaption }}</span><span style="font-size:20px;font-weight:800">{{ priceStr }}</span></span><i class="icon-pencil" style="font-size:15px;opacity:.7"></i></button>
+        <sc-if value="{{ priceOpen }}">
+          <div onClick="{{ closePrice }}" style="position:fixed;inset:0;z-index:40"></div>
+          <div style="position:absolute;right:0;bottom:calc(100% + 10px);z-index:41;width:320px;max-height:calc(100vh - 90px);overflow:auto;background:var(--color-bg);color:var(--color-text);border:2px solid var(--color-text);box-shadow:0 12px 32px rgba(0,0,0,.18);padding:14px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-weight:800;font-size:16px">Precio del proyecto</div>
+            <sc-for list="{{ priceRows }}" as="r"><div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ r.k }}</span><span style="font-weight:700">{{ r.v }}</span></div></sc-for>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="field"><label>Instalación %</label><input class="input" type="number" min="0" max="100" step="0.5" value="{{ instPct }}" onChange="{{ setInst }}"></div>
+              <div class="field"><label>Descuento %</label><input class="input" type="number" min="0" max="100" step="0.5" value="{{ descPct }}" onChange="{{ setDesc }}"></div>
+            </div>
+            <div class="field"><label>Encimera ({{ curLabel }})</label><input class="input" type="number" min="0" step="1" value="{{ counterVal }}" onChange="{{ setCounter }}"></div>
+            <div class="field"><label>Precio final ({{ curLabel }})</label><input class="input" type="number" min="0" step="1" value="{{ finalVal }}" onChange="{{ setFinal }}" style="font-weight:800;font-size:16px"></div>
+            <span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ priceHint }}</span>
+            <button class="btn btn-secondary" onClick="{{ resetPrice }}"><i class="icon-rotate-ccw" style="font-size:15px"></i>Volver a precios calculados</button>
+          </div>
+        </sc-if>
+      </div>
+      <button class="btn btn-primary" onClick="{{ goApproval }}" style="height:40px">Continuar a aprobación<i class="icon-arrow-right" style="font-size:16px"></i></button>
+    </div>
+  </div>
+</div>
+</sc-if>
+<sc-if value="{{ suggest }}">
+  <div class="dialog-backdrop" style="z-index:50;position:absolute" onClick="{{ closeSuggest }}">
+    <div class="dialog" onClick="{{ stop }}" style="width:min(960px,100%);gap:18px">
+      <div style="display:flex;align-items:start;gap:12px">
+        <div style="flex:1"><div class="dialog-title">Distribuciones sugeridas</div><div class="dialog-body">Calculadas con tus medidas, instalaciones y electrodomésticos. Elige una para reemplazar la escena actual (puedes deshacer).</div></div>
+        <button class="btn btn-icon" onClick="{{ closeSuggest }}" aria-label="Cerrar"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <sc-for list="{{ alts }}" as="a" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;background:var(--color-bg);border:2px solid {{ a.bd }}">
+            <div style="height:190px;background:var(--sp-canvas);padding:8px;position:relative">
+              <sc-if value="{{ a.loading }}"><div style="position:absolute;inset:0;background:var(--color-neutral-200);animation:sppulse 1.1s infinite"></div></sc-if>
+              <sc-if value="{{ a.ready }}">{{ a.art }}</sc-if>
+            </div>
+            <div style="padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:800;font-size:16px">{{ a.name }}</span><sc-if value="{{ a.current }}"><span class="tag tag-accent">Actual</span></sc-if></div>
+              <sc-for list="{{ a.metrics }}" as="mt"><div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ mt.k }}</span><strong>{{ mt.v }}</strong></div></sc-for>
+              <button class="btn btn-secondary" onClick="{{ a.apply }}" disabled="{{ a.loading }}" style="justify-content:flex-start;margin-top:4px">Usar esta distribución<i class="icon-arrow-right" style="font-size:15px;margin-left:auto"></i></button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ isApproval }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:stretch;gap:12px;padding:0 16px;border-bottom:2px solid var(--color-divider);flex:none;min-width:0">
+    <div style="display:flex;min-width:0;overflow-x:auto">
+      <sc-for list="{{ apTabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:8px;padding:14px 14px 12px;background:none;border:0;border-bottom:3px solid {{ t.bc }};margin-bottom:-2px;font:inherit;font-size:14px;font-weight:{{ t.fw }};color:var(--color-text);cursor:pointer;white-space:nowrap"><i class="{{ t.icon }}" style="font-size:16px"></i>{{ t.label }}</button>
+      </sc-for>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:8px 0;flex:none;white-space:nowrap">
+      <div style="position:relative">
+        <button class="btn btn-secondary" onClick="{{ toggleExp }}" aria-expanded="{{ expOpen }}" style="height:38px"><i class="icon-download" style="font-size:15px"></i>Exportar<i class="icon-chevron-down" style="font-size:14px"></i></button>
+        <sc-if value="{{ expOpen }}">
+          <div style="position:fixed;inset:0;z-index:89" onClick="{{ closeExp }}"></div>
+          <div style="position:absolute;right:0;top:44px;width:260px;background:var(--color-surface);box-shadow:var(--shadow-lg);border:1px solid var(--color-divider);z-index:90;display:flex;flex-direction:column">
+            <sc-for list="{{ expItems }}" as="x"><button onClick="{{ x.act }}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:none;border:0;border-bottom:1px solid var(--color-divider);font:inherit;font-size:14px;color:var(--color-text);cursor:pointer;text-align:left" style-hover="background:color-mix(in srgb,var(--color-text) 6%,transparent)"><i class="{{ x.icon }}" style="font-size:16px"></i><span style="flex:1">{{ x.l }}</span><span style="font-size:11px;opacity:.6">{{ x.ext }}</span></button></sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <button class="btn btn-secondary" onClick="{{ sendClient }}" title="Enviar al cliente" style="height:38px"><i class="icon-send" style="font-size:15px"></i><sc-if value="{{ showLabels }}">Enviar al cliente</sc-if></button>
+      <sc-if value="{{ notApproved }}"><button class="btn btn-primary" onClick="{{ openApprove }}" style="height:38px"><i class="icon-badge-check" style="font-size:16px"></i>Aprobar proyecto</button></sc-if>
+      <sc-if value="{{ approved }}"><span style="display:flex;align-items:center;gap:6px;height:38px;padding:0 12px;background:var(--color-text);color:var(--color-bg);font-weight:800;font-size:14px"><i class="icon-badge-check" style="font-size:16px"></i>Aprobado</span></sc-if>
+    </div>
+  </div>
+  <sc-if value="{{ approved }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--color-accent-100);color:var(--color-accent-800);font-size:14px;border-bottom:1px solid var(--color-divider)"><i class="icon-badge-check" style="font-size:17px"></i>{{ approvedText }}</div>
+  </sc-if>
+
+  <sc-if value="{{ tGal }}">
+    <div style="flex:1;overflow:auto;padding:20px">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:300px;gap:16px">
+        <sc-for list="{{ gal }}" as="g" hint-placeholder-count="5">
+          <div style="grid-column:{{ g.col }};grid-row:{{ g.row }};display:flex;flex-direction:column;background:var(--color-surface);min-height:0">
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid var(--color-divider)">
+              <span style="font-weight:800;font-size:14px;flex:1">{{ g.title }}</span><span class="tag tag-neutral" style="white-space:nowrap">{{ g.scale }}</span>
+            </div>
+            <div style="flex:1;min-height:0;position:relative;background:var(--sp-canvas);padding:10px">
+              <sc-if value="{{ g.ready }}">{{ g.art }}</sc-if>
+              <sc-if value="{{ g.loading }}"><div style="position:absolute;inset:0;display:grid;place-items:center;background:var(--color-neutral-200)"><div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600"><span style="width:18px;height:18px;border:2px solid var(--color-neutral-400);border-top-color:var(--color-accent);border-radius:50%;animation:spspin .8s linear infinite"></span>Regenerando vista…</div></div></sc-if>
+            </div>
+            <div style="display:flex;gap:4px;padding:6px 8px">
+              <button class="btn btn-ghost" onClick="{{ g.regen }}" style="font-size:13px"><i class="icon-refresh-cw" style="font-size:14px"></i>Regenerar</button>
+              <button class="btn btn-ghost" onClick="{{ g.adjust }}" style="font-size:13px"><i class="icon-camera" style="font-size:14px"></i>Ajustar cámara</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ tPlan }}">
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr)">
+      <div style="border-right:2px solid var(--color-divider);overflow:auto">
+        <div style="padding:14px 16px 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;border-bottom:2px solid var(--color-divider)">Módulos · {{ planCount }}</div>
+        <sc-for list="{{ planList }}" as="p" hint-placeholder-count="8">
+          <button onClick="{{ p.pick }}" style="width:100%;display:flex;gap:10px;align-items:center;padding:10px 16px;background:{{ p.bg }};border:0;border-left:3px solid {{ p.bc }};border-bottom:1px solid var(--color-divider);text-align:left;font:inherit;color:var(--color-text);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 5%,transparent)">
+            <span style="width:24px;height:24px;display:grid;place-items:center;background:var(--color-text);color:var(--color-bg);font-size:11px;font-weight:800;flex:none">{{ p.n }}</span>
+            <span style="min-width:0"><span style="display:block;font-size:14px;font-weight:600">{{ p.name }}</span><span style="display:block;font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ p.code }} · {{ p.dims }}</span></span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="overflow:auto;padding:20px 24px 32px">
+        <div style="display:flex;align-items:end;gap:16px;padding-bottom:14px;border-bottom:2px solid var(--color-divider)">
+          <div style="flex:1"><div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-700);font-weight:600">Plano de ensamblaje · Módulo {{ pmNum }}</div><h2 style="margin:4px 0 0;font-size:28px">{{ pmName }}</h2></div>
+          <span class="tag tag-accent">{{ pmCode }}</span><span style="font-size:14px">{{ pmDims }}</span>
+          <button class="btn btn-secondary" onClick="{{ exportDxf }}"><i class="icon-download" style="font-size:15px"></i>Plano DXF</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:16px">
+          <sc-for list="{{ pmViews }}" as="v" hint-placeholder-count="3">
+            <div style="background:var(--color-surface);display:flex;flex-direction:column">
+              <div style="padding:8px 12px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-bottom:2px solid var(--color-divider)">{{ v.title }}</div>
+              <div style="height:240px;padding:12px;background:var(--color-neutral-100)">{{ v.art }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;margin-top:16px;align-items:start">
+          <div style="background:var(--color-surface)">
+            <div style="padding:8px 12px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-bottom:2px solid var(--color-divider)">Vista explosionada</div>
+            <div style="height:380px;padding:12px;background:var(--color-neutral-100)">{{ pmExpl }}</div>
+          </div>
+          <div style="background:var(--color-surface);padding:0 12px 8px;overflow:auto">
+            <div style="padding:8px 0;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase">Despiece · {{ pmPieces }}</div>
+            <div style="display:grid;grid-template-columns:28px minmax(0,1.3fr) 40px 100px 52px minmax(0,1.5fr) 72px 48px;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent);padding:8px 0;border-bottom:2px solid var(--color-divider);min-width:600px">
+              <span>#</span><span>Pieza</span><span>Cant.</span><span>Largo × ancho</span><span>Esp.</span><span>Material</span><span>Veta</span><span>Cantos</span>
+            </div>
+            <sc-for list="{{ pmParts }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:28px minmax(0,1.3fr) 40px 100px 52px minmax(0,1.5fr) 72px 48px;gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--color-divider);align-items:center;min-width:600px">
+                <span style="width:20px;height:20px;display:grid;place-items:center;background:var(--color-accent);color:#fff;font-size:11px;font-weight:800">{{ r.ref }}</span>
+                <span style="font-weight:600">{{ r.pieza }}</span><span>{{ r.cant }}</span><span style="font-variant-numeric:tabular-nums">{{ r.dim }}</span><span>{{ r.esp }}</span><span>{{ r.mat }}</span><span>{{ r.veta }}</span><span>{{ r.cantos }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ tCorte }}">
+    <div style="flex:1;overflow:auto;padding:20px 24px 32px">
+      <div style="display:flex;align-items:end;gap:16px;padding-bottom:14px;border-bottom:2px solid var(--color-divider)">
+        <div style="flex:1"><h2 style="margin:0;font-size:28px">Lista de corte consolidada</h2><div style="font-size:14px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ corteSummary }}</div></div>
+        <button class="btn btn-secondary" onClick="{{ exportCsv }}"><i class="icon-file-spreadsheet" style="font-size:15px"></i>Descargar CSV</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:16px 0 24px">
+        <sc-for list="{{ corteGroups }}" as="g" hint-placeholder-count="4">
+          <div style="background:var(--color-surface);padding:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:10px;align-items:center"><span style="width:28px;height:28px;background:{{ g.bg }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);flex:none"></span><div style="min-width:0"><div style="font-weight:800;font-size:14px;line-height:1.2">{{ g.mat }}</div><div style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ g.esp }}</div></div></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding-top:8px;border-top:1px solid var(--color-divider)">
+              <div><div style="font-size:18px;font-weight:800">{{ g.pieces }}</div><div style="font-size:11px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">piezas</div></div>
+              <div><div style="font-size:18px;font-weight:800">{{ g.area }}</div><div style="font-size:11px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">m²</div></div>
+              <div><div style="font-size:18px;font-weight:800">{{ g.boards }}</div><div style="font-size:11px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">tableros</div></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <sc-for list="{{ corteTables }}" as="tb" hint-placeholder-count="2">
+        <div style="margin-bottom:24px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px"><h4 style="margin:0">{{ tb.title }}</h4><span style="font-size:13px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ tb.note }}</span></div>
+          <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) 56px 90px 90px 80px 60px;gap:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 62%,transparent);padding:8px 0;border-bottom:2px solid var(--color-divider)">
+            <span>Pieza</span><span>Módulos</span><span>Cant.</span><span>Largo</span><span>Ancho</span><span>Veta</span><span>Cantos</span>
+          </div>
+          <sc-for list="{{ tb.rows }}" as="r">
+            <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) 56px 90px 90px 80px 60px;gap:8px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--color-divider);font-variant-numeric:tabular-nums">
+              <span style="font-weight:600">{{ r.pieza }}</span><span>{{ r.mods }}</span><span>{{ r.cant }}</span><span>{{ r.L }}</span><span>{{ r.A }}</span><span>{{ r.veta }}</span><span>{{ r.cantos }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ tPdf }}">
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr)">
+      <div style="border-right:2px solid var(--color-divider);overflow:auto;padding:16px;display:flex;flex-direction:column;gap:18px">
+        <div>
+          <h6 style="margin:0 0 8px">Contenido del PDF</h6>
+          <sc-for list="{{ pdfChecks }}" as="c" hint-placeholder-count="7">
+            <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px;cursor:pointer"><input type="checkbox" checked="{{ c.on }}" onChange="{{ c.toggle }}" style="width:18px;height:18px;accent-color:var(--color-accent);margin:0"><span style="flex:1">{{ c.label }}</span><span style="font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">{{ c.pages }}</span></label>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <h6 style="margin:0">Datos del cliente (portada)</h6>
+          <div class="field"><label>Nombre</label><input class="input" value="{{ cNombre }}" onChange="{{ setCNombre }}"></div>
+          <div class="field"><label>Teléfono</label><input class="input" value="{{ cTel }}" onChange="{{ setCTel }}"></div>
+          <div class="field"><label>Dirección de instalación</label><input class="input" value="{{ cDir }}" onChange="{{ setCDir }}"></div>
+        </div>
+        <button class="btn btn-primary" onClick="{{ exportPdf }}" style="height:44px;justify-content:flex-start"><i class="icon-file-text" style="font-size:16px"></i>Exportar PDF · {{ pageCount }} págs.</button>
+      </div>
+      <div style="overflow:auto;padding:20px 24px;background:var(--sp-canvas)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px">
+          <sc-for list="{{ pdfPages }}" as="pg" hint-placeholder-count="8">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div data-pdf-page="1" style="aspect-ratio:297/210;background:#ffffff;color:#201e1d;box-shadow:var(--shadow-md);padding:10px;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:7px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1.5px solid #201e1d;padding-bottom:3px"><span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#ec3013"></span>Stephanny Planner</span><span>{{ pg.num }}</span></div>
+                <sc-if value="{{ pg.cover }}">
+                  <div style="flex:1;display:flex;flex-direction:column;justify-content:end;gap:3px">
+                    <div style="font-size:6px;letter-spacing:.1em;text-transform:uppercase;color:#ae1800">Proyecto de cocina a medida</div>
+                    <div style="font-size:17px;font-weight:800;line-height:1">{{ pname }}</div>
+                    <div style="font-size:7px">{{ cNombre }} · {{ cTel }}</div>
+                    <div style="font-size:7px">{{ cDir }}</div>
+                    <div style="height:3px;background:#ec3013;width:40%;margin-top:4px"></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ pg.hasArt }}">
+                  <div style="font-size:8px;font-weight:800">{{ pg.title }}</div>
+                  <div style="flex:1;min-height:0">{{ pg.art }}</div>
+                </sc-if>
+                <sc-if value="{{ pg.hasRows }}">
+                  <div style="font-size:8px;font-weight:800">{{ pg.title }}</div>
+                  <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+                    <sc-for list="{{ pg.rows }}" as="r"><div style="display:flex;justify-content:space-between;gap:6px;font-size:6px;padding:1.5px 0;border-bottom:.5px solid #bab6b6"><span>{{ r.k }}</span><span>{{ r.v }}</span></div></sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <span style="font-size:12px;font-weight:600">{{ pg.num }} · {{ pg.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ libOpen }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:70" onClick="{{ closeLib }}">
+    <div class="dialog" onClick="{{ stop }}" style="width:min(1040px,100%);height:min(760px,100%);gap:0;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:start;gap:12px;padding:20px 20px 0">
+        <div style="flex:1"><div class="dialog-title">Bibliotecas</div><div class="dialog-body">Sube tus propias texturas y módulos. Se guardan en este navegador y quedan disponibles en todos los proyectos.</div></div>
+        <button class="btn btn-icon" onClick="{{ closeLib }}" aria-label="Cerrar"><i class="icon-x" style="font-size:18px"></i></button>
+      </div>
+      <div style="display:flex;padding:0 20px;border-bottom:2px solid var(--color-divider);margin-top:12px">
+        <sc-for list="{{ libTabs }}" as="t"><button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:8px;padding:12px 14px 10px;background:none;border:0;border-bottom:3px solid {{ t.bc }};margin-bottom:-2px;font:inherit;font-size:14px;font-weight:{{ t.fw }};color:var(--color-text);cursor:pointer"><i class="{{ t.icon }}" style="font-size:16px"></i>{{ t.label }}<span class="tag tag-neutral">{{ t.count }}</span></button></sc-for>
+      </div>
+      <div style="flex:1;min-height:0;overflow:auto;padding:16px 20px 20px;display:flex;flex-direction:column;gap:16px">
+        <label onDragOver="{{ libDragOver }}" onDragLeave="{{ libDragLeave }}" onDrop="{{ libDrop }}" style="display:flex;align-items:center;gap:16px;padding:22px;border:2px dashed {{ dropBd }};background:{{ dropBg }};cursor:pointer">
+          <input type="file" multiple="{{ true }}" accept="{{ libAccept }}" onChange="{{ libPick }}" style="position:absolute;width:0;height:0;opacity:0">
+          <i class="icon-upload" style="font-size:28px;color:var(--color-accent)"></i>
+          <div style="flex:1"><div style="font-weight:800;font-size:16px">{{ dropTitle }}</div><div style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ dropHint }}</div></div>
+          <span class="btn btn-primary">Elegir archivos</span>
+        </label>
+        <sc-if value="{{ libBusy }}"><div style="display:flex;align-items:center;gap:10px;font-size:14px"><span style="width:16px;height:16px;border:2px solid var(--color-neutral-400);border-top-color:var(--color-accent);border-radius:50%;animation:spspin .8s linear infinite"></span>{{ libBusy }}</div></sc-if>
+        <sc-if value="{{ hasLibMsg }}"><div style="display:flex;gap:10px;align-items:start;padding:10px 12px;background:var(--color-accent-100);color:var(--color-accent-800);font-size:13px"><i class="icon-triangle-alert" style="font-size:16px;flex:none"></i><span>{{ libMsg }}</span></div></sc-if>
+
+        <sc-if value="{{ libTexTab }}">
+          <sc-if value="{{ noTex }}"><p style="margin:0;font-size:14px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Aún no hay texturas propias. Recomendado: imágenes sin costuras (seamless) de 1024 px o más, con la medida real de la muestra.</p></sc-if>
+          <sc-for list="{{ texItems }}" as="t">
+            <div style="display:grid;grid-template-columns:88px minmax(0,1fr) 36px;gap:14px;padding:12px 0;border-bottom:1px solid var(--color-divider);align-items:start">
+              <div style="width:88px;height:88px;background:{{ t.bg }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)"></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+                <div class="field"><label>Nombre</label><input class="input" value="{{ t.name }}" onChange="{{ t.setName }}"></div>
+                <div class="field"><label>Tipo</label><select class="input" value="{{ t.type }}" onChange="{{ t.setType }}"><option>Melamina</option><option>Melamina texturizada</option><option>Chapa natural</option><option>Lacado</option><option>Cuarzo</option><option>Granito</option><option>Madera maciza</option><option>Metal</option></select></div>
+                <div class="field"><label>Medida real de la muestra</label><div style="position:relative"><input class="input" type="number" min="5" max="400" value="{{ t.tile }}" onChange="{{ t.setTile }}" style="padding-right:36px"><span style="position:absolute;right:10px;top:9px;font-size:12px;opacity:.6">cm</span></div></div>
+                <div class="field"><label>Acabado</label><select class="input" value="{{ t.finish }}" onChange="{{ t.setFinish }}"><option>Mate</option><option>Satinado</option><option>Brillante</option></select></div>
+                <div style="grid-column:1 / -1"><div style="font-size:12px;margin-bottom:5px;color:color-mix(in srgb,var(--color-text) 70%,transparent)">Usar en</div><div style="display:flex;gap:4px;flex-wrap:wrap"><sc-for list="{{ t.uses }}" as="u"><button onClick="{{ u.toggle }}" style="display:flex;align-items:center;gap:6px;font:inherit;font-size:12px;padding:5px 10px;cursor:pointer;background:{{ u.bg }};color:{{ u.fg }};border:1px solid {{ u.bd }}"><i class="{{ u.icon }}" style="font-size:13px"></i>{{ u.l }}</button></sc-for></div></div>
+              </div>
+              <button class="btn btn-icon" onClick="{{ t.del }}" aria-label="Eliminar textura" title="Eliminar"><i class="icon-trash-2" style="font-size:16px"></i></button>
+            </div>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ libModTab }}">
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)"><span style="flex:1">JSON para módulos paramétricos (frentes, rango de ancho, precio). GLB para modelos 3D (electrodomésticos, accesorios); se escalan a la medida indicada.</span><button class="btn btn-secondary" onClick="{{ dlTemplate }}"><i class="icon-file-json" style="font-size:15px"></i>Descargar plantilla JSON</button></div>
+          <sc-if value="{{ noMods }}"><p style="margin:0;font-size:14px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Aún no hay módulos propios.</p></sc-if>
+          <sc-for list="{{ modItems }}" as="m">
+            <div style="display:grid;grid-template-columns:88px minmax(0,1fr) 36px;gap:14px;padding:12px 0;border-bottom:1px solid var(--color-divider);align-items:start">
+              <div style="width:88px;height:88px;background:var(--sp-canvas);padding:{{ m.pad }};overflow:hidden">{{ m.art }}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
+                <div class="field" style="grid-column:span 2"><label>Nombre</label><input class="input" value="{{ m.name }}" onChange="{{ m.setName }}"></div>
+                <div class="field"><label>Código</label><input class="input" value="{{ m.code }}" onChange="{{ m.setCode }}"></div>
+                <div class="field"><label>Categoría</label><select class="input" value="{{ m.cat }}" onChange="{{ m.setCat }}"><option>Mis módulos</option><option>Bajos</option><option>Altos</option><option>Columnas</option><option>Esquinas</option><option>Cajoneras</option><option>Closet</option><option>Electro</option></select></div>
+                <div class="field"><label>Montaje</label><select class="input" value="{{ m.type }}" onChange="{{ m.setType }}"><option value="base">Bajo (con encimera)</option><option value="upper">Alto (a 150 cm)</option><option value="tall">Columna</option><option value="fridge">Libre / de piso</option></select></div>
+                <div class="field"><label>Ancho cm</label><input class="input" type="number" value="{{ m.w }}" onChange="{{ m.setW }}"></div>
+                <div class="field"><label>Alto cm</label><input class="input" type="number" value="{{ m.h }}" onChange="{{ m.setH }}"></div>
+                <div class="field"><label>Fondo cm</label><input class="input" type="number" value="{{ m.d }}" onChange="{{ m.setD }}"></div>
+                <div class="field"><label>Ancho mín.</label><input class="input" type="number" value="{{ m.rw0 }}" onChange="{{ m.setRw0 }}"></div>
+                <div class="field"><label>Ancho máx.</label><input class="input" type="number" value="{{ m.rw1 }}" onChange="{{ m.setRw1 }}"></div>
+                <div class="field"><label>Precio base US$</label><input class="input" type="number" value="{{ m.precio }}" onChange="{{ m.setPrecio }}"></div>
+                <div style="grid-column:1 / -1;display:flex;gap:8px;align-items:center;font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)"><span class="tag tag-neutral">{{ m.src }}</span>{{ m.note }}</div>
+              </div>
+              <button class="btn btn-icon" onClick="{{ m.del }}" aria-label="Eliminar módulo" title="Eliminar"><i class="icon-trash-2" style="font-size:16px"></i></button>
+            </div>
+          </sc-for>
+        </sc-if>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:2px solid var(--color-divider)">
+        <span style="flex:1;font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">{{ libFoot }}</span>
+        <button class="btn btn-primary" onClick="{{ closeLib }}">Listo</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ pdfGen }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <div class="dialog" style="gap:14px">
+      <div class="dialog-title">Generando PDF</div>
+      <div class="dialog-body">{{ pdfStep }}</div>
+      <div style="height:6px;background:var(--color-neutral-300)"><div style="height:6px;background:var(--color-accent);width:{{ pdfPct }};transition:width .25s"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ pageCount }} páginas</span><strong>{{ pdfPct }}</strong></div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ approveOpen }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60" onClick="{{ closeApprove }}">
+    <div class="dialog" onClick="{{ stop }}" style="width:min(520px,100%);gap:14px">
+      <div class="dialog-title">Aprobar proyecto</div>
+      <div class="dialog-body">Al aprobar, el diseño queda bloqueado y se envía a producción con la lista de corte y los planos de ensamblaje.</div>
+      <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:2px solid var(--color-divider);border-bottom:1px solid var(--color-divider);font-size:14px"><span>{{ pname }} · {{ modCount }} módulos</span><strong>{{ priceStr }}</strong></div>
+      <div class="field"><label>Nombre completo del cliente</label><input class="input" value="{{ signer }}" onChange="{{ setSigner }}" placeholder="Nombre y apellidos"></div>
+      <div class="field">
+        <label style="display:flex;justify-content:space-between"><span>Firma</span><button class="btn btn-ghost" onClick="{{ sigClear }}" style="font-size:12px;padding:0 4px">Borrar</button></label>
+        <canvas ref="{{ sigRef }}" width="470" height="130" onPointerDown="{{ sigDown }}" onPointerMove="{{ sigMove }}" onPointerUp="{{ sigUp }}" onPointerLeave="{{ sigUp }}" aria-label="Área de firma" style="width:100%;height:130px;background:var(--color-bg);border:1px solid var(--color-divider);touch-action:none;cursor:crosshair;display:block"></canvas>
+      </div>
+      <label style="display:flex;gap:10px;align-items:start;font-size:13px;cursor:pointer"><input type="checkbox" checked="{{ accept }}" onChange="{{ toggleAccept }}" style="width:18px;height:18px;accent-color:var(--color-accent);margin:0;flex:none">Acepto la distribución, materiales, medidas y el presupuesto estimado.</label>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" onClick="{{ closeApprove }}">Cancelar</button>
+        <button class="btn btn-primary" onClick="{{ confirmApprove }}" disabled="{{ confirmDisabled }}"><i class="icon-badge-check" style="font-size:16px"></i>Aprobar proyecto</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+</main>
+
+<sc-if value="{{ hasToast }}">
+  <div role="status" style="position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:var(--color-text);color:var(--color-bg);padding:12px 18px;font-size:14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-lg);z-index:80;max-width:520px"><i class="icon-circle-check" style="font-size:17px;color:var(--color-accent-400)"></i>{{ toast }}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Inicio&quot;,&quot;Especificaciones&quot;,&quot;Editor&quot;,&quot;Aprobación&quot;],&quot;default&quot;:&quot;Inicio&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;editorState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Normal&quot;,&quot;Vacío&quot;,&quot;Cargando&quot;],&quot;default&quot;:&quot;Normal&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;darkEditor&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;currency&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dólar (US$)&quot;,&quot;Peso dominicano (RD$)&quot;],&quot;default&quot;:&quot;Dólar (US$)&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;exchangeRate&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:63.5,&quot;min&quot;:1,&quot;max&quot;:200,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;}}">
+const h = React.createElement;
+const MUTED = 'color-mix(in srgb, var(--color-text) 62%, transparent)';
+const CUR = { code: 'USD', rate: 63.5 }, BASE = 18;
+const toCur = n => CUR.code === 'USD' ? Math.round(n / BASE) : Math.round(n / BASE * CUR.rate);
+const fromCur = v => (CUR.code === 'USD' ? v : v / CUR.rate) * BASE;
+const fmt = n => { const usd = n / BASE; return CUR.code === 'USD' ? 'US$' + Math.round(usd).toLocaleString('en-US') : 'RD$' + Math.round(usd * CUR.rate).toLocaleString('en-US'); };
+function svg(r, extra) {
+  if (!r) return null;
+  return h('svg', Object.assign({ viewBox: r.vb.map(v => +(+v).toFixed(1)).join(' '), width: '100%', height: '100%', preserveAspectRatio: 'xMidYMid meet', style: { display: 'block' } }, extra || {}), r.items.map((p, i) => {
+    if (p.t === 'text') return h('text', { key: i, x: p.x, y: p.y, fontSize: p.fs || 9, fill: p.fill || '#201e1d', textAnchor: p.anchor || 'middle', dominantBaseline: 'central', fontWeight: p.fw || 600, fontFamily: 'Archivo, system-ui, sans-serif', transform: p.rot ? `rotate(${p.rot} ${p.x} ${p.y})` : undefined, style: Object.assign({ pointerEvents: 'none' }, p.halo ? { paintOrder: 'stroke', stroke: p.halo, strokeWidth: 3, strokeLinejoin: 'round' } : {}) }, p.s);
+    if (p.t === 'c') return h('circle', { key: i, cx: p.cx, cy: p.cy, r: p.r, fill: p.fill || 'none', stroke: p.stroke || 'none', strokeWidth: p.sw || 0, onClick: p.oc, style: p.oc ? { cursor: 'pointer' } : { pointerEvents: 'none' } });
+    const filled = p.fill && p.fill !== 'none';
+    return h('path', { key: i, d: p.d, fill: p.fill || 'none', stroke: p.stroke || 'none', strokeWidth: p.sw || 0, strokeDasharray: p.dash, strokeLinejoin: 'round', onClick: p.oc, style: p.oc ? { cursor: 'pointer' } : (filled || p.floor ? undefined : { pointerEvents: 'none' }) });
+  }));
+}
+const APPL_K = [
+  { k: 'refri', name: 'Refrigerador', icon: 'icon-refrigerator', insts: ['Libre', 'Empotrado', 'En columna'], d: { on: true, inst: 'Libre', w: 75, h: 185, d: 65 } },
+  { k: 'estufa', name: 'Estufa / parrilla', icon: 'icon-flame', insts: ['Bajo encimera', 'Libre'], d: { on: true, inst: 'Bajo encimera', w: 76, h: 5, d: 52 } },
+  { k: 'horno', name: 'Horno', icon: 'icon-cooking-pot', insts: ['En columna', 'Bajo encimera'], d: { on: true, inst: 'En columna', w: 60, h: 60, d: 56 } },
+  { k: 'campana', name: 'Campana', icon: 'icon-wind', insts: ['Empotrado', 'Libre'], d: { on: true, inst: 'Libre', w: 80, h: 25, d: 50 } },
+  { k: 'micro', name: 'Microondas', icon: 'icon-microwave', insts: ['En columna', 'Empotrado', 'Libre'], d: { on: false, inst: 'En columna', w: 60, h: 38, d: 40 } },
+  { k: 'lava', name: 'Lavavajillas', icon: 'icon-washing-machine', insts: ['Empotrado', 'Libre'], d: { on: true, inst: 'Empotrado', w: 60, h: 82, d: 57 } },
+  { k: 'freg', name: 'Fregadero', icon: 'icon-droplets', insts: ['Bajo encimera', 'Empotrado'], d: { on: true, inst: 'Bajo encimera', w: 76, h: 20, d: 44 } },
+  { k: 'cava', name: 'Cava de vinos', icon: 'icon-wine', insts: ['Empotrado', 'Libre', 'En columna'], d: { on: false, inst: 'Empotrado', w: 30, h: 82, d: 57 } }
+];
+const APPL_C = [
+  { k: 'espejo', name: 'Espejo abatible', icon: 'icon-rectangle-vertical', insts: ['Integrado', 'Libre'], d: { on: true, inst: 'Integrado', w: 40, h: 150, d: 3 } },
+  { k: 'plancha', name: 'Planchador extraíble', icon: 'icon-shirt', insts: ['Integrado', 'Libre'], d: { on: false, inst: 'Integrado', w: 30, h: 10, d: 50 } },
+  { k: 'cesto', name: 'Cesto de ropa', icon: 'icon-shopping-basket', insts: ['Integrado', 'Libre'], d: { on: true, inst: 'Integrado', w: 45, h: 60, d: 45 } },
+  { k: 'caja', name: 'Caja fuerte', icon: 'icon-lock', insts: ['Integrado', 'Libre'], d: { on: false, inst: 'Integrado', w: 40, h: 30, d: 35 } },
+  { k: 'pant', name: 'Pantalonero', icon: 'icon-align-justify', insts: ['Integrado', 'Libre'], d: { on: true, inst: 'Integrado', w: 60, h: 10, d: 50 } },
+  { k: 'led', name: 'Iluminación LED', icon: 'icon-lightbulb', insts: ['Integrado', 'Libre'], d: { on: true, inst: 'Integrado', w: 300, h: 1, d: 1 } }
+];
+const LAYOUTS_K = [
+  { k: 'lineal', name: 'Lineal', desc: 'Un solo muro. Ideal para espacios angostos.', r: [[10, 10, 80, 14]] },
+  { k: 'L', name: 'En L', desc: 'Dos muros en esquina. Buen triángulo de trabajo.', r: [[10, 10, 80, 14], [10, 24, 14, 46]] },
+  { k: 'U', name: 'En U', desc: 'Tres muros. Máximo almacenamiento.', r: [[10, 10, 80, 14], [10, 24, 14, 46], [76, 24, 14, 46]] },
+  { k: 'paralela', name: 'Paralela', desc: 'Dos frentes enfrentados, pasillo al centro.', r: [[10, 10, 80, 14], [10, 56, 80, 14]] },
+  { k: 'isla', name: 'Con isla', desc: 'L o lineal con isla central independiente.', r: [[10, 10, 80, 14], [10, 24, 14, 46], [42, 44, 34, 14]] },
+  { k: 'peninsula', name: 'Con península', desc: 'Barra unida a un extremo del mueble.', r: [[10, 10, 80, 14], [10, 24, 14, 46], [62, 24, 14, 30]] }
+];
+const LAYOUTS_C = [
+  { k: 'lineal', name: 'Lineal', desc: 'Un muro con puertas abatibles o corredizas.', r: [[10, 10, 80, 16]] },
+  { k: 'L', name: 'En L', desc: 'Aprovecha la esquina con colgado.', r: [[10, 10, 80, 16], [10, 26, 16, 44]] },
+  { k: 'U', name: 'En U', desc: 'Tres muros, ideal para vestidor.', r: [[10, 10, 80, 16], [10, 26, 16, 44], [74, 26, 16, 44]] },
+  { k: 'abierto', name: 'Vestidor abierto', desc: 'Sin puertas, con isla cajonera.', r: [[10, 10, 80, 12], [10, 22, 12, 48], [40, 44, 30, 14]] }
+];
+const PT_T = { agua: ['AG', 'Toma de agua'], desague: ['DS', 'Desagüe'], elec: ['EL', 'Contacto eléctrico'], gas: ['GS', 'Toma de gas'], campana: ['CP', 'Salida de campana'] };
+const ESTILOS = [
+  { name: 'Contemporáneo', desc: 'Roble, blanco y cuarzo.', c: ['#c49a6c', '#eeebe6', '#e9e7e2'], m: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' } },
+  { name: 'Nórdico', desc: 'Fresno claro y blanco.', c: ['#d8bf98', '#eeebe6', '#b3804f'], m: { cuerpo: 'blanco', frentes: 'fresno', encimera: 'macizo', jaladeras: 'inox' } },
+  { name: 'Industrial', desc: 'Grafito, nogal y granito.', c: ['#4a4845', '#7a5236', '#34322f'], m: { cuerpo: 'grafito', frentes: 'grafito', encimera: 'granito', jaladeras: 'negro' } },
+  { name: 'Natural', desc: 'Salvia, arena y latón.', c: ['#8e9c86', '#d9cdb8', '#b8995a'], m: { cuerpo: 'arena', frentes: 'salvia', encimera: 'cuarzo', jaladeras: 'laton' } }
+];
+const STEP_K = ['Distribución', 'Medidas', 'Instalaciones', 'Electrodomésticos', 'Preferencias', 'Resumen'];
+const STEP_C = ['Distribución', 'Medidas', 'Instalaciones', 'Accesorios', 'Preferencias', 'Resumen'];
+
+class Component extends DCLogic {
+  sigRef = React.createRef();
+  viewRef = React.createRef();
+  snaps = {}; snapPending = {}; blobs = {};
+  state = {
+    ready: !!window.SPEngine, screen: 'home', ptype: 'cocina', pname: 'Cocina Familia Ortega', step: 1, layout: 'L',
+    room: { A: 360, B: 300, H: 250 },
+    ops: [{ id: 1, t: 'ventana', wall: 'A', pos: 100, w: 70, h: 100, z: 110 }, { id: 2, t: 'puerta', wall: 'D', pos: 230, w: 90, h: 210 }],
+    pts: [{ id: 1, t: 'agua', wall: 'A', pos: 255, z: 55 }, { id: 2, t: 'desague', wall: 'A', pos: 150, z: 45 }, { id: 3, t: 'elec', wall: 'A', pos: 330, z: 110 }, { id: 4, t: 'elec', wall: 'B', pos: 170, z: 110 }, { id: 5, t: 'gas', wall: 'B', pos: 90, z: 60 }, { id: 6, t: 'campana', wall: 'B', pos: 100, z: 210 }],
+    appl: null, prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: 'Jaladera', zocalo: '10 cm', presupuesto: 180000 },
+    closet: { largo: 2.4, corto: 1.8, cajoneras: 2, zapatos: 24, luz: 'Tira LED con sensor' },
+    mods: [], hist: [], fut: [], mats: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' }, applyTo: 'todo',
+    view: '3d', wall: 'A', ang: 45, zoom: 1, cotas: true, altos: true, leftOpen: true, rightOpen: true, leftTab: 'modulos', cat: 'Todos', q: '', sel: 4,
+    valOpen: false, suggest: false, suggestLoading: false, loading3d: false, loadPct: 0, generating: false, genStep: 0, tip: null, dark: false, replaceMode: false,
+    tab: 'galeria', planMod: 2, regen: {}, galAng: 45, pdfOpts: { portada: true, vistas: true, planta: true, alzados: true, planos: true, corte: true, presupuesto: true },
+    client: { nombre: 'Familia Ortega', tel: '55 4821 3390', dir: 'Av. Universidad 1420, Coyoacán, CDMX' },
+    pdfGen: false, pdfProg: 0, approveOpen: false, signer: '', sigHas: false, accept: false, approved: false, approvedBy: '', toast: null,
+    saved: 'Guardado hace 1 min', narrow: false, libOpen: false, libTab: 'tex', userTex: [], userMods: [], libMsg: null, libBusy: null, libDrag: false, priceAdj: { inst: 8, desc: 0, final: null, counter: null }, priceOpen: false, currency: 'USD', rate: 63.5, curOpen: false, tool: 'agua', ptSel: null, herr: {}
+  };
+  timers = [];
+  later(fn, ms) { const t = setTimeout(fn, ms); this.timers.push(t); return t; }
+  componentDidMount() {
+    const boot = () => {
+      if (!window.SPEngine) return this.later(boot, 60);
+      const E = window.SPEngine;
+      const appl = {}; APPL_K.concat(APPL_C).forEach(a => appl[a.k] = Object.assign({}, a.d));
+      this.setState({ ready: true, mods: E.KITCHEN(), appl }, () => this.applyProps());
+      this.loadLibrary().catch(e => console.warn('biblioteca', e && e.message));
+    };
+    boot();
+    import((window.__resources && window.__resources.planner3d) || new URL('planner-3d.js', document.baseURI).href).then(R => { this.R3 = R; return R.init(); }).then(() => { this.r3ok = true; this.forceUpdate(); }).catch(e => { console.warn('Motor 3D no disponible', e && e.message); this.r3fail = true; this.forceUpdate(); });
+    this.onResize = () => { const n = window.innerWidth < 1200; if (n !== this.state.narrow) this.setState({ narrow: n }); };
+    this.onResize(); window.addEventListener('resize', this.onResize);
+    this.onKey = e => {
+      if (this.state.screen !== 'editor' || /INPUT|SELECT|TEXTAREA/.test((e.target || {}).tagName || '')) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && this.state.sel) this.remove();
+      if (e.key === 'Escape') this.setState({ sel: null, suggest: false, replaceMode: false });
+    };
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { if (this.viewer) this.viewer.dispose(); this.timers.forEach(clearTimeout); clearInterval(this.iv); window.removeEventListener('resize', this.onResize); window.removeEventListener('keydown', this.onKey); }
+  componentDidUpdate(pp) {
+    this.syncViewer();
+    const p = this.props || {};
+    if (pp.startScreen !== p.startScreen || pp.editorState !== p.editorState || pp.currency !== p.currency || pp.exchangeRate !== p.exchangeRate) this.applyProps();
+    if (pp.darkEditor !== p.darkEditor) this.setState({ dark: !!p.darkEditor });
+  }
+  applyProps() {
+    const p = this.props || {}, E = window.SPEngine;
+    const map = { 'Inicio': 'home', 'Especificaciones': 'spec', 'Editor': 'editor', 'Aprobación': 'approval' };
+    const st = {};
+    if (p.currency) st.currency = p.currency === 'Peso dominicano (RD$)' ? 'DOP' : 'USD';
+    if (p.exchangeRate > 0) st.rate = p.exchangeRate;
+    if (p.startScreen && map[p.startScreen]) st.screen = map[p.startScreen];
+    if (p.darkEditor != null) st.dark = !!p.darkEditor;
+    if (p.editorState === 'Vacío') { st.mods = []; st.sel = null; st.loading3d = false; }
+    else if (p.editorState === 'Cargando') { st.loading3d = true; st.loadPct = 42; }
+    else if (p.editorState === 'Normal' && this.state.mods.length === 0) { st.mods = E.KITCHEN(); st.loading3d = false; }
+    else if (p.editorState === 'Normal') st.loading3d = false;
+    this.setState(st);
+  }
+  flash(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = this.later(() => this.setState({ toast: null }), 2800); }
+  commit(mods, extra) { this.setState(s => Object.assign({ mods, hist: s.hist.slice(-40).concat([s.mods]), fut: [], saved: 'Cambios sin guardar' }, extra || {})); }
+  undo = () => this.setState(s => s.hist.length ? { mods: s.hist[s.hist.length - 1], hist: s.hist.slice(0, -1), fut: [s.mods].concat(s.fut) } : null);
+  redo = () => this.setState(s => s.fut.length ? { mods: s.fut[0], fut: s.fut.slice(1), hist: s.hist.concat([s.mods]) } : null);
+  go = screen => {
+    const st = { screen, suggest: false, tip: null };
+    if (screen === 'editor' && this.state.screen !== 'editor') {
+      this.load3d();
+      const s = this.state;
+      if (!s.sel && s.mods.length) st.sel = (s.mods.find(m => m.id === 4) || s.mods[0]).id;
+    }
+    this.setState(st);
+  };
+  load3d() {
+    clearInterval(this.iv);
+    this.setState({ loading3d: true, loadPct: 0 });
+    this.iv = setInterval(() => {
+      this.setState(s => {
+        const n = Math.min(100, s.loadPct + 9 + Math.round(Math.random() * 10));
+        if (n >= 100) { clearInterval(this.iv); return { loadPct: 100, loading3d: false }; }
+        return { loadPct: n };
+      });
+    }, 110);
+  }
+  startProject(ptype) {
+    const E = window.SPEngine;
+    const closet = ptype !== 'cocina';
+    this.setState({
+      ptype, screen: 'spec', step: 1, approved: false, hist: [], fut: [],
+      pname: ptype === 'cocina' ? 'Nueva cocina' : ptype === 'closet' ? 'Nuevo closet' : 'Nuevo vestidor',
+      layout: closet ? (ptype === 'vestidor' ? 'abierto' : 'lineal') : 'L',
+      room: closet ? { A: 360, B: 240, H: 250 } : { A: 360, B: 300, H: 250 },
+      ops: closet ? [{ id: 1, t: 'puerta', wall: 'D', pos: 250, w: 80, h: 210 }] : this.state.ops,
+      pts: closet ? [{ id: 1, t: 'elec', wall: 'B', pos: 200, z: 110 }] : this.state.pts,
+      mods: closet ? (ptype === 'vestidor' ? E.VESTIDOR() : E.CLOSET()) : E.KITCHEN(), sel: null
+    });
+  }
+  generate = () => {
+    const E = window.SPEngine, s = this.state;
+    this.setState({ generating: true, genStep: 0 });
+    let k = 0;
+    const tick = () => {
+      k++;
+      if (k < 5) { this.setState({ genStep: k }); this.later(tick, 520); return; }
+      let mods;
+      if (s.ptype === 'cocina') mods = s.layout === 'isla' ? E.ISLAND() : s.layout === 'lineal' ? E.LINEAL() : E.KITCHEN();
+      else mods = s.layout === 'abierto' || s.ptype === 'vestidor' ? E.VESTIDOR() : E.CLOSET();
+      const uh = s.prefs.alacena === '90 cm' ? 90 : 70;
+      mods = mods.map(m => m.type === 'upper' ? Object.assign({}, m, { h: uh }) : m);
+      const est = ESTILOS.find(e => e.name === s.prefs.estilo);
+      this.setState({ generating: false, mods, hist: s.mods.length ? s.hist.concat([s.mods]) : s.hist, sel: mods[3] ? mods[3].id : null, mats: est ? Object.assign({}, est.m) : s.mats, screen: 'editor', view: '3d' });
+      this.load3d();
+    };
+    this.later(tick, 520);
+  };
+  setDim(key, val) {
+    const s = this.state, m = s.mods.find(x => x.id === s.sel); if (!m) return;
+    const r = this.ranges(m)[key]; val = Math.max(r[0], Math.min(r[1], Math.round(val || 0)));
+    const delta = key === 'w' ? val - m.w : 0;
+    const floor = x => x.type !== 'upper' && x.type !== 'hood';
+    const mods = s.mods.map(x => {
+      if (x.id === m.id) return Object.assign({}, x, { [key]: val });
+      if (delta && x.wall === m.wall && m.wall !== 'F' && floor(x) === floor(m) && x.pos >= m.pos + m.w - .5) return Object.assign({}, x, { pos: x.pos + delta });
+      return x;
+    });
+    this.commit(mods);
+  }
+  ranges(m) {
+    const t = m.type;
+    return {
+      w: m.rw || [30, 120],
+      h: t === 'tall' ? [180, 240] : t === 'upper' ? [35, 100] : t === 'fridge' ? [170, 200] : t === 'hood' ? [25, 25] : [60, 80],
+      d: t === 'upper' ? [25, 40] : t === 'hood' ? [50, 50] : [45, 65]
+    };
+  }
+  freeSpot(tpl) {
+    const s = this.state, up = tpl.type === 'upper';
+    const lvl = x => up ? (x.type === 'upper' || x.type === 'hood' || x.type === 'tall' || x.type === 'fridge') : (x.type !== 'upper' && x.type !== 'hood');
+    const walls = [['A', s.room.A, 0], ['B', s.room.B, s.mods.some(x => x.wall === 'A' && lvl(x) && x.pos === 0) ? (up ? 35 : 60) : 0]];
+    for (const [w, len, start] of walls) {
+      const occ = s.mods.filter(x => x.wall === w && lvl(x)).map(x => [x.pos, x.pos + x.w]);
+      if (up) s.ops.filter(o => o.wall === w && o.t === 'ventana').forEach(o => occ.push([o.pos, o.pos + o.w]));
+      occ.sort((a, b) => a[0] - b[0]);
+      let cur = start;
+      for (const [a, b] of occ) { if (a - cur >= tpl.w) return { wall: w, pos: cur }; cur = Math.max(cur, b); }
+      if (len - cur >= tpl.w) return { wall: w, pos: cur };
+    }
+    if (up) return null;
+    const isl = s.mods.filter(x => x.wall === 'F');
+    const x0 = isl.length ? Math.max(...isl.map(x => x.x + x.w)) : 130;
+    return { wall: 'F', x: x0, y: s.room.B - 125 };
+  }
+  addFromLib(tpl) {
+    const s = this.state;
+    if (s.replaceMode && s.sel) {
+      const old = s.mods.find(x => x.id === s.sel);
+      const w = Math.max(tpl.rw[0], Math.min(tpl.rw[1], old.w));
+      const nm = Object.assign({}, JSON.parse(JSON.stringify(tpl)), { id: old.id, wall: old.wall, pos: old.pos, x: old.x, y: old.y, w });
+      this.commit(s.mods.map(x => x.id === old.id ? nm : x), { replaceMode: false });
+      this.flash('Módulo ' + old.id + ' reemplazado por ' + tpl.name);
+      return;
+    }
+    const spot = this.freeSpot(tpl);
+    if (!spot) { this.flash('No hay espacio libre en los muros para ' + tpl.name); return; }
+    const id = s.mods.reduce((a, x) => Math.max(a, x.id), 0) + 1;
+    const nm = Object.assign({}, JSON.parse(JSON.stringify(tpl)), spot, { id });
+    this.commit(s.mods.concat([nm]), { sel: id, rightOpen: true });
+    this.flash(spot.wall === 'F' ? tpl.name + ' colocado como isla (sin espacio en muros)' : tpl.name + ' agregado en el muro ' + spot.wall);
+  }
+  remove = () => { const s = this.state; if (!s.sel) return; const n = s.sel; this.commit(s.mods.filter(x => x.id !== n), { sel: null }); this.flash('Módulo ' + n + ' eliminado · Ctrl+Z para deshacer'); };
+  applyMat(group, id) {
+    const s = this.state;
+    if (s.applyTo === 'modulo' && s.sel && (group === 'cuerpo' || group === 'frentes')) {
+      const key = group === 'cuerpo' ? 'cue' : 'fre';
+      this.commit(s.mods.map(x => x.id === s.sel ? Object.assign({}, x, { [key]: id }) : x));
+    } else {
+      this.setState({ mats: Object.assign({}, s.mats, { [group]: id }), saved: 'Cambios sin guardar' });
+    }
+  }
+  planClick(e, onPick) {
+    const el = e.currentTarget, pt = el.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(el.getScreenCTM().inverse()), { A, B } = this.state.room;
+    const d = [['A', p.y, p.x], ['B', p.x, p.y], ['C', A - p.x, p.y], ['D', B - p.y, p.x]].sort((a, b) => Math.abs(a[1]) - Math.abs(b[1]))[0];
+    const len = d[0] === 'A' || d[0] === 'D' ? A : B;
+    onPick(d[0], Math.max(0, Math.min(len, Math.round(d[2]))));
+  }
+  validate() {
+    const s = this.state, E = window.SPEngine, mods = s.mods, out = [];
+    const floorLv = m => m.type !== 'upper' && m.type !== 'hood';
+    const center = m => { const g = E.geo(m); return [(g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2]; };
+    const ptXY = p => E.wallPt(p.wall, p.pos, 0, s.room.A, s.room.B);
+    const sink = mods.find(m => m.sink), cook = mods.find(m => m.cook), fridge = mods.find(m => m.type === 'fridge'), hood = mods.find(m => m.type === 'hood'), oven = mods.find(m => m.oven), lv = mods.find(m => m.code && m.code.startsWith('LV'));
+    if (sink) {
+      const ws = s.pts.filter(p => p.t === 'agua');
+      if (ws.length) {
+        const c = center(sink);
+        const dist = Math.min(...ws.map(p => p.wall === sink.wall ? Math.abs(p.pos - (sink.pos + sink.w / 2)) : Math.hypot(ptXY(p)[0] - c[0], ptXY(p)[1] - c[1])));
+        const dd = Math.round(dist);
+        out.push(dd > 60 ? { st: 'err', text: `El fregadero (módulo ${sink.id}) está a ${dd} cm de la toma de agua (máx. 60 cm)`, id: sink.id, act: 'Editar instalaciones', fn: () => this.setState({ screen: 'spec', step: 3 }) } : { st: 'ok', text: `Fregadero a ${dd} cm de la toma de agua`, id: sink.id });
+      } else out.push({ st: 'err', text: 'No hay toma de agua definida para el fregadero', act: 'Editar instalaciones', fn: () => this.setState({ screen: 'spec', step: 3 }) });
+    }
+    const aCorner = mods.find(m => m.wall === 'A' && floorLv(m) && m.pos === 0);
+    [['A', s.room.A, 0], ['B', s.room.B, aCorner ? aCorner.d : 0]].forEach(([w, len, start]) => {
+      const list = mods.filter(m => m.wall === w && floorLv(m)).sort((a, b) => a.pos - b.pos);
+      if (!list.length) return;
+      let cur = start, prev = null;
+      list.forEach(m => {
+        const gap = Math.round(m.pos - cur);
+        if (gap > 0 && gap < 15) out.push({ st: 'warn', text: prev ? `Espacio sobrante de ${gap} cm entre módulos ${prev.id} y ${m.id} — agregar relleno` : `Espacio sobrante de ${gap} cm al inicio del muro ${w} — agregar relleno`, id: m.id });
+        if (gap < 0) out.push({ st: 'err', text: `Los módulos ${prev ? prev.id : ''} y ${m.id} se traslapan ${-gap} cm`, id: m.id });
+        cur = Math.max(cur, m.pos + m.w); prev = m;
+      });
+      const end = Math.round(len - cur);
+      if (end < 0) out.push({ st: 'err', text: `Los módulos del muro ${w} exceden su longitud por ${-end} cm`, id: prev.id });
+      else if (end > 0 && end < 15) out.push({ st: 'warn', text: `Espacio sobrante de ${end} cm entre el módulo ${prev.id} y el muro ${w} — agregar relleno`, id: prev.id, act: 'Ajustar ancho', fn: () => { this.setState({ sel: prev.id, rightOpen: true }, () => this.setDim('w', prev.w + end)); } });
+      else if (end === 0) out.push({ st: 'ok', text: `Muro ${w}: módulos ajustados a la longitud (${len * 10} mm)` });
+    });
+    if (sink && cook && fridge) {
+      const a = center(sink), b = center(cook), c = center(fridge);
+      const t = (Math.hypot(a[0] - b[0], a[1] - b[1]) + Math.hypot(b[0] - c[0], b[1] - c[1]) + Math.hypot(c[0] - a[0], c[1] - a[1])) / 100;
+      const ok = t >= 4 && t <= 7.9;
+      out.push({ st: ok ? 'ok' : 'warn', text: `Triángulo de trabajo: ${t.toFixed(1).replace('.', ',')} m ${ok ? '(recomendado 4–7,9 m)' : '— fuera del rango recomendado 4–7,9 m'}` });
+    }
+    if (hood && cook) {
+      const dc = Math.abs((hood.pos + hood.w / 2) - (cook.pos + cook.w / 2));
+      out.push(hood.wall === cook.wall && dc <= 5 ? { st: 'ok', text: `Campana centrada sobre la parrilla, a ${150 - 90} cm de altura libre` } : { st: 'warn', text: 'La campana no está centrada sobre la parrilla', id: hood.id });
+    }
+    if (oven) {
+      const near = s.pts.some(p => p.t === 'elec' && p.wall === oven.wall && Math.abs(p.pos - (oven.pos + oven.w / 2)) < 80);
+      out.push(near ? { st: 'ok', text: `Columna horno ${oven.id}: contacto eléctrico dedicado a menos de 80 cm` } : { st: 'warn', text: `La columna horno ${oven.id} no tiene contacto eléctrico cercano`, id: oven.id });
+    }
+    if (lv && sink) out.push(lv.wall === sink.wall && (Math.abs(lv.pos - (sink.pos + sink.w)) < 1 || Math.abs(sink.pos - (lv.pos + lv.w)) < 1) ? { st: 'ok', text: 'Lavavajillas contiguo al fregadero' } : { st: 'warn', text: 'El lavavajillas no está junto al fregadero', id: lv.id });
+    if (mods.some(m => m.wall === 'A' && m.type === 'base') && mods.some(m => m.wall === 'B' && m.type === 'base')) out.push({ st: 'warn', text: 'Encimera en L: se requiere junta en la esquina (tramos de ' + (s.room.A / 100).toFixed(1).replace('.', ',') + ' m y ' + ((s.room.B - 60) / 100).toFixed(1).replace('.', ',') + ' m)' });
+    if (s.ptype !== 'cocina' && mods.length) out.push({ st: 'ok', text: 'Profundidad de colgado suficiente (≥ 55 cm) en todos los módulos' });
+    return out;
+  }
+  modPrice(m) {
+    const s = this.state, E = window.SPEngine;
+    if (m.pOv != null) return m.pOv;
+    const fr = E.MATS[s.mats.frentes].type, k = fr.startsWith('Chapa') ? 1.14 : fr.startsWith('Lacado') ? 1.1 : 1;
+    return E.price(m) * (m.fre && E.MATS[m.fre].type.startsWith('Chapa') ? 1.12 : 1) * k;
+  }
+  totals(modsArg) {
+    const s = this.state, E = window.SPEngine, mods = modsArg || s.mods, pa = s.priceAdj;
+    const ov = mods.filter(m => m.pOv != null).reduce((a, m) => a + m.pOv, 0);
+    const base = mods.filter(m => m.pOv == null).reduce((a, m) => a + E.price(m) * (m.fre && E.MATS[m.fre].type.startsWith('Chapa') ? 1.12 : 1), 0);
+    const counterRate = { cuarzo: 52, granito: 44, macizo: 38 }[s.mats.encimera] || 45;
+    const counter = mods.filter(m => m.type === 'base').reduce((a, m) => a + m.w, 0) * counterRate;
+    const fr = E.MATS[s.mats.frentes].type;
+    const k = fr.startsWith('Chapa') ? 1.14 : fr.startsWith('Lacado') ? 1.1 : 1;
+    const cnt = pa.counter != null ? pa.counter : counter;
+    const sub = base * k + ov + cnt, install = sub * pa.inst / 100, disc = (sub + install) * pa.desc / 100;
+    const calc = sub + install - disc;
+    return { sub, counter: cnt, counterAuto: counter, install, disc, calc, total: pa.final != null ? pa.final : calc, manual: pa.final != null };
+  }
+  allParts() {
+    const s = this.state, E = window.SPEngine, rows = [];
+    s.mods.forEach(m => E.parts(m, s.mats).forEach(p => rows.push(Object.assign({ mod: m.id }, p))));
+    return rows;
+  }
+  corte() {
+    const groups = {};
+    this.allParts().forEach(p => {
+      const key = p.mat + '|' + p.esp;
+      const g = groups[key] = groups[key] || { mat: p.mat, esp: p.esp, rows: {}, pieces: 0, area: 0 };
+      const rk = p.pieza + '|' + p.L + '|' + p.A;
+      const r = g.rows[rk] = g.rows[rk] || { pieza: p.pieza, L: p.L, A: p.A, veta: p.veta, cantos: p.cantos, cant: 0, mods: [] };
+      r.cant += p.cant; if (r.mods.indexOf(p.mod) < 0) r.mods.push(p.mod);
+      g.pieces += p.cant; g.area += p.cant * p.L * p.A / 1e6;
+    });
+    return Object.values(groups).sort((a, b) => b.area - a.area);
+  }
+  exportCsv = () => {
+    const lines = [['Material', 'Espesor (mm)', 'Pieza', 'Módulos', 'Cantidad', 'Largo (mm)', 'Ancho (mm)', 'Veta', 'Cantos']];
+    this.corte().forEach(g => Object.values(g.rows).forEach(r => lines.push([g.mat, g.esp, r.pieza, r.mods.join(' '), r.cant, r.L, r.A, r.veta, r.cantos])));
+    const csv = '\ufeff' + lines.map(l => l.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'lista-de-corte-' + this.state.pname.toLowerCase().replace(/\s+/g, '-') + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    this.flash('Lista de corte descargada (CSV compatible con Excel)');
+  };
+  loadScript(src) {
+    return new Promise((res, rej) => { if (document.querySelector('script[src="' + src + '"]') || (/jspdf/.test(src) && window.jspdf) || (/html2canvas/.test(src) && window.html2canvas)) return res(); const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error('No se pudo cargar ' + src)); document.head.appendChild(el); });
+  }
+  exportPdf = async () => {
+    if (this.state.pdfGen) return;
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    this.setState({ pdfGen: true, pdfProg: 3, pdfStep: 'Preparando páginas…', screen: 'approval', tab: 'pdf', expOpen: false });
+    try {
+      await Promise.all([this.loadScript((window.__resources && window.__resources.jspdf) || 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'), this.loadScript((window.__resources && window.__resources.html2canvas) || 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js')]);
+      this.setState({ pdfProg: 10, pdfStep: 'Renderizando vistas 3D…' });
+      let t0 = Date.now();
+      while (Date.now() - t0 < 12000) { await wait(400); if (this.r3fail || !this.r3ok || !Object.keys(this.snapPending).some(k => !this.snaps[k])) break; }
+      await wait(300);
+      const pages = Array.from(document.querySelectorAll('[data-pdf-page]'));
+      if (!pages.length) throw new Error('No hay páginas para exportar');
+      const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+      for (let i = 0; i < pages.length; i++) {
+        this.setState({ pdfProg: Math.round(15 + 80 * i / pages.length), pdfStep: 'Página ' + (i + 1) + ' de ' + pages.length + '…' });
+        const el = pages[i], sc = Math.max(3, 1400 / el.offsetWidth);
+        const cv = await window.html2canvas(el, { scale: sc, backgroundColor: '#ffffff', useCORS: true, logging: false, onclone: d => { d.querySelectorAll('[data-pdf-page]').forEach(p => { p.style.boxShadow = 'none'; }); } });
+        if (i) doc.addPage();
+        doc.addImage(cv.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, 297, 210);
+        await wait(0);
+      }
+      this.setState({ pdfProg: 100, pdfStep: 'Descargando…' });
+      const name = (this.state.pname || 'proyecto').replace(/[\\/:*?"<>|]+/g, '-') + '.pdf';
+      doc.save(name);
+      await wait(300);
+      this.setState({ pdfGen: false }); this.flash('PDF descargado: ' + name);
+    } catch (e) {
+      console.warn('PDF', e && e.message);
+      this.setState({ pdfGen: false }); this.flash('No se pudo generar el PDF: ' + (e && e.message || 'error'));
+    }
+  };
+  sigPos(e) { const c = this.sigRef.current, r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; }
+  sigDown = e => { const c = this.sigRef.current; if (!c) return; this.drawing = true; c.setPointerCapture && c.setPointerCapture(e.pointerId); const ctx = c.getContext('2d'); const [x, y] = this.sigPos(e); ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = getComputedStyle(c).color || '#201e1d'; ctx.beginPath(); ctx.moveTo(x, y); };
+  sigMove = e => { if (!this.drawing) return; const ctx = this.sigRef.current.getContext('2d'); const [x, y] = this.sigPos(e); ctx.lineTo(x, y); ctx.stroke(); if (!this.state.sigHas) this.setState({ sigHas: true }); };
+  sigUp = () => { this.drawing = false; };
+  sigClear = e => { e && e.preventDefault(); const c = this.sigRef.current; if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); this.setState({ sigHas: false }); };
+  renderVals() {
+    const s = this.state;
+    if (!s.ready || !window.SPEngine) return { isHome: true, theme: 'light' };
+    CUR.code = s.currency; CUR.rate = s.rate;
+    const v = this.rvCommon();
+    if (s.screen === 'home') Object.assign(v, this.rvHome());
+    if (s.screen === 'spec') Object.assign(v, this.rvSpec());
+    if (s.screen === 'editor') Object.assign(v, this.rvEditor());
+    if (s.screen === 'approval') Object.assign(v, this.rvApproval());
+    return v;
+  }
+  isoArt(mods, o) {
+    const s = this.state, E = window.SPEngine;
+    const full = Object.assign({ room: s.room, mats: s.mats, ops: s.ops, ang: 45, zoc: s.prefs.zocalo === '15 cm' ? 15 : 10, handle: E.handleOf(s.prefs.apertura), altos: true, pad: 10 }, o || {});
+    const fb = svg(E.iso(mods, full));
+    if (!full.photo) return fb;
+    const cfg = { mods, mats: full.mats, room: full.room, ops: full.ops, handle: full.handle, zoc: full.zoc, kitchen: mods.some(m => m.sink || m.cook || m.type === 'fridge'), bg: '#d3cec6' };
+    const url = this.snap(cfg, Object.assign({ ang: full.ang }, full.photo, full.focusId ? { focusId: full.focusId } : {}));
+    return url ? h('img', { src: url, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }) : fb;
+  }
+  rvLib() {
+    const s = this.state, E = window.SPEngine, tex = s.libTab === 'tex';
+    const v = {
+      openLib: () => this.setState({ libOpen: true, libMsg: null }), openLibMod: () => this.setState({ libOpen: true, libTab: 'mod', libMsg: null }), openLibTex: () => this.setState({ libOpen: true, libTab: 'tex', libMsg: null }),
+      closeLib: () => this.setState({ libOpen: false }), libOpen: s.libOpen
+    };
+    if (!s.libOpen) return v;
+    Object.assign(v, {
+      libTabs: [['tex', 'Texturas', 'icon-palette', s.userTex.length], ['mod', 'Módulos', 'icon-package', s.userMods.length]].map(([k, label, icon, count]) => ({ label, icon, count, pick: () => this.setState({ libTab: k, libMsg: null }), bc: s.libTab === k ? 'var(--color-accent)' : 'transparent', fw: s.libTab === k ? 800 : 600 })),
+      libTexTab: tex, libModTab: !tex, noTex: !s.userTex.length, noMods: !s.userMods.length,
+      libAccept: tex ? 'image/jpeg,image/png,image/webp' : '.json,.glb,.gltf',
+      dropTitle: tex ? 'Arrastra tus texturas aquí' : 'Arrastra tus módulos aquí',
+      dropHint: tex ? 'JPG, PNG o WebP. Detectamos madera, piedra y metal por el nombre del archivo; puedes ajustarlo después.' : 'Archivos .json con módulos paramétricos o modelos 3D .glb (una sola pieza, con texturas incluidas).',
+      dropBd: s.libDrag ? 'var(--color-accent)' : 'var(--color-divider)', dropBg: s.libDrag ? 'var(--color-accent-100)' : 'var(--color-bg)',
+      libDragOver: e => { e.preventDefault(); if (!s.libDrag) this.setState({ libDrag: true }); }, libDragLeave: () => this.setState({ libDrag: false }),
+      libDrop: e => { e.preventDefault(); this.setState({ libDrag: false }); this.addFiles(e.dataTransfer.files); },
+      libPick: e => { this.addFiles(e.target.files); e.target.value = ''; },
+      libBusy: s.libBusy, hasLibMsg: !!s.libMsg, libMsg: s.libMsg, dlTemplate: this.dlTemplate,
+      libFoot: s.userTex.length + ' textura(s) y ' + s.userMods.length + ' módulo(s) propios · aparecen en Materiales y en Módulos → Mis módulos'
+    });
+    const USES = [['cuerpo', 'Cuerpo', 'icon-box'], ['frentes', 'Frentes', 'icon-door-closed'], ['encimera', 'Encimera', 'icon-rectangle-horizontal'], ['jaladeras', 'Jaladeras', 'icon-grip-horizontal']];
+    const num = (e, d) => { const n = parseFloat(e.target.value); return n > 0 ? n : d; };
+    v.texItems = s.userTex.map(t => ({
+      bg: `center / cover url("${t.url}")`, name: t.name, type: t.type, tile: t.tile, finish: t.finish,
+      setName: e => this.updLib('tex', t.id, { name: e.target.value }), setType: e => this.updLib('tex', t.id, { type: e.target.value }),
+      setTile: e => this.updLib('tex', t.id, { tile: num(e, t.tile) }), setFinish: e => this.updLib('tex', t.id, { finish: e.target.value }),
+      uses: USES.map(([k, l, icon]) => { const on = (t.groups || []).includes(k); return { l, icon, bg: on ? 'var(--color-text)' : 'transparent', fg: on ? 'var(--color-bg)' : 'var(--color-text)', bd: on ? 'var(--color-text)' : 'var(--color-divider)', toggle: () => this.updLib('tex', t.id, { groups: on ? t.groups.filter(x => x !== k) : (t.groups || []).concat([k]) }) }; }),
+      del: () => this.delLib('tex', t.id)
+    }));
+    v.modItems = s.userMods.map(m => {
+      const set = k => e => this.updLib('mod', m.id, { [k]: e.target.value }), setN = k => e => this.updLib('mod', m.id, { [k]: num(e, m[k]) });
+      return {
+        name: m.name, code: m.code, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, rw0: m.rw0, rw1: m.rw1, precio: m.precio,
+        pad: m.thumb ? '0' : '8px', art: m.thumb ? h('img', { src: m.thumb, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }) : svg(E.frontThumb({ w: m.w, h: m.h, d: m.d, type: m.type, fr: m.fr || [] }, s.mats, E.handleOf(s.prefs.apertura))),
+        src: m.src === 'glb' ? 'Modelo 3D · GLB' : 'Paramétrico · JSON',
+        note: m.src === 'glb' ? 'El modelo se escala a ancho × alto × fondo. Sin despiece en la lista de corte.' : (m.fr || []).length + ' frente(s) · genera despiece y lista de corte',
+        setName: set('name'), setCode: set('code'), setCat: set('cat'), setType: set('type'), setW: setN('w'), setH: setN('h'), setD: setN('d'), setRw0: setN('rw0'), setRw1: setN('rw1'), setPrecio: e => this.updLib('mod', m.id, { precio: Math.max(0, parseFloat(e.target.value) || 0) }),
+        del: () => this.delLib('mod', m.id)
+      };
+    });
+    return v;
+  }
+  sceneCfg(mods, extra) {
+    const s = this.state, E = window.SPEngine;
+    return Object.assign({ mods, mats: s.mats, room: s.room, ops: s.ops, handle: E.handleOf(s.prefs.apertura), zoc: s.prefs.zocalo === '15 cm' ? 15 : 10, kitchen: s.ptype === 'cocina' }, extra || {});
+  }
+  snap(cfg, o) {
+    if (!this.r3ok) return null;
+    const str = JSON.stringify([cfg, o, this.texVer || 0]);
+    let hsh = 2166136261; for (let i = 0; i < str.length; i++) { hsh ^= str.charCodeAt(i); hsh = Math.imul(hsh, 16777619); }
+    const k = hsh >>> 0;
+    if (this.snaps[k]) return this.snaps[k];
+    if (!this.snapPending[k]) { this.snapPending[k] = 1; this.R3.snapshot(cfg, o).then(url => { if (url) { this.snaps[k] = url; this.forceUpdate(); } }).catch(e => console.warn('snapshot', e && e.message)); }
+    return null;
+  }
+  syncViewer() {
+    const host = this.viewRef.current, s = this.state;
+    if (this.viewer && this.viewer.host !== host) { this.viewer.dispose(); this.viewer = null; this.v3ready = false; }
+    if (!host || !this.r3ok) return;
+    if (!this.viewer) {
+      if (this.creating) return;
+      this.creating = true;
+      this.R3.createViewer(host, {
+        onSelect: id => this.setState(st => ({ sel: id, rightOpen: id ? true : st.rightOpen, replaceMode: false })),
+        onReady: () => { this.v3ready = true; this.forceUpdate(); }
+      }).then(v => { this.creating = false; if (this.viewRef.current !== host) { v.dispose(); return; } this.viewer = v; this.syncViewer(); }).catch(e => { this.creating = false; console.warn('viewer', e && e.message); this.r3fail = true; this.forceUpdate(); });
+      return;
+    }
+    this.viewer.update(this.sceneCfg(s.mods, { sel: s.sel, cotas: s.cotas, altos: s.altos, bg: s.dark ? '#131211' : '#d3cec6' })).catch(e => console.warn('update 3D', e && e.message));
+  }
+  async loadLibrary() {
+    if (!window.SPLib) return this.later(() => this.loadLibrary(), 100);
+    const items = await window.SPLib.all().catch(() => []) || [];
+    const userTex = [], userMods = [];
+    items.forEach(it => {
+      const { blob, ...meta } = it;
+      if (blob) { this.blobs[it.id] = blob; meta.url = URL.createObjectURL(blob); }
+      (it.kind === 'tex' ? userTex : userMods).push(meta);
+    });
+    this.setState({ userTex, userMods }, () => this.registerLib());
+  }
+  registerLib() {
+    const E = window.SPEngine, s = this.state, ROUGH = { Mate: .72, Satinado: .45, Brillante: .14 };
+    Object.keys(E.MATS).filter(k => k.startsWith('u_')).forEach(k => delete E.MATS[k]);
+    s.userTex.forEach(t => { E.MATS[t.id] = { name: t.name, type: t.type, c: t.c, img: t.url, tile: t.tile, rough: ROUGH[t.finish] || .5, user: 1 }; });
+    for (let i = E.LIB.length - 1; i >= 0; i--) if (E.LIB[i].user) E.LIB.splice(i, 1);
+    s.userMods.forEach(m => E.LIB.push({ user: 1, libId: m.id, code: m.code, name: m.name, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, w0: m.w, rw: [Math.min(m.rw0 || m.w, m.w), Math.max(m.rw1 || m.w, m.w)], fr: m.fr || [], glb: m.src === 'glb' ? m.url : undefined, pBase: m.precio > 0 ? m.precio : undefined, thumb: m.thumb }));
+    this.texVer = (this.texVer || 0) + 1;
+    this.forceUpdate();
+  }
+  saveItem(meta) { const { url, ...rest } = meta; window.SPLib && window.SPLib.put(Object.assign(rest, this.blobs[meta.id] ? { blob: this.blobs[meta.id] } : {})); }
+  updLib(kind, id, patch) {
+    const key = kind === 'tex' ? 'userTex' : 'userMods';
+    this.setState(st => ({ [key]: st[key].map(x => x.id === id ? Object.assign({}, x, patch) : x) }), () => { const it = this.state[key].find(x => x.id === id); if (it) this.saveItem(it); this.registerLib(); });
+  }
+  delLib(kind, id) {
+    const key = kind === 'tex' ? 'userTex' : 'userMods';
+    window.SPLib && window.SPLib.del(id);
+    this.setState(st => ({ [key]: st[key].filter(x => x.id !== id), mats: kind === 'tex' ? Object.fromEntries(Object.entries(st.mats).map(([g, v]) => [g, v === id ? ({ cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' })[g] : v])) : st.mats }), () => this.registerLib());
+  }
+  async addFiles(files) {
+    const s = this.state, list = Array.from(files || []);
+    if (!list.length) return;
+    const errs = [];
+    this.setState({ libBusy: 'Procesando ' + list.length + ' archivo(s)…', libMsg: null });
+    const newTex = [], newMods = [];
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i], name = file.name.replace(/\.[^.]+$/, ''), ext = (file.name.split('.').pop() || '').toLowerCase(), id = 'u_' + Date.now().toString(36) + i;
+      try {
+        if (/^(jpe?g|png|webp)$/.test(ext)) {
+          const url = URL.createObjectURL(file), c = await window.SPLib.avgColor(url), low = name.toLowerCase();
+          const stone = /marm|quartz|cuarzo|granit|piedra|stone|marble/.test(low), wood = /madera|roble|nogal|oak|walnut|wood|fresno|encino|pino/.test(low), metal = /metal|acero|steel|laton|brass|alumin/.test(low);
+          const meta = { id, kind: 'tex', name, type: stone ? 'Cuarzo' : wood ? 'Chapa natural' : metal ? 'Metal' : 'Melamina', groups: stone ? ['encimera'] : metal ? ['jaladeras'] : ['frentes', 'cuerpo'], tile: stone ? 80 : 60, finish: stone ? 'Satinado' : 'Mate', c, url };
+          this.blobs[id] = file; newTex.push(meta); this.saveItem(meta);
+        } else if (ext === 'json') {
+          const data = JSON.parse(await file.text()), arr = Array.isArray(data) ? data : (data.modulos || data.modules || [data]);
+          const TY = { bajo: 'base', base: 'base', alto: 'upper', upper: 'upper', columna: 'tall', tall: 'tall', libre: 'fridge', fridge: 'fridge' };
+          arr.forEach((d, j) => {
+            const w = +(d.ancho ?? d.w), hh = +(d.alto ?? d.h), dd = +(d.fondo ?? d.d), type = TY[String(d.tipo ?? d.type ?? 'base').toLowerCase()];
+            if (!(w > 0 && hh > 0 && dd > 0) || !type) { errs.push(file.name + ' #' + (j + 1) + ': faltan ancho/alto/fondo o tipo válido'); return; }
+            let fr = d.frentes ?? d.fr;
+            if (!Array.isArray(fr)) fr = type === 'fridge' ? [] : [{ t: 'door', n: w > 60 ? 2 : 1, f: 1 }];
+            const TT = { puerta: 'door', door: 'door', cajon: 'drawer', 'cajón': 'drawer', drawer: 'drawer', abierto: 'open', open: 'open', horno: 'oven', oven: 'oven' };
+            fr = fr.map(x => ({ t: TT[x.t ?? x.tipo] || 'door', f: +(x.f ?? x.fraccion ?? 1), n: x.n ?? x.puertas, rod: x.rod ?? x.barra }));
+            const sum = fr.reduce((a, x) => a + x.f, 0) || 1; fr.forEach(x => x.f /= sum);
+            const rw = d.rangoAncho ?? d.rw ?? [w, w];
+            const meta = { id: id + '_' + j, kind: 'mod', src: 'json', name: d.nombre ?? d.name ?? name, code: d.codigo ?? d.code ?? ('MOD-' + (j + 1)), cat: d.categoria ?? d.cat ?? 'Mis módulos', type, w, h: hh, d: dd, rw0: +rw[0] || w, rw1: +rw[1] || w, precio: +(d.precio ?? d.price ?? 0), fr };
+            newMods.push(meta); this.saveItem(meta);
+          });
+        } else if (ext === 'glb' || ext === 'gltf') {
+          if (!this.R3) throw new Error('el motor 3D aún no está disponible');
+          const url = URL.createObjectURL(file);
+          const dim = await this.R3.modelInfo(url), thumb = await this.R3.modelThumb(url);
+          const meta = { id, kind: 'mod', src: 'glb', name, code: 'GLB-' + (s.userMods.length + newMods.length + 1), cat: 'Mis módulos', type: dim.h > 150 ? 'fridge' : 'base', w: dim.w, h: dim.h, d: dim.d, rw0: dim.w, rw1: dim.w, precio: 0, thumb, url };
+          this.blobs[id] = file; newMods.push(meta); this.saveItem(meta);
+        } else errs.push(file.name + ': formato no admitido');
+      } catch (e) { errs.push(file.name + ': ' + (e.message || 'no se pudo leer')); }
+    }
+    this.setState(st => ({ userTex: st.userTex.concat(newTex), userMods: st.userMods.concat(newMods), libBusy: null, libMsg: errs.length ? errs.join(' · ') : null }), () => {
+      this.registerLib();
+      const n = newTex.length + newMods.length;
+      if (n) this.flash(n + ' elemento(s) agregados a tu biblioteca');
+    });
+  }
+  dlTemplate = () => {
+    const tpl = [
+      { codigo: 'MB-2C', nombre: 'Bajo 2 cajones', categoria: 'Cajoneras', tipo: 'bajo', ancho: 60, alto: 76, fondo: 60, rangoAncho: [40, 90], precio: 420, frentes: [{ tipo: 'cajon', fraccion: 0.5 }, { tipo: 'cajon', fraccion: 0.5 }] },
+      { codigo: 'MA-2P', nombre: 'Alacena 2 puertas', categoria: 'Altos', tipo: 'alto', ancho: 80, alto: 70, fondo: 35, rangoAncho: [60, 120], precio: 260, frentes: [{ tipo: 'puerta', puertas: 2, fraccion: 1 }] },
+      { codigo: 'MC-DE', nombre: 'Columna despensa', categoria: 'Columnas', tipo: 'columna', ancho: 50, alto: 210, fondo: 60, rangoAncho: [40, 60], precio: 690, frentes: [{ tipo: 'puerta', puertas: 1, fraccion: 0.45 }, { tipo: 'puerta', puertas: 1, fraccion: 0.55 }] }
+    ];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(tpl, null, 2)], { type: 'application/json' }));
+    a.download = 'plantilla-modulos-stephanny.json'; document.body.appendChild(a); a.click(); a.remove();
+  };
+  rvCommon() {
+    const s = this.state, E = window.SPEngine;
+    const order = ['spec', 'editor', 'approval'], idx = order.indexOf(s.screen);
+    const phases = [['Especificaciones', 'spec'], ['Diseño', 'editor'], ['Aprobación', 'approval']].map(([label, sc], i) => {
+      const done = i < idx || (i === 2 && s.approved), act = i === idx;
+      return {
+        n: i + 1, label, done, notDone: !done, notLast: i < 2, go: () => this.go(sc), showLabel: !s.narrow || act,
+        lc: act || done ? 'var(--color-text)' : MUTED, fw: act ? 800 : 600,
+        cbg: act ? 'var(--color-accent)' : done ? 'var(--color-text)' : 'transparent',
+        cfg: act ? '#fff' : done ? 'var(--color-bg)' : MUTED,
+        cbd: act ? 'var(--color-accent)' : done ? 'var(--color-text)' : 'var(--color-divider)'
+      };
+    });
+    const t = this.totals();
+    const setCur = c => { this.setState({ currency: c }); this.flash(c === 'USD' ? 'Precios en dólares estadounidenses (US$)' : 'Precios en pesos dominicanos (RD$)'); };
+    const lib = this.rvLib();
+    return {
+      ...lib,
+      curLabel: s.currency === 'USD' ? 'US$' : 'RD$', curOpen: s.curOpen, toggleCur: () => this.setState({ curOpen: !s.curOpen }), closeCur: () => this.setState({ curOpen: false }),
+      curOpts: [['USD', 'Dólar estadounidense', 'US$'], ['DOP', 'Peso dominicano', 'RD$']].map(([c, l, sym]) => ({ l, sym, on: s.currency === c, pick: () => setCur(c) })),
+      rate: s.rate, setRate: e => { const r = parseFloat(e.target.value); if (r > 0) this.setState({ rate: r }); },
+      rateNote: '1 US$ = RD$' + s.rate.toFixed(2),
+      theme: s.screen === 'editor' && s.dark ? 'dark' : 'light',
+      isHome: s.screen === 'home', isSpec: s.screen === 'spec', isEditor: s.screen === 'editor', isApproval: s.screen === 'approval',
+      inProject: s.screen !== 'home', pname: s.pname, setPname: e => this.setState({ pname: e.target.value, saved: 'Cambios sin guardar' }),
+      phases, showLabels: !s.narrow, saved: s.saved,
+      goHome: () => this.setState({ screen: 'home' }),
+      undo: this.undo, redo: this.redo, undoDisabled: !s.hist.length, redoDisabled: !s.fut.length,
+      toggleDark: () => this.setState({ dark: !s.dark }), darkIcon: s.dark ? 'icon-sun' : 'icon-moon',
+      share: () => this.flash('Enlace de solo lectura copiado al portapapeles'),
+      save: () => { this.setState({ saved: 'Guardado hace un momento' }); this.flash('Proyecto guardado'); },
+      hasToast: !!s.toast, toast: s.toast, stop: e => e.stopPropagation(),
+      generating: s.generating, genPct: (s.genStep * 25) + '%',
+      genSteps: ['Analizando medidas y aberturas', 'Ubicando fregadero junto a la toma de agua', 'Colocando electrodomésticos', 'Optimizando triángulo de trabajo y rellenos'].map((label, i) => ({ label, icon: i < s.genStep ? 'icon-circle-check' : i === s.genStep ? 'icon-loader' : 'icon-circle', c: i <= s.genStep ? 'var(--color-text)' : MUTED })),
+      priceStr: fmt(t.total), modCount: s.mods.length, priceCaption: t.manual ? 'Precio final' : 'Precio estimado',
+      priceOpen: s.priceOpen, togglePrice: () => this.setState({ priceOpen: !s.priceOpen }), closePrice: () => this.setState({ priceOpen: false }),
+      priceRows: [{ k: 'Módulos', v: fmt(t.sub - t.counter) }, { k: 'Encimera', v: fmt(t.counter) }, { k: 'Instalación (' + s.priceAdj.inst + '%)', v: fmt(t.install) }].concat(t.disc ? [{ k: 'Descuento (' + s.priceAdj.desc + '%)', v: '−' + fmt(t.disc) }] : []).concat([{ k: 'Total calculado', v: fmt(t.calc) }]),
+      instPct: s.priceAdj.inst, descPct: s.priceAdj.desc, counterVal: toCur(t.counter), finalVal: toCur(t.total),
+      setInst: e => { const n = parseFloat(e.target.value); if (n >= 0 && n <= 100) this.setState(st => ({ priceAdj: Object.assign({}, st.priceAdj, { inst: n }) })); },
+      setDesc: e => { const n = parseFloat(e.target.value); if (n >= 0 && n <= 100) this.setState(st => ({ priceAdj: Object.assign({}, st.priceAdj, { desc: n }) })); },
+      setCounter: e => { const n = parseFloat(e.target.value); if (n >= 0) this.setState(st => ({ priceAdj: Object.assign({}, st.priceAdj, { counter: fromCur(n) }) })); },
+      setFinal: e => { const n = parseFloat(e.target.value); if (n >= 0) this.setState(st => ({ priceAdj: Object.assign({}, st.priceAdj, { final: Math.abs(fromCur(n) - t.calc) < BASE ? null : fromCur(n) }) })); },
+      resetPrice: () => this.setState(st => ({ priceAdj: { inst: 8, desc: 0, final: null, counter: null }, mods: st.mods.map(x => { const { pOv, ...rest } = x; return rest; }) })),
+      priceHint: t.manual ? 'Precio final fijado a mano; no cambia al editar módulos.' : 'Haz clic en un módulo para editar su precio. El total se recalcula solo.',
+      pdfGen: s.pdfGen, pdfPct: s.pdfProg + '%', pdfStep: s.pdfStep,
+      approveOpen: s.approveOpen, closeApprove: () => this.setState({ approveOpen: false }),
+      signer: s.signer, setSigner: e => this.setState({ signer: e.target.value }), sigRef: this.sigRef, sigDown: this.sigDown, sigMove: this.sigMove, sigUp: this.sigUp, sigClear: this.sigClear,
+      accept: s.accept, toggleAccept: () => this.setState({ accept: !s.accept }),
+      confirmDisabled: !(s.signer.trim() && s.sigHas && s.accept),
+      confirmApprove: () => { this.setState({ approved: true, approveOpen: false, approvedBy: s.signer.trim() }); this.flash('Proyecto aprobado y enviado a producción'); },
+      suggest: s.suggest, closeSuggest: () => this.setState({ suggest: false })
+    };
+  }
+  rvHome() {
+    const s = this.state, E = window.SPEngine;
+    const isoL = (m, o) => this.isoArt(m, Object.assign({ photo: { w: 760, h: 570 } }, o));
+    const isoS = (m, o) => this.isoArt(m, Object.assign({ photo: { w: 320, h: 200 } }, o));
+    const kroom = { A: 360, B: 300, H: 250 }, croom = { A: 360, B: 240, H: 250 };
+    const kops = [{ t: 'ventana', wall: 'A', pos: 100, w: 70, h: 100, z: 110 }];
+    const types = [
+      { k: 'cocina', name: 'Cocina', kicker: 'Lineal · L · U · Isla', desc: 'Bajos, alacenas, columnas y electrodomésticos con validación de instalaciones.', art: isoL(E.KITCHEN(), { room: kroom, ops: kops, mats: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' } }) },
+      { k: 'closet', name: 'Closet', kicker: 'Puertas abatibles', desc: 'Colgado largo y corto, cajoneras y zapateras en un muro o en esquina.', art: isoL(E.CLOSET(), { room: croom, ops: [], mats: { cuerpo: 'blanco', frentes: 'blanco', encimera: 'cuarzo', jaladeras: 'laton' } }) },
+      { k: 'vestidor', name: 'Vestidor', kicker: 'Abierto · En U', desc: 'Módulos abiertos con isla cajonera e iluminación integrada.', art: isoL(E.VESTIDOR(), { room: croom, ops: [], mats: { cuerpo: 'nogal', frentes: 'nogal', encimera: 'cuarzo', jaladeras: 'laton' } }) }
+    ].map(t => Object.assign(t, { pick: () => this.startProject(t.k) }));
+    const P = (name, meta, date, status, tag, art, open) => ({ name, meta, date, status, tag, thumb: art, open });
+    const projects = [
+      P('Cocina Familia Ortega', 'Cocina · En L · 13 módulos', '21 sep 2026', 'En diseño', 'tag tag-outline', isoS(E.KITCHEN(), { room: kroom, ops: kops, mats: s.mats, altos: true, pad: 4 }), () => { this.setState({ ptype: 'cocina', pname: 'Cocina Familia Ortega', room: kroom, mods: E.KITCHEN(), sel: 4, approved: false }); this.go('editor'); }),
+      P('Closet recámara principal', 'Closet · Lineal · 4 módulos', '18 sep 2026', 'Borrador', 'tag tag-neutral', isoS(E.CLOSET(), { room: croom, ops: [], mats: { cuerpo: 'blanco', frentes: 'blanco', encimera: 'cuarzo', jaladeras: 'laton' }, pad: 4 }), () => { this.startProject('closet'); this.setState({ pname: 'Closet recámara principal', step: 2 }); }),
+      P('Vestidor Depto. Polanco', 'Vestidor · Abierto · 7 módulos', '2 sep 2026', 'Aprobado', 'tag tag-accent', isoS(E.VESTIDOR(), { room: croom, ops: [], mats: { cuerpo: 'nogal', frentes: 'nogal', encimera: 'cuarzo', jaladeras: 'laton' }, pad: 4 }), () => { this.setState({ ptype: 'vestidor', pname: 'Vestidor Depto. Polanco', room: croom, mods: E.VESTIDOR(), ops: [], approved: true, approvedBy: 'Ana Lucía Pérez', screen: 'approval', tab: 'galeria', planMod: 1 }); }),
+      P('Cocina Casa Coyoacán', 'Cocina · Lineal · 7 módulos', '14 ago 2026', 'Aprobado', 'tag tag-accent', isoS(E.LINEAL(), { room: kroom, ops: [], mats: { cuerpo: 'grafito', frentes: 'grafito', encimera: 'granito', jaladeras: 'negro' }, pad: 4 }), () => { this.setState({ ptype: 'cocina', pname: 'Cocina Casa Coyoacán', room: kroom, mods: E.LINEAL(), ops: [], mats: { cuerpo: 'grafito', frentes: 'grafito', encimera: 'granito', jaladeras: 'negro' }, approved: true, approvedBy: 'Jorge Ramírez', screen: 'approval', tab: 'galeria', planMod: 3 }); })
+    ];
+    return { types, projects };
+  }
+  rvSpec() {
+    const s = this.state, E = window.SPEngine, kit = s.ptype === 'cocina';
+    const names = kit ? STEP_K : STEP_C;
+    const Q = {
+      1: ['¿Qué distribución tiene tu espacio?', kit ? 'Elige la forma general. Podrás ajustar cada módulo en el editor.' : 'Elige cómo se reparten los módulos en la habitación.'],
+      2: ['Medidas del espacio', 'Captura el largo de cada muro y la altura del techo en centímetros. Agrega puertas y ventanas para evitar interferencias.'],
+      3: ['¿Dónde están las instalaciones?', 'Elige un tipo y haz clic sobre un muro en la planta para ubicarlo. Indica la altura desde el piso.'],
+      4: [kit ? '¿Qué electrodomésticos llevará?' : '¿Qué accesorios quieres incluir?', kit ? 'Define el tipo de instalación y las medidas de cada equipo para reservar su hueco.' : 'Selecciona los accesorios y su forma de integración.'],
+      5: ['Preferencias de diseño', kit ? 'Estas elecciones definen materiales, alturas y herrajes de la propuesta.' : 'Indica cuánto espacio necesitas para cada tipo de prenda.'],
+      6: ['Revisa tus respuestas', 'Confirma que todo esté correcto antes de generar la distribución propuesta.']
+    };
+    const st = s.step;
+    const v = {
+      asideW: s.narrow ? '280px' : '320px', step: st, stepLabel: 'Paso ' + st + ' de 6', question: Q[st][0], helper: Q[st][1],
+      s1: st === 1, s2: st === 2, s3: st === 3, s4: st === 4, s5k: st === 5 && kit, s5c: st === 5 && !kit, s6: st === 6,
+      specSteps: names.map((label, i) => ({ n: i + 1, label, go: () => this.setState({ step: i + 1 }), bar: i + 1 < st ? 'var(--color-text)' : i + 1 === st ? 'var(--color-accent)' : 'var(--color-neutral-300)', lc: i + 1 <= st ? 'var(--color-text)' : MUTED, fw: i + 1 === st ? 800 : 600 })),
+      prev: () => this.setState({ step: Math.max(1, st - 1) }), prevDisabled: st === 1,
+      next: () => st < 6 ? this.setState({ step: st + 1 }) : this.generate(), nextLabel: st < 6 ? 'Siguiente' : 'Generar distribución'
+    };
+    const planEl = (withPts) => svg(E.plan({ A: s.room.A, B: s.room.B, ops: s.ops, pts: withPts ? s.pts : [], ptSel: s.ptSel, cotas: true }), withPts ? { onClick: e => this.planClick(e, (wall, pos) => { const id = s.pts.reduce((a, p) => Math.max(a, p.id), 0) + 1; const z = { agua: 55, desague: 45, elec: 110, gas: 60, campana: 210 }[s.tool]; this.setState({ pts: s.pts.concat([{ id, t: s.tool, wall, pos, z }]), ptSel: id }); this.flash(PT_T[s.tool][1] + ' ubicada en muro ' + wall + ' a ' + pos + ' cm'); }) } : null);
+    if (st === 1) {
+      const L = kit ? LAYOUTS_K : LAYOUTS_C;
+      v.layouts = L.map(l => {
+        const sel = s.layout === l.k;
+        const items = [{ d: 'M4 4H96V76H4Z', fill: 'none', stroke: '#201e1d', sw: 2 }, { d: 'M62 76H84', stroke: '#f3f2f2', sw: 3 }].concat(l.r.map(r => ({ d: `M${r[0]} ${r[1]}h${r[2]}v${r[3]}h${-r[2]}Z`, fill: sel ? '#ec3013' : '#7d7979' })));
+        return { name: l.name, desc: l.desc, sel, bd: sel ? 'var(--color-accent)' : 'transparent', pick: () => this.setState({ layout: l.k }), art: svg({ items, vb: [0, 0, 100, 80] }) };
+      });
+    }
+    if (st === 2) {
+      v.planSpec = planEl(false);
+      const setR = k => e => { const n = Math.max(100, Math.min(1200, parseFloat(e.target.value) || 0)); this.setState({ room: Object.assign({}, s.room, { [k]: n }) }); };
+      v.walls = [{ label: 'Muro A', val: s.room.A, set: setR('A'), locked: false }, { label: 'Muro B', val: s.room.B, set: setR('B'), locked: false }, { label: 'Muro C', val: s.room.B, set: null, locked: true }, { label: 'Muro D', val: s.room.A, set: null, locked: true }];
+      v.roomH = s.room.H; v.setRoomH = setR('H');
+      const upd = (id, k, num) => e => this.setState({ ops: s.ops.map(o => o.id === id ? Object.assign({}, o, { [k]: num ? (parseFloat(e.target.value) || 0) : e.target.value }) : o) });
+      v.opsRows = s.ops.map(o => ({ label: o.t === 'ventana' ? 'Ventana' : 'Puerta', icon: o.t === 'ventana' ? 'icon-app-window' : 'icon-door-open', wall: o.wall, pos: o.pos, w: o.w, h: o.h, setWall: upd(o.id, 'wall'), setPos: upd(o.id, 'pos', 1), setW: upd(o.id, 'w', 1), setH: upd(o.id, 'h', 1), del: () => this.setState({ ops: s.ops.filter(x => x.id !== o.id) }) }));
+      const nid = s.ops.reduce((a, o) => Math.max(a, o.id), 0) + 1;
+      v.addDoor = () => this.setState({ ops: s.ops.concat([{ id: nid, t: 'puerta', wall: 'C', pos: 40, w: 80, h: 210 }]) });
+      v.addWindow = () => this.setState({ ops: s.ops.concat([{ id: nid, t: 'ventana', wall: 'D', pos: 60, w: 100, h: 100, z: 110 }]) });
+    }
+    if (st === 3) {
+      v.planPts = planEl(true);
+      v.tools = Object.keys(PT_T).map(k => { const on = s.tool === k; return { code: PT_T[k][0], label: PT_T[k][1], pick: () => this.setState({ tool: k }), bg: on ? 'var(--color-accent)' : 'var(--color-bg)', fg: on ? '#fff' : 'var(--color-text)', bd: on ? 'var(--color-accent)' : 'var(--color-divider)' }; });
+      v.toolHint = 'Clic sobre un muro para ubicar: ' + PT_T[s.tool][1].toLowerCase();
+      v.ptRows = s.pts.map(p => ({ code: PT_T[p.t][0], label: PT_T[p.t][1], where: 'Muro ' + p.wall + ' · a ' + p.pos + ' cm de la esquina', z: p.z, bg: s.ptSel === p.id ? 'var(--color-accent-100)' : 'transparent', pick: () => this.setState({ ptSel: p.id }), setZ: e => this.setState({ pts: s.pts.map(x => x.id === p.id ? Object.assign({}, x, { z: parseFloat(e.target.value) || 0 }) : x) }), del: e => { e.stopPropagation(); this.setState({ pts: s.pts.filter(x => x.id !== p.id) }); } }));
+    }
+    if (st === 4) {
+      const list = kit ? APPL_K : APPL_C;
+      const upd = (k, patch) => this.setState({ appl: Object.assign({}, s.appl, { [k]: Object.assign({}, s.appl[k], patch) }) });
+      v.applList = list.map(a => {
+        const c = s.appl[a.k];
+        return {
+          name: a.name, icon: a.icon, on: c.on, op: c.on ? 1 : .45, bd: c.on ? 'var(--color-text)' : 'transparent', toggle: () => upd(a.k, { on: !c.on }),
+          insts: a.insts.map(l => { const on = c.inst === l; return { l, pick: () => upd(a.k, { inst: l, on: true }), bg: on ? 'var(--color-text)' : 'transparent', fg: on ? 'var(--color-bg)' : 'var(--color-text)', bd: on ? 'var(--color-text)' : 'var(--color-divider)' }; }),
+          w: c.w, h: c.h, d: c.d, setW: e => upd(a.k, { w: +e.target.value }), setH: e => upd(a.k, { h: +e.target.value }), setD: e => upd(a.k, { d: +e.target.value })
+        };
+      });
+    }
+    if (st === 5) {
+      const setP = (k, val) => this.setState({ prefs: Object.assign({}, s.prefs, { [k]: val }) });
+      v.estilos = ESTILOS.map(e => ({ name: e.name, desc: e.desc, c1: e.c[0], c2: e.c[1], c3: e.c[2], bd: s.prefs.estilo === e.name ? 'var(--color-accent)' : 'transparent', pick: () => setP('estilo', e.name) }));
+      const seg = (title, key, opts, note) => ({ title, key, note, opts: opts.map(l => ({ l, on: s.prefs[key] === l, pick: () => setP(key, l) })) });
+      v.prefSegs = [seg('Altura de alacenas', 'alacena', ['70 cm', '90 cm'], 'Alacenas de 90 cm llegan casi al techo.'), seg('Tipo de apertura', 'apertura', ['Jaladera', 'Gola', 'Push'], 'Se refleja en todos los frentes del 3D.'), seg('Zócalo', 'zocalo', ['10 cm', '15 cm'], 'Altura del rodapié bajo los módulos.')];
+      v.pres = s.prefs.presupuesto; v.presLabel = fmt(s.prefs.presupuesto); v.presMin = fmt(80000); v.presMax = fmt(400000); v.setPres = e => setP('presupuesto', +e.target.value);
+      const setC = (k, val) => this.setState({ closet: Object.assign({}, s.closet, { [k]: val }) });
+      v.closetSliders = [
+        { title: 'Colgado largo', key: 'largo', min: 0, max: 5, step: .1, unit: ' m', note: 'Vestidos, abrigos (altura libre 150 cm).' },
+        { title: 'Colgado corto', key: 'corto', min: 0, max: 5, step: .1, unit: ' m', note: 'Camisas, sacos (altura libre 100 cm).' },
+        { title: 'Zapateras', key: 'zapatos', min: 0, max: 80, step: 2, unit: ' pares', note: 'Repisas extraíbles inclinadas.' }
+      ].map(c => Object.assign(c, { val: s.closet[c.key], label: String(s.closet[c.key]).replace('.', ',') + c.unit, set: e => setC(c.key, +e.target.value) }));
+      v.cajoneras = s.closet.cajoneras; v.cajMinus = () => setC('cajoneras', Math.max(0, s.closet.cajoneras - 1)); v.cajPlus = () => setC('cajoneras', Math.min(6, s.closet.cajoneras + 1));
+      v.luzOpts = ['Sin iluminación', 'Tira LED', 'Tira LED con sensor'].map(l => ({ l, on: s.closet.luz === l, pick: () => setC('luz', l) }));
+    }
+    const lay = (kit ? LAYOUTS_K : LAYOUTS_C).find(l => l.k === s.layout) || {};
+    const list = kit ? APPL_K : APPL_C;
+    const applOn = list.filter(a => s.appl[a.k] && s.appl[a.k].on);
+    const cnt = t => s.pts.filter(p => p.t === t).length;
+    const prefTxt = kit ? s.prefs.estilo + ' · ' + s.prefs.apertura : 'Colgado ' + String(s.closet.largo).replace('.', ',') + ' m + ' + String(s.closet.corto).replace('.', ',') + ' m';
+    const rows = [
+      ['icon-shapes', 'Tipo de proyecto', s.ptype === 'cocina' ? 'Cocina' : s.ptype === 'closet' ? 'Closet' : 'Vestidor', 0],
+      ['icon-layout-grid', 'Distribución', lay.name, 1],
+      ['icon-ruler', 'Medidas', s.room.A + ' × ' + s.room.B + ' cm · techo ' + s.room.H + ' cm', 2],
+      ['icon-door-open', 'Puertas y ventanas', s.ops.filter(o => o.t === 'puerta').length + ' puerta(s) · ' + s.ops.filter(o => o.t === 'ventana').length + ' ventana(s)', 2],
+      ['icon-plug', 'Instalaciones', cnt('agua') + ' agua · ' + cnt('desague') + ' desagüe · ' + cnt('elec') + ' eléctrico · ' + cnt('gas') + ' gas', 3],
+      ['icon-refrigerator', kit ? 'Electrodomésticos' : 'Accesorios', applOn.map(a => a.name).join(', ') || 'Ninguno', 4],
+      ['icon-palette', 'Preferencias', prefTxt, 5]
+    ];
+    v.summary = rows.map(r => { const done = st > r[3]; return { icon: done ? 'icon-circle-check' : r[0], ic: done ? 'var(--color-accent)' : MUTED, label: r[1], value: done ? r[2] : 'Pendiente', vc: done ? 'var(--color-text)' : MUTED }; });
+    if (st === 6) {
+      const ed = n => () => this.setState({ step: n });
+      v.resumen = [
+        { n: 1, title: 'Distribución', rows: [{ k: 'Tipo', v: rows[0][2] }, { k: 'Forma', v: lay.name }], edit: ed(1) },
+        { n: 2, title: 'Medidas', rows: [{ k: 'Muro A', v: s.room.A + ' cm' }, { k: 'Muro B', v: s.room.B + ' cm' }, { k: 'Techo', v: s.room.H + ' cm' }, { k: 'Aberturas', v: String(s.ops.length) }], edit: ed(2) },
+        { n: 3, title: 'Instalaciones', rows: Object.keys(PT_T).filter(t => cnt(t)).map(t => ({ k: PT_T[t][1], v: s.pts.filter(p => p.t === t).map(p => p.wall + ' ' + p.pos).join(' · ') })), edit: ed(3) },
+        { n: 4, title: kit ? 'Electrodomésticos' : 'Accesorios', rows: applOn.map(a => ({ k: a.name, v: s.appl[a.k].inst + (kit ? ' · ' + s.appl[a.k].w + ' cm' : '') })), edit: ed(4) },
+        { n: 5, title: 'Preferencias', rows: kit ? [{ k: 'Estilo', v: s.prefs.estilo }, { k: 'Alacenas', v: s.prefs.alacena }, { k: 'Apertura', v: s.prefs.apertura }, { k: 'Zócalo', v: s.prefs.zocalo }] : [{ k: 'Colgado largo', v: s.closet.largo + ' m' }, { k: 'Colgado corto', v: s.closet.corto + ' m' }, { k: 'Cajoneras', v: String(s.closet.cajoneras) }, { k: 'Iluminación', v: s.closet.luz }], edit: ed(5) },
+        { n: 6, title: 'Presupuesto', rows: [{ k: 'Aproximado', v: fmt(s.prefs.presupuesto) }, { k: 'Entrega estimada', v: '5–6 semanas' }], edit: ed(5) }
+      ];
+      v.generate = this.generate;
+    }
+    return v;
+  }
+  rvEditor() {
+    const s = this.state, E = window.SPEngine, v = {};
+    const handle = E.handleOf(s.prefs.apertura), zoc = s.prefs.zocalo === '15 cm' ? 15 : 10;
+    const onSel = id => this.setState({ sel: id, rightOpen: true, replaceMode: false });
+    const sel = s.mods.find(m => m.id === s.sel);
+    Object.assign(v, {
+      leftOpen: s.leftOpen, leftClosed: !s.leftOpen, rightOpen: s.rightOpen, rightClosed: !s.rightOpen,
+      leftW: s.narrow ? '256px' : '300px', rightW: s.narrow ? '272px' : '320px',
+      toggleLeft: () => this.setState({ leftOpen: !s.leftOpen }), toggleRight: () => this.setState({ rightOpen: !s.rightOpen }),
+      leftTabs: [['modulos', 'Módulos', 'icon-package'], ['materiales', 'Materiales', 'icon-palette'], ['electro', 'Electro', 'icon-refrigerator']].map(([k, label, icon]) => ({ label, icon, pick: () => this.setState({ leftTab: k }), open: () => this.setState({ leftTab: k, leftOpen: true }), bc: s.leftTab === k ? 'var(--color-accent)' : 'transparent', fw: s.leftTab === k ? 800 : 600 })),
+      tabMod: s.leftTab === 'modulos', tabMat: s.leftTab === 'materiales', tabElec: s.leftTab === 'electro',
+      q: s.q, setQ: e => this.setState({ q: e.target.value }), replaceMode: s.replaceMode, cancelReplace: () => this.setState({ replaceMode: false }),
+      openLibPanel: () => this.setState({ leftOpen: true, leftTab: 'modulos' })
+    });
+    const CATS = [['Todos', 'Todos'], ['Bajos', 'Bajos'], ['Altos', 'Altos'], ['Columnas', 'Columnas'], ['Esquinas', 'Esquinas'], ['Cajoneras', 'Cajoneras'], ['Closet', 'Accesorios de closet']].concat(s.userMods.length ? [['__user', 'Mis módulos']] : []);
+    v.cats = CATS.map(([k, l]) => { const on = s.cat === k; return { l, pick: () => this.setState({ cat: k }), bg: on ? 'var(--color-text)' : 'transparent', fg: on ? 'var(--color-bg)' : 'var(--color-text)', bd: on ? 'var(--color-text)' : 'var(--color-divider)' }; });
+    const q = s.q.trim().toLowerCase();
+    const lib = E.LIB.filter(l => (s.cat === 'Todos' || l.cat === s.cat || (s.cat === '__user' && l.user)) && (!q || (l.name + ' ' + l.code).toLowerCase().includes(q)));
+    v.lib = lib.map(l => ({ user: !!l.user, pad: l.thumb ? '0' : '8px', name: l.name, code: l.code, range: l.rw[0] === l.rw[1] ? 'Ancho ' + l.rw[0] + ' cm' : 'Ancho ' + l.rw[0] + '–' + l.rw[1] + ' cm', art: l.thumb ? h('img', { src: l.thumb, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }) : svg(E.frontThumb(l, s.mats, handle)), add: () => this.addFromLib(l), drag: e => { e.dataTransfer.setData('text/plain', l.code); e.dataTransfer.effectAllowed = 'copy'; } }));
+    v.libEmpty = !lib.length;
+    v.dragOver = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+    v.drop = e => { e.preventDefault(); const code = e.dataTransfer.getData('text/plain'); const l = E.LIB.find(x => x.code === code); if (l) this.addFromLib(l); };
+    const modMode = s.applyTo === 'modulo' && sel;
+    v.applyTodo = !modMode; v.applyMod = !!modMode; v.applyModOp = sel ? 1 : .45;
+    v.setApplyTodo = () => this.setState({ applyTo: 'todo' }); v.setApplyMod = () => sel && this.setState({ applyTo: 'modulo' });
+    const groupsAll = E.GROUPS.map(g => Object.assign({}, g, { ids: g.ids.concat(s.userTex.filter(t => (t.groups || []).includes(g.k)).map(t => t.id)) }));
+    v.matGroups = groupsAll.map(g => {
+      const cur = modMode && (g.k === 'cuerpo' || g.k === 'frentes') ? (sel[g.k === 'cuerpo' ? 'cue' : 'fre'] || s.mats[g.k]) : s.mats[g.k];
+      return {
+        label: g.label, current: E.MATS[cur].name,
+        items: g.ids.map(id => { const m = E.MATS[id]; return { name: m.name, type: m.type, bg: m.img ? `center / cover url("${m.img}")` : m.wood ? `repeating-linear-gradient(100deg, ${m.c} 0 7px, ${E.shade(m.c, -.08)} 7px 9px, ${m.c} 9px 15px, ${E.shade(m.c, .06)} 15px 17px)` : m.c, ring: cur === id ? '2px solid var(--color-accent)' : '2px solid transparent', pick: () => this.applyMat(g.k, id) }; })
+      };
+    });
+    v.elecList = s.mods.filter(m => m.appl || m.oven || m.sink || m.cook).map(m => ({ n: m.id, name: m.oven ? 'Horno (en ' + m.name.toLowerCase() + ')' : m.sink ? 'Fregadero (en ' + m.name.toLowerCase() + ')' : m.cook ? 'Parrilla (en ' + m.name.toLowerCase() + ')' : m.name, dims: m.w + ' × ' + m.h + ' × ' + m.d + ' cm · Muro ' + (m.wall === 'F' ? 'isla' : m.wall), inst: m.type === 'fridge' ? 'Libre' : m.oven ? 'En columna' : m.sink || m.cook ? 'Bajo encimera' : 'Empotrado', pick: () => onSel(m.id) }));
+
+    const is3d = s.view === '3d', isPlan = s.view === 'planta', isElev = s.view === 'alzado';
+    const webgl = !this.r3fail, waiting3d = is3d && webgl && !this.v3ready;
+    Object.assign(v, { is3d, isPlan, isElev, isEmpty: !s.mods.length && !(is3d && webgl ? waiting3d : s.loading3d), loading3d: is3d && webgl ? waiting3d : s.loading3d, loadPct: Math.min(96, s.loadPct) + '%', viewRef: this.viewRef, d3: is3d && webgl ? 'block' : 'none', show3dFallback: is3d && !webgl });
+    if (is3d && !webgl && s.mods.length) v.viewer3d = this.isoArt(s.mods, { ang: s.ang, zoom: s.zoom, cotas: s.cotas, altos: s.altos, sel: s.sel, onSel, handle, zoc, pad: 30 });
+    if (is3d && !webgl && !s.mods.length) v.viewer3d = this.isoArt([], { ang: s.ang, zoom: s.zoom, cotas: s.cotas, pad: 30 });
+    if (isPlan) v.viewerPlan = svg(E.plan({ A: s.room.A, B: s.room.B, mods: s.mods, pts: s.pts, ops: s.ops, sel: s.sel, onSel, cotas: s.cotas, altos: s.altos }), s.zoom !== 1 ? { style: { display: 'block', transform: `scale(${s.zoom})` } } : null);
+    if (isElev) v.viewerElev = svg(E.elev({ wall: s.wall, len: s.wall === 'A' ? s.room.A : s.room.B, H: s.room.H, mods: s.mods, ops: s.ops, mats: s.mats, handle, zoc, sel: s.sel, onSel, cotas: s.cotas, altos: s.altos }), s.zoom !== 1 ? { style: { display: 'block', transform: `scale(${s.zoom})` } } : null);
+    v.showMinimap = is3d && !s.narrow && !v.loading3d;
+    if (v.showMinimap) v.minimap = svg(E.plan({ A: s.room.A, B: s.room.B, mods: s.mods, pts: s.pts, ops: s.ops, sel: s.sel, onSel, cotas: false, nums: false, altos: false }));
+    v.showSelChip = !!sel && !v.loading3d && !s.rightOpen;
+    v.viewOpts = [['3d', '3D Perspectiva', 'icon-box'], ['planta', 'Planta', 'icon-square-dashed'], ['alzado', 'Alzado', 'icon-panels-top-left']].map(([k, l, icon]) => ({ l, icon, pick: () => this.setState({ view: k }), bg: s.view === k ? 'var(--color-text)' : 'transparent', fg: s.view === k ? 'var(--color-bg)' : 'var(--color-text)' }));
+    const wallsWith = ['A', 'B'].filter(w => s.mods.some(m => m.wall === w));
+    v.wallOpts = (wallsWith.length ? wallsWith : ['A', 'B']).map(w => ({ l: w, pick: () => this.setState({ wall: w }), bg: s.wall === w ? 'var(--color-accent)' : 'transparent', fg: s.wall === w ? '#fff' : 'var(--color-text)' }));
+    const ctl = [
+      ['zin', 'icon-zoom-in', 'Acercar', '+', () => is3d && this.viewer ? this.viewer.zoomBy(1.25) : this.setState({ zoom: Math.min(2.6, +(s.zoom * 1.25).toFixed(2)) })],
+      ['zout', 'icon-zoom-out', 'Alejar', '−', () => is3d && this.viewer ? this.viewer.zoomBy(1 / 1.25) : this.setState({ zoom: Math.max(.6, +(s.zoom / 1.25).toFixed(2)) })],
+      ['fit', 'icon-scan', 'Centrar vista', 'F', () => { if (is3d && this.viewer) this.viewer.fit(false, Math.PI / 4); this.setState({ zoom: 1, ang: 45 }); }],
+      ['rot', 'icon-rotate-cw', 'Rotar cámara', 'R', () => { const a = s.ang === 45 ? 25 : s.ang === 25 ? 65 : 45; if (this.viewer) this.viewer.setAngle(a); this.setState({ ang: a, view: '3d' }); }],
+      ['full', 'icon-maximize', 'Pantalla completa', 'Shift+F', () => { const on = s.leftOpen || s.rightOpen; this.setState({ leftOpen: !on, rightOpen: !on }); }],
+      ['cotas', 'icon-ruler', s.cotas ? 'Ocultar cotas' : 'Mostrar cotas', 'C', () => this.setState({ cotas: !s.cotas }), s.cotas],
+      ['altos', 'icon-layers', s.altos ? 'Ocultar alacenas' : 'Mostrar alacenas', 'A', () => this.setState({ altos: !s.altos }), s.altos]
+    ];
+    v.controls = ctl.map((c, i) => ({ icon: c[1], tip: c[2], key: c[3], act: c[4], enter: () => this.setState({ tip: c[0] }), tipOn: s.tip === c[0], bg: c[5] ? 'var(--color-accent-100)' : 'transparent', fg: c[5] ? 'var(--color-accent-700)' : 'var(--color-text)', sep: i === 5 ? '2px solid var(--color-divider)' : '0' }));
+    v.tipOff = () => this.setState({ tip: null });
+    v.suggestLabel = s.narrow ? 'Sugerir distribución' : 'Sugerir distribución automática';
+    v.openSuggest = () => { this.setState({ suggest: true, suggestLoading: true }); this.later(() => this.setState({ suggestLoading: false }), 900); };
+    if (s.suggest) {
+      const kit = s.ptype === 'cocina';
+      const A = kit ? [['En L optimizada', E.KITCHEN], ['En L con isla', E.ISLAND], ['Lineal con columnas', E.LINEAL]] : [['Puertas abatibles', E.CLOSET], ['Vestidor abierto', E.VESTIDOR], ['Mixto', () => E.CLOSET().slice(0, 2).concat(E.VESTIDOR().slice(2, 4).map((m, i) => Object.assign(m, { id: 3 + i, pos: 200 + i * 100, w: i ? 60 : 100 })))]];
+      const curSig = s.mods.map(m => m.code + m.wall).join();
+      v.alts = A.map(([name, fn]) => {
+        const mods = fn();
+        const tot = this.totals(mods).total;
+        const ml = mods.filter(m => m.type !== 'upper' && m.type !== 'hood').reduce((a, m) => a + m.w, 0) / 100;
+        const current = mods.map(m => m.code + m.wall).join() === curSig;
+        return { name, current, bd: current ? 'var(--color-accent)' : 'transparent', loading: s.suggestLoading, ready: !s.suggestLoading, art: s.suggestLoading ? null : this.isoArt(mods, { pad: 6, photo: { w: 600, h: 420 } }), metrics: [{ k: 'Módulos', v: String(mods.length) }, { k: 'Metros lineales', v: ml.toFixed(1).replace('.', ',') + ' m' }, { k: 'Precio estimado', v: fmt(tot) }], apply: () => { this.commit(mods, { suggest: false, sel: null }); this.flash('Distribución "' + name + '" aplicada · Ctrl+Z para deshacer'); } };
+      });
+    }
+    v.hasSel = !!sel; v.noSel = !sel;
+    v.selNum = sel ? sel.id : '';
+    if (sel) {
+      const r = this.ranges(sel);
+      Object.assign(v, { selName: sel.name, selCode: sel.code, selCat: sel.cat, selDims: sel.w * 10 + ' × ' + sel.h * 10 + ' × ' + sel.d * 10 + ' mm', selThumb: svg(E.frontThumb(sel, s.mats, handle)), selPrice: fmt(this.modPrice(sel)), selPriceVal: toCur(this.modPrice(sel)), selPriceOv: sel.pOv != null,
+        setSelPrice: e => { const n = parseFloat(e.target.value); if (!(n >= 0)) return; const id = sel.id; this.setState(st => ({ mods: st.mods.map(x => x.id === id ? Object.assign({}, x, { pOv: fromCur(n) }) : x) })); },
+        resetSelPrice: () => { const id = sel.id; this.setState(st => ({ mods: st.mods.map(x => { if (x.id !== id) return x; const { pOv, ...rest } = x; return rest; }) })); }, closeSel: () => this.setState({ sel: null }) });
+      v.dims = [['w', 'Ancho'], ['h', 'Alto'], ['d', 'Fondo']].map(([k, label]) => ({ label, min: r[k][0], max: r[k][1], val: sel[k], fixed: r[k][0] === r[k][1], range: r[k][0] === r[k][1] ? 'fijo' : r[k][0] + '–' + r[k][1] + ' cm', set: e => this.setDim(k, parseFloat(e.target.value)) }));
+      const doorSeg = sel.fr.find(f => f.t === 'door'), drawers = sel.fr.filter(f => f.t === 'drawer').length, allDr = sel.fr.length && sel.fr.every(f => f.t === 'drawer');
+      v.showFronts = !!(doorSeg || allDr);
+      v.frLabel = allDr ? 'Cajones' : 'Puertas'; v.frCount = allDr ? drawers : (doorSeg ? doorSeg.n || 1 : 0);
+      const setFr = d => {
+        let fr;
+        if (allDr) { const n = Math.max(1, Math.min(5, drawers + d)); fr = Array.from({ length: n }, () => ({ t: 'drawer', f: 1 / n })); }
+        else fr = sel.fr.map(f => f === doorSeg ? Object.assign({}, f, { n: Math.max(1, Math.min(2, (f.n || 1) + d)) }) : f);
+        this.commit(s.mods.map(x => x.id === sel.id ? Object.assign({}, x, { fr }) : x));
+      };
+      v.frMinus = () => setFr(-1); v.frPlus = () => setFr(1);
+      v.showOpen = !!doorSeg && (doorSeg.n || 1) === 1;
+      v.openOpts = [['der', 'Derecha'], ['izq', 'Izquierda']].map(([k, l]) => ({ l, on: (sel.open || 'der') === k, pick: () => this.commit(s.mods.map(x => x.id === sel.id ? Object.assign({}, x, { open: k }) : x)) }));
+      v.showMatSel = !sel.appl || sel.code.startsWith('LV');
+      v.cueVal = sel.cue || ''; v.freVal = sel.fre || '';
+      v.setCue = e => this.commit(s.mods.map(x => x.id === sel.id ? Object.assign({}, x, { cue: e.target.value || undefined }) : x));
+      v.setFre = e => this.commit(s.mods.map(x => x.id === sel.id ? Object.assign({}, x, { fre: e.target.value || undefined }) : x));
+      v.herrVal = s.herr[sel.id] || (allDr ? 'Corredera oculta cierre suave' : sel.cat === 'Esquinas' ? 'Carrusel esquinero 3/4' : 'Bisagra cierre suave 110°');
+      v.setHerr = e => this.setState({ herr: Object.assign({}, s.herr, { [sel.id]: e.target.value }) });
+      v.duplicate = () => { const { wall, pos, x, y, id, ...tpl } = sel; this.addFromLib(Object.assign(tpl, { rw: sel.rw || [sel.w, sel.w] })); };
+      v.replace = () => { this.setState({ replaceMode: true, leftOpen: true, leftTab: 'modulos', cat: E.LIB.some(l => l.cat === sel.cat) ? sel.cat : 'Todos' }); this.flash('Elige en la biblioteca el módulo de reemplazo'); };
+      v.remove = this.remove;
+    }
+    const t = this.totals();
+    v.projStats = [{ k: 'Módulos', v: String(s.mods.length) }, { k: 'Metros lineales', v: (s.mods.filter(m => m.type !== 'upper' && m.type !== 'hood').reduce((a, m) => a + m.w, 0) / 100).toFixed(2).replace('.', ',') + ' m' }, { k: 'Encimera', v: E.MATS[s.mats.encimera].name }, { k: 'Frentes', v: E.MATS[s.mats.frentes].name }, { k: 'Presupuesto objetivo', v: fmt(s.prefs.presupuesto) }, { k: 'Precio estimado', v: fmt(t.total) }];
+    const val = this.validate();
+    const ICON = { ok: ['icon-circle-check', '#2f7d4f'], warn: ['icon-triangle-alert', '#a86a00'], err: ['icon-circle-x', 'var(--color-accent-700)'] };
+    const ord = { err: 0, warn: 1, ok: 2 };
+    const sorted = val.slice().sort((a, b) => ord[a.st] - ord[b.st]);
+    v.valItems = sorted.map(x => ({ icon: ICON[x.st][0], c: ICON[x.st][1], text: x.text, hasAct: !!(x.fn || x.id), actLabel: x.act || 'Ver módulo ' + x.id, act: x.fn || (() => onSel(x.id)) }));
+    v.okCount = val.filter(x => x.st === 'ok').length; v.warnCount = val.filter(x => x.st === 'warn').length; v.errCount = val.filter(x => x.st === 'err').length;
+    v.firstIssue = sorted[0] ? sorted[0].text : 'Sin módulos en la escena'; v.firstColor = sorted[0] ? ICON[sorted[0].st][1] : MUTED;
+    v.valOpen = s.valOpen; v.toggleVal = () => this.setState({ valOpen: !s.valOpen }); v.valChevron = s.valOpen ? 'icon-chevron-down' : 'icon-chevron-up';
+    v.goApproval = () => this.setState({ screen: 'approval' });
+    return v;
+  }
+  rvApproval() {
+    const s = this.state, E = window.SPEngine, v = {};
+    const handle = E.handleOf(s.prefs.apertura), zoc = s.prefs.zocalo === '15 cm' ? 15 : 10;
+    const nr = s.narrow;
+    v.expOpen = !!s.expOpen; v.toggleExp = () => this.setState({ expOpen: !s.expOpen }); v.closeExp = () => this.setState({ expOpen: false });
+    const ex = fn => () => { this.setState({ expOpen: false }); fn(); };
+    v.expItems = [['icon-file-text', 'Exportar PDF', 'PDF', this.exportPdf], ['icon-file-spreadsheet', 'Lista de corte', 'CSV / Excel', this.exportCsv], ['icon-pen-tool', 'Planos técnicos', 'DXF', () => this.flash('DXF generado: planta, alzados y ' + s.mods.filter(m => !m.appl).length + ' planos de módulo')]].map(([icon, l, ext, fn]) => ({ icon, l, ext, act: ex(fn) }));
+    v.apTabs = [['galeria', nr ? 'Galería' : 'Galería de vistas', 'icon-images'], ['planos', nr ? 'Planos' : 'Planos de ensamblaje', 'icon-drafting-compass'], ['corte', nr ? 'Corte' : 'Lista de corte', 'icon-scissors'], ['pdf', nr ? 'PDF' : 'Vista previa PDF', 'icon-file-text']].map(([k, label, icon]) => ({ label, icon, pick: () => this.setState({ tab: k }), bc: s.tab === k ? 'var(--color-accent)' : 'transparent', fw: s.tab === k ? 800 : 600 }));
+    Object.assign(v, { tGal: s.tab === 'galeria', tPlan: s.tab === 'planos', tCorte: s.tab === 'corte', tPdf: s.tab === 'pdf', exportPdf: this.exportPdf, exportCsv: this.exportCsv, exportDxf: () => this.flash('DXF generado: planta, alzados y ' + s.mods.filter(m => !m.appl).length + ' planos de módulo'), sendClient: () => this.flash('Propuesta enviada a ' + s.client.nombre + ' por correo y WhatsApp'), openApprove: () => this.setState({ approveOpen: true, signer: s.signer || s.client.nombre, accept: false, sigHas: false }), approved: s.approved, notApproved: !s.approved, approvedText: 'Aprobado por ' + (s.approvedBy || s.client.nombre) + ' · 23 sep 2026 · El diseño está bloqueado para producción.' });
+    const elevA = () => svg(E.elev({ wall: 'A', len: s.room.A, H: s.room.H, mods: s.mods, ops: s.ops, mats: s.mats, handle, zoc }));
+    const elevB = () => svg(E.elev({ wall: 'B', len: s.room.B, H: s.room.H, mods: s.mods, ops: s.ops, mats: s.mats, handle, zoc }));
+    const planA = () => svg(E.plan({ A: s.room.A, B: s.room.B, mods: s.mods, pts: s.pts, ops: s.ops }));
+    const persp = (o) => this.isoArt(s.mods, Object.assign({ ang: s.galAng, handle, zoc, photo: { w: 1100, h: 1000 } }, o || {}));
+    const detMod = s.mods.find(m => m.sink) || s.mods[0];
+    const detFocus = detMod ? (() => { const g = E.geo(detMod); return [(g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2, 80, 340]; })() : null;
+    if (s.tab === 'galeria') {
+      const G = [['persp', 'Render perspectiva', 'Cámara ' + s.galAng + '°', persp, '1 / span 2', '1 / span 2'], ['planta', 'Planta acotada', '1:25', planA, 'auto', 'auto'], ['alzA', 'Alzado muro A', '1:20', elevA, 'auto', 'auto'], ['alzB', 'Alzado muro B', '1:20', elevB, 'auto', 'auto'], ['det', 'Vista de detalle · fregadero', 'Detalle', () => persp({ ang: 35, focus: detFocus, focusId: detMod && detMod.id, photo: { w: 1200, h: 480 } }), 'span 2', 'auto']];
+      v.gal = G.map(([k, title, scale, fn, col, row]) => { const loading = !!s.regen[k]; return { title, scale, col, row, loading, ready: !loading, art: loading ? null : fn(), regen: () => { this.setState({ regen: Object.assign({}, this.state.regen, { [k]: true }) }); this.later(() => this.setState({ regen: Object.assign({}, this.state.regen, { [k]: false }) }), 1100); }, adjust: () => { if (k === 'persp' || k === 'det') this.setState({ galAng: s.galAng === 45 ? 30 : s.galAng === 30 ? 60 : 45 }); else this.flash('Encuadre ajustado a los muros'); } }; });
+    }
+    const buildable = s.mods.filter(m => E.parts(m, s.mats).length);
+    if (s.tab === 'planos') {
+      const pm = buildable.find(m => m.id === s.planMod) || buildable[0];
+      v.planCount = buildable.length;
+      v.planList = buildable.map(m => ({ n: m.id, name: m.name, code: m.code, dims: m.w * 10 + '×' + m.h * 10 + '×' + m.d * 10, pick: () => this.setState({ planMod: m.id }), bg: pm && pm.id === m.id ? 'var(--color-accent-100)' : 'transparent', bc: pm && pm.id === m.id ? 'var(--color-accent)' : 'transparent' }));
+      if (pm) {
+        const pr = E.parts(pm, s.mats);
+        Object.assign(v, { pmNum: pm.id, pmName: pm.name, pmCode: pm.code, pmDims: pm.w * 10 + ' × ' + pm.h * 10 + ' × ' + pm.d * 10 + ' mm', pmPieces: pr.reduce((a, p) => a + p.cant, 0) + ' piezas' });
+        v.pmViews = [['Vista frontal', 'front'], ['Vista lateral', 'side'], ['Vista superior', 'top']].map(([title, k]) => ({ title, art: svg(E.ortho(pm, s.mats, k, handle)) }));
+        v.pmExpl = svg(E.exploded(pm, s.mats));
+        v.pmParts = pr.map(p => ({ ref: p.ref, pieza: p.pieza, cant: p.cant, dim: p.L + ' × ' + p.A, esp: p.esp + ' mm', mat: p.mat, veta: p.veta, cantos: p.cantos }));
+      }
+    }
+    const corte = (s.tab === 'corte' || s.tab === 'pdf') ? this.corte() : [];
+    if (s.tab === 'corte') {
+      const matC = name => { const k = Object.keys(E.MATS).find(k => name.endsWith(E.MATS[k].name)); return k ? E.MATS[k].c : '#ebe7e0'; };
+      v.corteGroups = corte.map(g => ({ mat: g.mat, esp: g.esp + ' mm', pieces: g.pieces, area: g.area.toFixed(2).replace('.', ','), boards: Math.ceil(g.area * 1.15 / 4.47), bg: matC(g.mat) }));
+      v.corteTables = corte.map(g => ({ title: g.mat + ' · ' + g.esp + ' mm', note: g.pieces + ' piezas · tablero 2440 × 1830 mm', rows: Object.values(g.rows).sort((a, b) => b.L * b.A - a.L * a.A).map(r => ({ pieza: r.pieza, mods: r.mods.map(n => 'M' + n).join(', '), cant: r.cant, L: r.L, A: r.A, veta: r.veta, cantos: r.cantos })) }));
+      const tot = corte.reduce((a, g) => a + g.pieces, 0), area = corte.reduce((a, g) => a + g.area, 0);
+      v.corteSummary = tot + ' piezas · ' + area.toFixed(1).replace('.', ',') + ' m² · ' + corte.length + ' materiales · agrupado por material y espesor';
+    }
+    if (s.tab === 'pdf') {
+      const o = s.pdfOpts, t = this.totals();
+      const pages = [];
+      if (o.portada) pages.push({ label: 'Portada', cover: true });
+      if (o.vistas) pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp({ pad: 4 }) }, { label: 'Vista de detalle', title: 'Detalle · fregadero', art: persp({ ang: 35, focus: detFocus, focusId: detMod && detMod.id, photo: { w: 1200, h: 480 } }) });
+      if (o.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: planA() });
+      if (o.alzados) pages.push({ label: 'Alzado muro A', title: 'Alzado muro A', art: elevA() }, { label: 'Alzado muro B', title: 'Alzado muro B', art: elevB() });
+      if (o.planos) buildable.forEach(m => pages.push({ label: 'Plano módulo ' + m.id, title: 'Módulo ' + m.id + ' · ' + m.name, art: svg(E.exploded(m, s.mats)) }));
+      if (o.corte) pages.push({ label: 'Lista de corte', title: 'Lista de corte', rows: corte.map(g => ({ k: g.mat + ' ' + g.esp + ' mm', v: g.pieces + ' pzas · ' + g.area.toFixed(2) + ' m²' })) });
+      if (o.presupuesto) pages.push({ label: 'Presupuesto', title: 'Presupuesto', rows: s.mods.slice(0, 9).map(m => ({ k: m.id + '. ' + m.name + ' ' + m.w + ' cm', v: fmt(this.modPrice(m)) })).concat([{ k: 'Encimera ' + E.MATS[s.mats.encimera].name, v: fmt(t.counter) }, { k: 'Instalación (' + s.priceAdj.inst + '%)', v: fmt(t.install) }]).concat(t.disc ? [{ k: 'Descuento (' + s.priceAdj.desc + '%)', v: '−' + fmt(t.disc) }] : []).concat([{ k: 'Total', v: fmt(t.total) }]) });
+      v.pdfPages = pages.map((p, i) => Object.assign({ num: String(i + 1).padStart(2, '0'), hasArt: !!p.art, hasRows: !!p.rows, cover: !!p.cover, rows: p.rows || [] }, p));
+      v.pageCount = pages.length;
+      const PC = { portada: ['Portada con datos del cliente', 1], vistas: ['Vistas 3D', 2], planta: ['Planta acotada', 1], alzados: ['Alzados por muro', 2], planos: ['Planos por módulo', buildable.length], corte: ['Lista de corte', 1], presupuesto: ['Presupuesto', 1] };
+      v.pdfChecks = Object.keys(PC).map(k => ({ label: PC[k][0], pages: PC[k][1] + ' pág.', on: !!o[k], toggle: () => this.setState({ pdfOpts: Object.assign({}, o, { [k]: !o[k] }) }) }));
+      const setC = k => e => this.setState({ client: Object.assign({}, s.client, { [k]: e.target.value }) });
+      Object.assign(v, { cNombre: s.client.nombre, cTel: s.client.tel, cDir: s.client.dir, setCNombre: setC('nombre'), setCTel: setC('tel'), setCDir: setC('dir') });
+    } else {
+      const o = s.pdfOpts;
+      v.pageCount = (o.portada ? 1 : 0) + (o.vistas ? 2 : 0) + (o.planta ? 1 : 0) + (o.alzados ? 2 : 0) + (o.planos ? buildable.length : 0) + (o.corte ? 1 : 0) + (o.presupuesto ? 1 : 0);
+    }
+    return v;
+  }
+}
+</script>
+<template id="__bundler_thumbnail" data-bg-color="#ec3013"><svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg"><rect width="1200" height="800" fill="#ec3013"/><g fill="none" stroke="#fff" stroke-width="28" stroke-linejoin="round"><path d="M600 230 L820 340 L820 560 L600 670 L380 560 L380 340 Z"/><path d="M380 340 L600 450 L820 340 M600 450 L600 670"/></g></svg></template>
+</body>
+</html>
