@@ -25,6 +25,7 @@ export async function connect(url: string): Promise<DbHandle> {
     const { drizzle } = await import('drizzle-orm/pglite');
     const { migrate } = await import('drizzle-orm/pglite/migrator');
     const dir = url.slice('pglite://'.length);
+    if (dir && dir !== 'memory') await (await import('node:fs/promises')).mkdir(dir, { recursive: true });
     const client = dir && dir !== 'memory' ? new PGlite(dir) : new PGlite();
     const db = drizzle(client, { schema });
     return {
