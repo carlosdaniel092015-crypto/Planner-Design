@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.7.0 · 2026-09-24
+
+### PDF con despiece por módulo
+- Cada página «Plano módulo» del PDF trae, junto a la vista explosionada, la tabla de despiece con **cada pieza numerada**: material, cantidad, **largo × ancho × espesor en mm**, veta y cantos. Los números coinciden con los del dibujo.
+
 ## 1.6.0 · 2026-09-24
 
 ### Especificaciones más flexibles
