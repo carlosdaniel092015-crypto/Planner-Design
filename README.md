@@ -23,6 +23,11 @@ App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (siste
   - deshacer y rehacer;
   - precios en USD y DOP.
 
+### Tiendas de apps
+
+Para publicar en Play Store (Android) y App Store (iPhone) sigue [docs/TIENDAS.md](docs/TIENDAS.md). Android usa
+`ANDROID_PACKAGE_NAME` y `ANDROID_CERT_SHA256` para `/.well-known/assetlinks.json`.
+
 ### Proyectos privados y compartidos
 
 - **Cada proyecto es privado:** solo lo ve su dueño. Esto vale para todos los roles, incluido el administrador; el taller ve únicamente lo que le compartan.

@@ -148,6 +148,16 @@ export function createApp(opts: CreateAppOptions) {
   app.get('/api/v1/docs', Scalar({ url: '/api/v1/openapi.json', pageTitle: 'Planeador API' }));
   // Frontend (Claude Design prototype) served from web/. It loads React, Babel and icons from unpkg and
   // compiles its template in the browser, so it gets a looser CSP than the API.
+  // Digital Asset Links: lets the Play Store app (Trusted Web Activity) open this site full screen, without a browser bar.
+  app.get('/.well-known/assetlinks.json', (c) => {
+    const android = deps.config.android;
+    if (!android?.sha256.length) return c.json([], 200);
+    return c.json(
+      [{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: android.packageName, sha256_cert_fingerprints: android.sha256 } }],
+      200,
+    );
+  });
+
   if (opts.webRoot) {
     const root = opts.webRoot;
     const isApi = (path: string) => path === '/api' || path.startsWith('/api/');
