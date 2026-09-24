@@ -29,6 +29,13 @@
       "when": 1790247624495,
       "tag": "0003_client_ref_y_compartidos",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790249869844,
+      "tag": "0004_renombrar_organizacion_planner",
+      "breakpoints": true
     }
   ]
 }

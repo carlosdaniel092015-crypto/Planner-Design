@@ -330,7 +330,6 @@ export function HomePage() {
           .home-proto,.sync-label,.install-label{display:none!important}
         }
         @media (max-width: 560px){
-          .brand-name{display:none!important}
           header{gap:8px!important;padding:0 10px!important}
           .proj-row{grid-template-columns:96px minmax(0,1fr) 44px}
           .proj-row>*:nth-child(3),.proj-row>*:nth-child(4){display:none}

@@ -16,7 +16,7 @@ if (password.length < 8) {
 const handle = await connect(url);
 try {
   const { org, admin } = await seedOrganization(handle.db, {
-    orgName: process.env.SEED_ORG_NAME ?? 'Stephanny Planner',
+    orgName: process.env.SEED_ORG_NAME ?? 'Planner',
     slug: process.env.SEED_ORG_SLUG ?? 'stephanny',
     admin: { name: process.env.SEED_ADMIN_NAME ?? 'Administrador', email, password },
     rate: Number(process.env.SEED_RATE ?? 60),
