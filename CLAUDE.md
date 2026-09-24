@@ -57,6 +57,12 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
   y el visor 3D del prototipo; `public/prototipo/` es el prototipo original
 - `tests/` integración por recurso (`tests/helpers.ts` arma app + BD PGlite migrada)
 
+## Flujo de trabajo
+
+- Los cambios van por pull request hacia `main`. **Autorización permanente del dueño:** en cuanto el PR pase las comprobaciones
+  de CI (`.github/workflows/ci.yml`), fusionarlo a `main` sin volver a preguntar (merge commit). Si CI falla, corregir y reintentar;
+  nunca fusionar en rojo.
+
 ## Despliegue
 
 Docker (`Dockerfile`) en Easypanel: Postgres como servicio, volumen en `/data` (archivos), `RUN_MIGRATIONS=true` aplica migraciones al arrancar. Detalle en README → "Despliegue en Easypanel".
