@@ -3,6 +3,12 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.3.0 · 2026-09-24
+
+### Tiendas de apps
+- Lista para publicarse en **Play Store**: el servidor publica `/.well-known/assetlinks.json` con `ANDROID_PACKAGE_NAME` y `ANDROID_CERT_SHA256`, así la app de Android abre a pantalla completa.
+- Guía paso a paso para Play Store y App Store en `docs/TIENDAS.md`.
+
 ## 1.2.0 · 2026-09-24
 
 ### Mi cuenta
