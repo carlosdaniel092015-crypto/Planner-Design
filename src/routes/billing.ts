@@ -24,6 +24,8 @@ async function applySubscription(deps: Deps, sub: StripeSubscription, orgHint?: 
     ? await deps.db.select().from(organizations).where(eq(organizations.id, orgHint)).limit(1)
     : await deps.db.select().from(organizations).where(eq(organizations.stripeCustomerId, sub.customer)).limit(1);
   if (!org) return;
+  // An event about a different, not live subscription (e.g. an old one ending after the org bought a new one) must not touch the plan.
+  if (org.stripeSubscriptionId && org.stripeSubscriptionId !== sub.id && !['active', 'trialing'].includes(sub.status)) return;
   await deps.db.transaction(async (tx) => {
     await tx
       .update(organizations)
@@ -193,8 +195,10 @@ export function billingRoutes() {
         const sub = await stripeRequest<StripeSubscription>(billing.secretKey, 'GET', `/subscriptions/${obj.subscription as string}`);
         await applySubscription(c.var.deps, sub, (obj.client_reference_id as string) ?? sub.metadata?.organizationId);
       } else if (event.type.startsWith('customer.subscription.')) {
-        const sub = obj as unknown as StripeSubscription;
-        await applySubscription(c.var.deps, event.type === 'customer.subscription.deleted' ? { ...sub, status: 'canceled' } : sub, sub.metadata?.organizationId);
+        // Stripe does not guarantee event order: apply the subscription's current state, not the one in the (possibly stale) event.
+        const sent = obj as unknown as StripeSubscription;
+        const sub = event.type === 'customer.subscription.deleted' ? { ...sent, status: 'canceled' } : await stripeRequest<StripeSubscription>(billing.secretKey, 'GET', `/subscriptions/${sent.id}`);
+        await applySubscription(c.var.deps, sub, sub.metadata?.organizationId);
       }
       return c.json({ received: true as const }, 200);
     },

@@ -32,7 +32,7 @@ export function SyncBadge({ compact = false }: { compact?: boolean }) {
   const style = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color, whiteSpace: 'nowrap' as const, background: 'none', border: 0, font: 'inherit', padding: '4px 6px', cursor: 'pointer' };
   if (s.needsLogin)
     return (
-      <Link to={`/login?next=${encodeURIComponent(location.pathname)}`} style={{ ...style, textDecoration: 'none' }} title={label}>
+      <Link to={`/login?reauth=1&next=${encodeURIComponent(location.pathname)}`} style={{ ...style, textDecoration: 'none' }} title={label}>
         {body}
       </Link>
     );

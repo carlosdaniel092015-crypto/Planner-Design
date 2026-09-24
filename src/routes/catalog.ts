@@ -7,7 +7,7 @@ import type { Organization } from '../lib/context';
 import { sha256 } from '../lib/crypto';
 import { notFound } from '../lib/errors';
 import { money } from '../lib/money';
-import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
+import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security, sentOnly } from '../lib/openapi';
 import { assertCan } from '../lib/permissions';
 import { requireAuth } from '../services/auth';
 import {
@@ -133,7 +133,8 @@ export function catalogRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'catalog:admin');
-      const row = await c.var.deps.db.transaction((tx) => updateModule(tx, a, c.req.valid('param').id, c.req.valid('json')));
+      const patch = await sentOnly(c, c.req.valid('json'));
+      const row = await c.var.deps.db.transaction((tx) => updateModule(tx, a, c.req.valid('param').id, patch));
       return c.json(serialize(row), 200);
     },
   );
@@ -166,7 +167,8 @@ export function catalogRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'catalog:admin');
-      const row = await c.var.deps.db.transaction((tx) => updateMaterial(tx, a, c.req.valid('param').id, c.req.valid('json')));
+      const patch = await sentOnly(c, c.req.valid('json'));
+      const row = await c.var.deps.db.transaction((tx) => updateMaterial(tx, a, c.req.valid('param').id, patch));
       return c.json(serialize(row), 200);
     },
   );
@@ -200,7 +202,8 @@ export function catalogRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'catalog:admin');
-      const row = await c.var.deps.db.transaction((tx) => updateHardware(tx, a, c.req.valid('param').id, c.req.valid('json')));
+      const patch = await sentOnly(c, c.req.valid('json'));
+      const row = await c.var.deps.db.transaction((tx) => updateHardware(tx, a, c.req.valid('param').id, patch));
       return c.json(serialize(row), 200);
     },
   );

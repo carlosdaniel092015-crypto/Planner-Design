@@ -63,3 +63,13 @@ export function router() {
 }
 
 export const security: Record<string, string[]>[] = [{ cookieAuth: [] }, { bearerAuth: [] }];
+
+/**
+ * Zod fills `.default()` values for keys the client left out, which in a PATCH would silently reset them
+ * (e.g. renaming a texture would also reset its uses and tile size). Keep only the keys actually sent.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: works with any route context
+export async function sentOnly<T extends Record<string, unknown>>(c: any, parsed: T): Promise<Partial<T>> {
+  const raw = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => k in raw)) as Partial<T>;
+}

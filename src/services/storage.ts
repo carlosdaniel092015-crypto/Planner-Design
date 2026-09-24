@@ -25,6 +25,8 @@ export interface Storage {
   delete(url: string): Promise<void>;
   /** True if the URL points into this store (never register foreign URLs). */
   owns(url: string): boolean;
+  /** Normalized path inside the store (`<orgId>/<kind>/<name>`), or null if the URL is not ours. */
+  keyOf(url: string): string | null;
   createUploadGrant(c: UploadConstraints): Promise<UploadGrant>;
 }
 
@@ -53,6 +55,11 @@ export function blobStorage(token: string): Storage {
       } catch {
         return false;
       }
+    },
+    keyOf(url) {
+      if (!this.owns(url)) return null;
+      const key = decodeURIComponent(new URL(url).pathname).replace(/^\/+/, '');
+      return key.split('/').some((seg) => seg === '..' || seg === '.' || seg === '') ? null : key;
     },
     async createUploadGrant(c) {
       const { generateClientTokenFromReadWriteToken } = await import('@vercel/blob/client');
@@ -140,6 +147,13 @@ function devStorage(kind: 'local' | 'memory', apiUrl: string, secret: string, di
         return true;
       } catch {
         return false;
+      }
+    },
+    keyOf(url) {
+      try {
+        return pathOf(url);
+      } catch {
+        return null;
       }
     },
     async createUploadGrant(c) {

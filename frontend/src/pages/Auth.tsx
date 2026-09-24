@@ -48,7 +48,8 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const next = params.get('next') || '/';
-  if (me) return <Navigate to={next} replace />;
+  // ?reauth=1: the session expired while the app kept working offline; show the form even though `me` is still cached.
+  if (me && !params.get('reauth')) return <Navigate to={next} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

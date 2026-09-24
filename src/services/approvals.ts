@@ -100,6 +100,11 @@ export async function approveInternal(deps: Deps, a: AuthContext, projectId: str
       })
       .returning();
     await markApproved(tx, row, version);
+    // Links already sent to the client can no longer change the decision.
+    await tx
+      .update(approvalLinks)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(approvalLinks.projectId, row.id), isNull(approvalLinks.revokedAt), isNull(approvalLinks.usedAt)));
     await audit(tx, a, 'aprobar', 'project', row.id, { approvalId: approval!.id, versionId: version.id, internal: true });
     return { row, version, approval: approval! };
   });
@@ -116,6 +121,7 @@ export async function resolveLink(db: DbOrTx, token: string) {
   if (link.expiresAt.getTime() <= Date.now()) throw gone('ENLACE_CADUCADO', 'Este enlace caducó. Pide a tu diseñador un enlace nuevo.');
   const [row] = await db.select().from(projects).where(and(eq(projects.id, link.projectId), isNull(projects.deletedAt))).limit(1);
   if (!row) throw gone('PROYECTO_NO_DISPONIBLE', 'El proyecto ya no está disponible.');
+  if (row.status === 'aprobado') throw gone('PROYECTO_APROBADO', 'Este proyecto ya fue aprobado. Si necesitas otro cambio, contacta a tu diseñador.');
   const version = await getVersion(db, row.id, link.versionId);
   return { link, row, version };
 }

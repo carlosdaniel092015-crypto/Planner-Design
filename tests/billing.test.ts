@@ -64,6 +64,9 @@ describe('planes y pagos', () => {
 
   it('los avisos de Stripe exigen firma válida y cambian el plan', async () => {
     const sub = { id: 'sub_1', customer: 'cus_1', status: 'active', metadata: { organizationId: t.orgA.id }, items: { data: [{ price: { id: 'price_emp' }, current_period_end: 1893456000 }] } };
+    // The server re-reads the subscription from Stripe; this stub answers with the state the event carries.
+    let current: Record<string, unknown> = sub;
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(current), { status: 200, headers: { 'content-type': 'application/json' } })));
     expect((await webhook({ type: 'customer.subscription.updated', data: { object: sub } }, 'otra')).status).toBe(400);
     expect(verifyWebhook('{}', signed('{}', SECRET, 1000), SECRET)).toBe(false); // too old
     expect((await webhook({ type: 'customer.subscription.updated', data: { object: sub } })).status).toBe(200);
@@ -72,10 +75,20 @@ describe('planes y pagos', () => {
     expect((await req('POST', '/users', t.adminA, { name: 'Tercero', email: 'tercero@a.test', role: 'disenador' })).status).toBe(201);
     expect((await req('GET', '/audit', t.adminA)).data.items.some((x: any) => x.action === 'cambiar_plan')).toBe(true);
     // A failed payment falls back to the free limits; cancelling returns to Gratis.
-    await webhook({ type: 'customer.subscription.updated', data: { object: { ...sub, status: 'past_due' } } });
+    current = { ...sub, status: 'past_due' };
+    await webhook({ type: 'customer.subscription.updated', data: { object: current } });
     expect((await req('GET', '/billing', t.adminA)).data.effectivePlan).toBe('gratis');
     await webhook({ type: 'customer.subscription.deleted', data: { object: sub } });
     expect((await req('GET', '/billing', t.adminA)).data).toMatchObject({ plan: 'gratis', status: 'canceled' });
+    // A late "updated: active" for the cancelled subscription does not bring the plan back (Stripe says it is canceled now).
+    current = { ...sub, status: 'canceled' };
+    await webhook({ type: 'customer.subscription.updated', data: { object: { ...sub, status: 'active' } } });
+    expect((await req('GET', '/billing', t.adminA)).data).toMatchObject({ plan: 'gratis', status: 'canceled' });
+    // New subscription sub_2; the old sub_1 ending afterwards leaves it alone.
+    current = { ...sub, id: 'sub_2', items: { data: [{ price: { id: 'price_pro' }, current_period_end: 1893456000 }] } };
+    await webhook({ type: 'customer.subscription.created', data: { object: current } });
+    await webhook({ type: 'customer.subscription.deleted', data: { object: { ...sub, status: 'unpaid' } } });
+    expect((await req('GET', '/billing', t.adminA)).data).toMatchObject({ plan: 'profesional', status: 'active' });
   });
 
   it('el pago abre Stripe Checkout con el precio del plan y crea el cliente una vez', async () => {

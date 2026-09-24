@@ -118,8 +118,14 @@ export function EditorPage() {
   }, []);
   const followRemap = useCallback(
     (to: string) => {
+      // The crash-proof draft follows the project to its server id; left under the old id it would roll back later edits.
+      clearDraft(pid.current);
       pid.current = to;
       remapTarget.current = to;
+      if (dirty.current) {
+        const snap = snapshotRef.current();
+        if (snap) stashDraft(to, snap);
+      }
       setProject((p) => (p ? { ...p, id: to } : p));
       nav(`/proyectos/${to}`, { replace: true });
     },
@@ -256,7 +262,17 @@ export function EditorPage() {
           if (e.from === pid.current) followRemap(e.to);
         } else if (e.projectId !== pid.current) return;
         else if (e.type === 'synced') setProject((p) => (p ? { ...p, ...e.project, data: p.data, name: p.name, currency: p.currency } : p));
-        else if (e.type === 'conflict') setConflict(e);
+        else if (e.type === 'conflict') {
+          // Edits made while the conflicting save was in flight belong to this user's copy; the draft must not
+          // be replayed onto the original later (it would overwrite the other person's work).
+          if (dirty.current) {
+            const snap = snapshotRef.current();
+            if (snap) void saveProject(e.copyId, snap).catch(() => {});
+            dirty.current = false;
+          }
+          clearDraft(e.projectId);
+          setConflict(e);
+        }
         else if (e.type === 'dropped') flash(e.message);
       }),
     [followRemap, flash],

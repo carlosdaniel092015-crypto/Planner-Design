@@ -3,6 +3,21 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.5.1 · 2026-09-24
+
+### Correcciones (revisión completa del código)
+- Editar solo el nombre de un módulo, material o herraje del catálogo ya no reinicia su precio, moneda y demás datos.
+- Al aprobar internamente, el enlace que tenía el cliente deja de funcionar y ya no puede cambiar un proyecto aprobado.
+- Seguridad de archivos: una organización ya no puede registrar ni borrar archivos de otra, y la portada solo acepta imágenes propias.
+- Desactivar a un usuario cierra sus sesiones y anula su invitación pendiente.
+- Pagos: los avisos de Stripe viejos o fuera de orden ya no cambian el plan.
+- Borrar un archivo de un proyecto privado exige poder editar ese proyecto.
+- Sin conexión: tras un conflicto o al subir un proyecto nuevo, un borrador viejo ya no sobrescribe cambios más recientes.
+- Un proyecto borrado mientras se subía ya no reaparece. Si el servidor rechaza un proyecto nuevo, se avisa en lugar de reintentarlo sin fin.
+- «Inicia sesión para sincronizar» ahora abre el inicio de sesión.
+- Respaldos: se toman de una sola vez (sin datos a medias), la restauración es todo o nada y conserva las fechas, y un valor no válido en `BACKUP_KEEP` o `BACKUP_INTERVAL_HOURS` ya no borra respaldos ni satura el servidor.
+- Al redesplegar, el servidor termina las peticiones en curso antes de apagarse.
+
 ## 1.5.0 · 2026-09-24
 
 ### Respaldos y monitoreo
