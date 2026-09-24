@@ -56,8 +56,11 @@ export interface Viewer {
   update(cfg: unknown): Promise<void>;
   dispose(): void;
   zoomBy(f: number): void;
-  fit(instant?: boolean, az?: number): void;
+  /** az: radians, or 'auto' for the angle that faces the most fronts. */
+  fit(instant?: boolean, az?: number | 'auto'): void;
   setAngle(deg: number): void;
+  /** Opens (true) or closes all doors and drawers, animated. */
+  setOpen(open: boolean): void;
 }
 interface Renderer {
   init(): Promise<void>;
@@ -72,6 +75,8 @@ export interface SnapOptions {
   ang?: number;
   /** Frame one module (detail view). */
   focusId?: number;
+  /** Render with doors and drawers open. */
+  open?: boolean;
 }
 
 const snapCache = new Map<string, Promise<string | null>>();

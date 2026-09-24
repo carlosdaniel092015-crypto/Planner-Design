@@ -69,6 +69,7 @@ export function EditorPage() {
   const [altos, setAltos] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [dark, setDark] = useState(false);
+  const [open, setOpen] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [leftTab, setLeftTab] = useState<LeftTab>('modulos');
@@ -332,10 +333,11 @@ export function EditorPage() {
   const controls: { k: string; icon: string; tip: string; key: string; on?: boolean; act: () => void }[] = [
     { k: 'zin', icon: 'zoom-in', tip: 'Acercar', key: '+', act: () => (is3d && viewer.current ? viewer.current.zoomBy(1.25) : setZoom((z) => Math.min(2.6, +(z * 1.25).toFixed(2)))) },
     { k: 'zout', icon: 'zoom-out', tip: 'Alejar', key: '−', act: () => (is3d && viewer.current ? viewer.current.zoomBy(1 / 1.25) : setZoom((z) => Math.max(0.6, +(z / 1.25).toFixed(2)))) },
-    { k: 'fit', icon: 'scan', tip: 'Centrar vista', key: 'F', act: () => (is3d && viewer.current ? viewer.current.fit(false, Math.PI / 4) : setZoom(1)) },
+    { k: 'fit', icon: 'scan', tip: 'Centrar vista', key: 'F', act: () => (is3d && viewer.current ? viewer.current.fit(false, 'auto') : setZoom(1)) },
     { k: 'rot', icon: 'rotate-cw', tip: 'Rotar cámara', key: 'R', act: () => (setView('3d'), viewer.current?.setAngle(25)) },
     { k: 'cotas', icon: 'ruler', tip: 'Cotas', key: 'C', on: cotas, act: () => setCotas(!cotas) },
     { k: 'altos', icon: 'layers', tip: 'Mostrar altos', key: 'A', on: altos, act: () => setAltos(!altos) },
+    { k: 'open', icon: 'door-open', tip: open ? 'Cerrar puertas y cajones' : 'Abrir puertas y cajones', key: 'P', on: open, act: () => (setView('3d'), setOpen(!open), viewer.current?.setOpen(!open)) },
   ];
   const saveLabel = save.kind === 'saving' ? 'Guardando…' : save.kind === 'dirty' ? 'Cambios sin guardar' : save.kind === 'error' ? save.message : `Guardado ${relativeTime(save.at).toLowerCase()}`;
   const flatView = view === 'planta' ? planDrawing : view === 'alzado' ? elevDrawing : null;
@@ -476,7 +478,7 @@ export function EditorPage() {
           )}
 
           <div style={{ flex: 1, minWidth: 0, position: 'relative', background: 'var(--sp-canvas)', overflow: 'hidden' }}>
-            {cfg && <div style={{ position: 'absolute', inset: 0, visibility: is3d ? 'visible' : 'hidden' }}><Viewer3D cfg={cfg} onSelect={(i) => { setSel(i); if (i) setRightOpen(true); setReplaceMode(false); }} onViewer={(v) => (viewer.current = v)} fallback={<Svg drawing={isoDrawing} onPick={setSel} />} /></div>}
+            {cfg && <div style={{ position: 'absolute', inset: 0, visibility: is3d ? 'visible' : 'hidden' }}><Viewer3D cfg={cfg} onSelect={(i) => { setSel(i); if (i) setRightOpen(true); setReplaceMode(false); }} onViewer={(v) => { viewer.current = v; v?.setOpen(open); }} fallback={<Svg drawing={isoDrawing} onPick={setSel} />} /></div>}
             {flatView && (
               <div style={{ position: 'absolute', inset: '64px 72px 24px 32px', transform: `scale(${zoom})`, transformOrigin: 'center' }}>
                 <Svg drawing={flatView} onPick={(i) => (setSel(i), i && setRightOpen(true))} />

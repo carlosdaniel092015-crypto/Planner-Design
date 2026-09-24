@@ -61,7 +61,8 @@ export function ApprovalView(props: {
   const [expOpen, setExpOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
-  const [galAng, setGalAng] = useState(45);
+  /** null = automatic angle (faces the most fronts). */
+  const [galAng, setGalAng] = useState<number | null>(null);
   const [regen, setRegen] = useState(0);
   const [planMod, setPlanMod] = useState<number | null>(null);
   const [pdf, setPdf] = useState<{ pct: number; step: string } | null>(null);
@@ -94,7 +95,7 @@ export function ApprovalView(props: {
   const isoOf = (ang: number, focus?: [number, number, number, number]) => iso(data, props.materialsByCode as never, { ang, cotas: false, altos: true, focus });
   const planD = () => plan(data, { cotas: true });
   const elevD = (w: Wall) => elev(data, w, mats, { cotas: true });
-  const persp = (w: number, h: number, ang = galAng) => <Photo cfg={cfg} opts={{ w, h, ang }} fallback={isoOf(ang)} title="Render en perspectiva" />;
+  const persp = (w: number, h: number, ang: number | null = galAng) => <Photo cfg={cfg} opts={ang == null ? { w, h } : { w, h, ang }} fallback={isoOf(ang ?? 45)} title="Render en perspectiva" />;
   const detail = (w: number, h: number) =>
     detMod ? <Photo cfg={cfg} opts={{ w, h, ang: 35, focusId: detMod.id }} fallback={isoOf(35, detFocus(detMod))} title={`Detalle · ${detMod.name}`} /> : null;
   const detLabel = detMod?.sink ? 'fregadero' : detMod?.cook ? 'parrilla' : (detMod?.name.toLowerCase() ?? '');
@@ -220,7 +221,7 @@ export function ApprovalView(props: {
       {tab === 'galeria' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
           <div className="gal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gridAutoRows: 300, gap: 16 }}>
-            <Tile title="Render perspectiva" scale={`Cámara ${galAng}°`} col="1 / span 2" row="1 / span 2" onRegen={() => setRegen((n) => n + 1)} onAdjust={() => setGalAng(galAng === 45 ? 30 : galAng === 30 ? 60 : 45)}>
+            <Tile title="Render perspectiva" scale={galAng == null ? 'Cámara automática' : `Cámara ${galAng}°`} col="1 / span 2" row="1 / span 2" onRegen={() => setRegen((n) => n + 1)} onAdjust={() => setGalAng(galAng == null ? 30 : galAng === 30 ? 60 : galAng === 60 ? 45 : null)}>
               {persp(1100, 1000)}
             </Tile>
             <Tile title="Planta acotada" scale="1:25">
@@ -331,7 +332,7 @@ export function ApprovalView(props: {
             const pages: { label: string; title?: string; art?: React.ReactNode; rows?: [string, string][]; cover?: boolean }[] = [];
             if (k.portada) pages.push({ label: 'Portada', cover: true });
             if (k.vistas) {
-              pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760, 45) });
+              pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760, null) });
               if (detMod) pages.push({ label: 'Vista de detalle', title: `Detalle · ${detLabel}`, art: detail(1200, 700) });
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });

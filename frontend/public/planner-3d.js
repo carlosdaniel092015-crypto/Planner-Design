@@ -145,9 +145,9 @@ function baseMat(id) {
     } else if (/Acero/.test(t)) Object.assign(p, { color: new T.Color(m.c), metalness: 1, roughness: .28 });
     else if (/Latón/.test(t)) Object.assign(p, { color: new T.Color('#b9a275'), metalness: 1, roughness: .38 });
     else if (/Aluminio/.test(t)) Object.assign(p, { color: new T.Color(m.c), metalness: .6, roughness: .42 });
-    else if (/Cuarzo/.test(t)) { p.map = stoneTex(m.c, false); p.roughness = .2; ud.tile = ud.tileH = .6; }
-    else if (/Granito/.test(t)) { p.map = stoneTex(m.c, true); p.roughness = .16; ud.tile = ud.tileH = .6; }
-    else if (m.wood) { p.map = woodTex(m.c); p.roughness = /Chapa/.test(t) ? .42 : .56; ud.tile = .6; ud.tileH = 1.2; }
+    else if (/Cuarzo/.test(t)) { phys = true; p.map = stoneTex(m.c, false); Object.assign(p, { roughness: .2, clearcoat: .35, clearcoatRoughness: .25, bumpMap: p.map, bumpScale: .15 }); ud.tile = ud.tileH = .6; }
+    else if (/Granito/.test(t)) { phys = true; p.map = stoneTex(m.c, true); Object.assign(p, { roughness: .16, clearcoat: .45, clearcoatRoughness: .2, bumpMap: p.map, bumpScale: .2 }); ud.tile = ud.tileH = .6; }
+    else if (m.wood) { p.map = woodTex(m.c); p.roughness = /Chapa/.test(t) ? .42 : .56; p.bumpMap = p.map; p.bumpScale = .35; ud.tile = .6; ud.tileH = 1.2; }
     else if (/Lacado/.test(t)) { phys = true; Object.assign(p, { color: new T.Color(muteHex(m.c, .15)), roughness: .46, clearcoat: .2, clearcoatRoughness: .5 }); }
     else { p.map = plainTex(muteHex(m.c, .2), 4); p.roughness = .62; }
     const mat = phys ? new T.MeshPhysicalMaterial(p) : new T.MeshStandardMaterial(p);
@@ -157,7 +157,7 @@ function baseMat(id) {
 function texMat(id, w, h, rotate, seed) {
   const base = baseMat(id);
   if (!base.map) return base;
-  const m = base.clone(); m.map = base.map.clone(); m.userData = Object.assign({ clone: 1 }, base.userData);
+  const m = base.clone(); m.map = base.map.clone(); if (base.bumpMap) m.bumpMap = m.map; m.userData = Object.assign({ clone: 1 }, base.userData);
   const tw = base.userData.tile, th = base.userData.tileH, r = rnd(seed * 7919 + 13);
   if (rotate) { m.map.center.set(.5, .5); m.map.rotation = Math.PI / 2; m.map.repeat.set(h / tw, w / th); }
   else m.map.repeat.set(w / tw, h / th);
@@ -165,8 +165,10 @@ function texMat(id, w, h, rotate, seed) {
   return m;
 }
 function tiledMat(tex, w, h, tile, props) {
-  const m = new T.MeshStandardMaterial(Object.assign({ map: tex.clone() }, props || {}));
+  const { bump, physical, ...rest } = props || {};
+  const m = physical ? new T.MeshPhysicalMaterial(Object.assign({ map: tex.clone() }, rest)) : new T.MeshStandardMaterial(Object.assign({ map: tex.clone() }, rest));
   m.map.repeat.set(w / tile, h / tile); m.map.needsUpdate = true; m.userData = { clone: 1 };
+  if (props && props.bump) { m.bumpMap = m.map; m.bumpScale = props.bump; }
   return m;
 }
 function loadTex(url) {
@@ -248,16 +250,30 @@ function buildModule(m, ctx) {
     const gc = ctx.handle === 'gola' && m.type !== 'upper' && (seg.t === 'door' || seg.t === 'drawer') ? .03 : 0;
     if (seg.t === 'door') {
       const n = seg.n || 1, w = W / n;
-      for (let i = 0; i < n; i++) bx(g, w - 2 * gap, sh - 2 * gap - gc, FT, texMat(frId, w, sh, false, seed++), i * w + gap, s0 + gap, cd, { round: 1 });
-      if (ctx.handle === 'bar') {
-        const L = m.type === 'tall' ? .32 : .16;
-        let cy = m.type === 'upper' ? s0 + .03 + L / 2 : s1 - .04 - L / 2;
-        if (m.type === 'tall') cy = Math.min(s1 - .06 - L / 2, Math.max(s0 + .06 + L / 2, 1.05));
-        (n === 2 ? [W / 2 - .035, W / 2 + .035] : [m.open === 'izq' ? W - .04 : .04]).forEach(x => vbar(g, x, cy, L, cd + FT, hdMat));
+      // An inner shelf, so an open door doesn't reveal an empty box.
+      if (sh > .4) bx(g, W - 2 * TT, TT, cd - .02, body(W, cd), TT, s0 + sh / 2, .006);
+      const L = m.type === 'tall' ? .32 : .16;
+      let cy = m.type === 'upper' ? s0 + .03 + L / 2 : s1 - .04 - L / 2;
+      if (m.type === 'tall') cy = Math.min(s1 - .06 - L / 2, Math.max(s0 + .06 + L / 2, 1.05));
+      for (let i = 0; i < n; i++) {
+        // The hinge sits opposite the handle: single doors follow m.open, pairs open from the middle.
+        const hingeLeft = n === 2 ? i === 0 : m.open === 'izq', hx = hingeLeft ? i * w : (i + 1) * w;
+        const pv = new T.Group(); pv.position.set(hx, 0, cd); pv.userData.mv = { kind: 'door', dir: hingeLeft ? -1 : 1 }; g.add(pv);
+        bx(pv, w - 2 * gap, sh - 2 * gap - gc, FT, texMat(frId, w, sh, false, seed++), (hingeLeft ? 0 : -w) + gap, s0 + gap, 0, { round: 1 });
+        if (ctx.handle === 'bar') {
+          const x = n === 2 ? W / 2 + (i ? .035 : -.035) : m.open === 'izq' ? W - .04 : .04;
+          vbar(pv, x - hx, cy, L, FT, hdMat);
+        }
       }
     } else if (seg.t === 'drawer') {
-      bx(g, W - 2 * gap, sh - 2 * gap - gc, FT, texMat(frId, W, sh, true, seed++), gap, s0 + gap, cd, { round: 1 });
-      if (ctx.handle === 'bar') hbar(g, W / 2, s1 - gc - .04, Math.min(.32, W * .5), cd + FT, hdMat);
+      const travel = Math.min(.45, cd * .75), dr = new T.Group(); dr.userData.mv = { kind: 'drawer', travel }; g.add(dr);
+      bx(dr, W - 2 * gap, sh - 2 * gap - gc, FT, texMat(frId, W, sh, true, seed++), gap, s0 + gap, cd, { round: 1 });
+      if (ctx.handle === 'bar') hbar(dr, W / 2, s1 - gc - .04, Math.min(.32, W * .5), cd + FT, hdMat);
+      // Drawer box (sides, back, bottom) behind the front: visible when it slides out.
+      const bw = W - 2 * TT - .026, bd = Math.min(cd - .04, .5), bh = Math.max(.06, (sh - gc) * .62), bz = cd - bd, bxX = TT + .013, by0 = s0 + .03, dm = body(bd, bh);
+      bx(dr, bw, .012, bd, dm, bxX, by0, bz, { noCast: 1 });
+      bx(dr, .012, bh, bd, dm, bxX, by0, bz, { noCast: 1 }); bx(dr, .012, bh, bd, dm, bxX + bw - .012, by0, bz, { noCast: 1 });
+      bx(dr, bw, bh, .012, dm, bxX, by0, bz, { noCast: 1 });
     } else if (seg.t === 'oven') {
       bx(g, W - 2 * gap, sh - 2 * gap, FT, mats.blackGlass(), gap, s0 + gap, cd, { round: 1 });
       bx(g, W - .04, sh * .13, .004, mats.steel(), .02, s1 - sh * .17, cd + FT);
@@ -370,65 +386,83 @@ function counters(root, mods, ctx, groups) {
       });
       slab(root, wall, a0, a1, d0, d1, top, th, holes, ctx.mats.encimera);
       r.ms.forEach(m => { const g = groups[m.id]; if (!g) return; if (m.sink) addSink(g, m.w / 100, m.d / 100, top + th); if (m.cook) addCooktop(g, m.w / 100, m.d / 100, top + th); });
-      if (wall === 'A' || wall === 'B') out.push({ wall, a0, a1, top: top + th });
+      if (wall !== 'F') out.push({ wall, a0, a1, top: top + th });
     });
   });
   return out;
 }
-function wallAlong(root, wall, len, H, ops, fn) {
-  const t = .12, cuts = [0, len];
-  ops.forEach(o => cuts.push(o.pos / 100, (o.pos + o.w) / 100));
-  const pts = [...new Set(cuts)].filter(p => p >= 0 && p <= len).sort((a, b) => a - b);
-  const put = (p, q, y0, y1) => { if (q - p < .001 || y1 - y0 < .001) return; const m = mats.wall(); const me = wall === 'A' ? bx(root, q - p, y1 - y0, t, m, p, y0, -t) : bx(root, t, y1 - y0, q - p, m, -t, y0, p); if (me) me.castShadow = false; };
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p = pts[i], q = pts[i + 1], o = ops.find(o => o.pos / 100 <= p + 1e-4 && (o.pos + o.w) / 100 >= q - 1e-4);
-    if (!o) { put(p, q, 0, H); continue; }
-    const z0 = o.t === 'ventana' ? (o.z || 110) / 100 : 0, z1 = z0 + o.h / 100;
-    put(p, q, 0, z0); put(p, q, z1, H);
-  }
-  ops.forEach(o => fn(o, (w, h, d, mat, a, y, dd, opt) => wall === 'A' ? bx(root, w, h, d, mat, a, y, dd, opt) : bx(root, d, h, w, mat, dd, y, a, opt), wall));
+// Each wall is built in its own frame (along +x from 0 to len, interior towards +z, masonry at z ∈ [-t, 0]) and then
+// placed like the modules on that wall. B and D run "backwards" in that frame, so their positions are mirrored.
+const WALL_T = .12;
+function wallFrame(wall, R) {
+  if (wall === 'B') return { rot: Math.PI / 2, pos: [0, 0, R.B], len: R.B, mirror: true };
+  if (wall === 'C') return { rot: -Math.PI / 2, pos: [R.A, 0, 0], len: R.B, mirror: false };
+  if (wall === 'D') return { rot: Math.PI, pos: [R.A, 0, R.B], len: R.A, mirror: true };
+  return { rot: 0, pos: [0, 0, 0], len: R.A, mirror: false };
 }
-function buildRoom(root, cfg, ctx, runs) {
-  const A = cfg.room.A / 100, Bw = cfg.room.B / 100, H = cfg.room.H / 100;
-  const fl = new T.Mesh(new T.PlaneGeometry(A, Bw), tiledMat(floorTex(), A, Bw, 1.8, { roughness: .6 }));
-  fl.rotation.x = -Math.PI / 2; fl.position.set(A / 2, 0, Bw / 2); fl.receiveShadow = true; root.add(fl);
-  bx(root, A + .12, .05, Bw + .12, mats.edge(), -.12, -.0501, -.12, { noCast: 1 });
-  bx(root, .12, H, .12, mats.wall(), -.12, 0, -.12, { noCast: 1 });
-  ['A', 'B'].forEach(w => {
-    const len = w === 'A' ? A : Bw, ops = (cfg.ops || []).filter(o => o.wall === w);
-    wallAlong(root, w, len, H, ops, (o, B3) => {
-      const a = o.pos / 100, ow = o.w / 100, z0 = o.t === 'ventana' ? (o.z || 110) / 100 : 0, oh = o.h / 100, f = .05;
-      if (o.t === 'ventana') {
-        const fr = mats.frame();
-        B3(ow, f, .07, fr, a, z0, -.1); B3(ow, f, .07, fr, a, z0 + oh - f, -.1);
-        B3(f, oh, .07, fr, a, z0, -.1); B3(f, oh, .07, fr, a + ow - f, z0, -.1); B3(.025, oh, .06, fr, a + ow / 2 - .0125, z0, -.095);
-        B3(ow - 2 * f, oh - 2 * f, .004, mats.glass(), a + f, z0 + f, -.07, { noCast: 1 });
-        B3(ow + .08, .025, .16, mats.trim(), a - .04, z0 - .025, -.12);
-        B3(ow + 1.2, oh + 1, .01, mats.sky(), a - .6, z0 - .4, -.9, { noCast: 1 });
-      } else {
-        const tr = mats.trim();
-        B3(.06, oh + .06, .14, tr, a - .06, 0, -.13); B3(.06, oh + .06, .14, tr, a + ow, 0, -.13); B3(ow, .06, .14, tr, a, oh, -.13);
-        B3(ow - .01, oh - .01, .04, texMat('fresno', ow, oh, false, 3), a + .005, 0, -.08, { round: 1 });
-      }
-    });
-    const skirt = std('skirt', { color: 0xf4f2ee, roughness: .6 });
-    const doors = ops.filter(o => o.t === 'puerta').map(o => [o.pos / 100, (o.pos + o.w) / 100]);
-    let segs = [[0, len]];
-    doors.forEach(([s, e]) => { segs = segs.flatMap(([p, q]) => e <= p || s >= q ? [[p, q]] : [[p, s], [e, q]].filter(x => x[1] - x[0] > .01)); });
-    segs.forEach(([p, q]) => w === 'A' ? bx(root, q - p, .08, .012, skirt, p, 0, 0, { noCast: 1 }) : bx(root, .012, .08, q - p, skirt, 0, 0, p, { noCast: 1 }));
-  });
-  if (ctx.kitchen) runs.forEach(r => {
-    const ops = (cfg.ops || []).filter(o => o.wall === r.wall && o.t === 'ventana');
-    const cuts = [r.a0, r.a1]; ops.forEach(o => cuts.push(o.pos / 100, (o.pos + o.w) / 100));
-    const pts = [...new Set(cuts)].filter(p => p >= r.a0 && p <= r.a1).sort((a, b) => a - b);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p = pts[i], q = pts[i + 1], o = ops.find(o => o.pos / 100 <= p + 1e-4 && (o.pos + o.w) / 100 >= q - 1e-4);
-      const y1 = o ? Math.min(1.5, (o.z || 110) / 100 - .025) : 1.5, y0 = r.top;
-      if (y1 - y0 < .01) continue;
-      const mat = tiledMat(tileTex(), q - p, y1 - y0, .6, { roughness: .18 });
-      if (r.wall === 'A') bx(root, q - p, y1 - y0, .008, mat, p, y0, 0, { noCast: 1 }); else bx(root, .008, y1 - y0, q - p, mat, 0, y0, p, { noCast: 1 });
+function buildWall(root, wall, cfg, splash) {
+  const R = { A: cfg.room.A / 100, B: cfg.room.B / 100 }, H = cfg.room.H / 100, fr = wallFrame(wall, R), len = fr.len, t = WALL_T;
+  const g = new T.Group(); g.rotation.y = fr.rot; g.position.set(...fr.pos); g.userData.wall = wall; root.add(g);
+  const loc = a => (fr.mirror ? len - a : a);
+  const ops = (cfg.ops || []).filter(o => o.wall === wall).map(o => { const a = o.pos / 100, b = (o.pos + o.w) / 100; return { ...o, a: Math.min(loc(a), loc(b)), b: Math.max(loc(a), loc(b)) }; });
+  const cuts = [0, len]; ops.forEach(o => cuts.push(o.a, o.b));
+  const pts = [...new Set(cuts)].filter(p => p >= 0 && p <= len).sort((a, b) => a - b);
+  const put = (p, q, y0, y1) => { if (q - p < .001 || y1 - y0 < .001) return; const me = bx(g, q - p, y1 - y0, t, mats.wall(), p, y0, -t); if (me) me.castShadow = false; };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1], o = ops.find(o => o.a <= p + 1e-4 && o.b >= q - 1e-4);
+    if (!o) { put(p, q, 0, H); continue; }
+    const z0 = o.t === 'ventana' ? (o.z || 110) / 100 : 0;
+    put(p, q, 0, z0); put(p, q, z0 + o.h / 100, H);
+  }
+  // Corner post so walls meet without a gap.
+  bx(g, t, H, t, mats.wall(), -t, 0, -t, { noCast: 1 });
+  ops.forEach(o => {
+    const a = o.a, ow = o.b - o.a, z0 = o.t === 'ventana' ? (o.z || 110) / 100 : 0, oh = o.h / 100, f = .05;
+    if (o.t === 'ventana') {
+      const fm = mats.frame();
+      bx(g, ow, f, .07, fm, a, z0, -.1); bx(g, ow, f, .07, fm, a, z0 + oh - f, -.1);
+      bx(g, f, oh, .07, fm, a, z0, -.1); bx(g, f, oh, .07, fm, a + ow - f, z0, -.1); bx(g, .025, oh, .06, fm, a + ow / 2 - .0125, z0, -.095);
+      bx(g, ow - 2 * f, oh - 2 * f, .004, mats.glass(), a + f, z0 + f, -.07, { noCast: 1 });
+      bx(g, ow + .08, .025, .16, mats.trim(), a - .04, z0 - .025, -.12);
+      // Daylight backdrop flush with the wall's outer face, the size of the opening: never peeks over the wall.
+      bx(g, ow, oh, .005, mats.sky(), a, z0, -WALL_T - .006, { noCast: 1 });
+    } else {
+      const tr = mats.trim();
+      bx(g, .06, oh + .06, .14, tr, a - .06, 0, -.13); bx(g, .06, oh + .06, .14, tr, a + ow, 0, -.13); bx(g, ow, .06, .14, tr, a, oh, -.13);
+      bx(g, ow - .01, oh - .01, .04, texMat('fresno', ow, oh, false, 3), a + .005, 0, -.08, { round: 1 });
     }
   });
+  const skirt = std('skirt', { color: 0xf4f2ee, roughness: .6 });
+  let segs = [[0, len]];
+  ops.filter(o => o.t === 'puerta').forEach(({ a: s0, b: e0 }) => { segs = segs.flatMap(([p, q]) => (e0 <= p || s0 >= q ? [[p, q]] : [[p, s0], [e0, q]].filter(x => x[1] - x[0] > .01))); });
+  segs.forEach(([p, q]) => bx(g, q - p, .08, .012, skirt, p, 0, 0, { noCast: 1 }));
+  // Backsplash tiles between the countertop and the uppers (1.5 m), cut around windows.
+  splash.filter(r => r.wall === wall).forEach(r => {
+    const a0 = Math.min(loc(r.a0), loc(r.a1)), a1 = Math.max(loc(r.a0), loc(r.a1)), win = ops.filter(o => o.t === 'ventana');
+    const cs = [a0, a1]; win.forEach(o => cs.push(o.a, o.b));
+    const ps = [...new Set(cs)].filter(p => p >= a0 && p <= a1).sort((x, y) => x - y);
+    for (let i = 0; i < ps.length - 1; i++) {
+      const p = ps[i], q = ps[i + 1], o = win.find(o => o.a <= p + 1e-4 && o.b >= q - 1e-4);
+      const y1 = o ? Math.min(1.5, (o.z || 110) / 100 - .025) : 1.5, y0 = r.top;
+      if (y1 - y0 < .01) continue;
+      bx(g, q - p, y1 - y0, .008, tiledMat(tileTex(), q - p, y1 - y0, .6, { roughness: .18 }), p, y0, 0, { noCast: 1 });
+    }
+  });
+  return g;
+}
+function buildRoom(root, cfg, ctx, runs) {
+  const A = cfg.room.A / 100, Bw = cfg.room.B / 100;
+  const fl = new T.Mesh(new T.PlaneGeometry(A, Bw), tiledMat(floorTex(), A, Bw, 1.8, { physical: true, roughness: .5, clearcoat: .25, clearcoatRoughness: .4, bump: .25 }));
+  fl.rotation.x = -Math.PI / 2; fl.position.set(A / 2, 0, Bw / 2); fl.receiveShadow = true; root.add(fl);
+  bx(root, A + 2 * WALL_T, .05, Bw + 2 * WALL_T, mats.edge(), -WALL_T, -.0501, -WALL_T, { noCast: 1 });
+  return ['A', 'B', 'C', 'D'].map(w => buildWall(root, w, cfg, ctx.kitchen ? runs : []));
+}
+/** Hides the walls standing between the camera and the room (dynamic cut-away), so any side can be viewed. */
+function cutaway(walls, cam, cfg) {
+  if (!walls) return;
+  const A = cfg.room.A / 100, Bw = cfg.room.B / 100, p = cam.position;
+  const out = { A: p.z < 0, B: p.x < 0, C: p.x > A, D: p.z > Bw };
+  walls.forEach(g => { g.visible = !out[g.userData.wall]; });
 }
 function addLights(root, cfg, mods) {
   const A = cfg.room.A / 100, Bw = cfg.room.B / 100;
@@ -451,9 +485,15 @@ function buildScene(root, cfg) {
   list.forEach(m => { if (m.glb) glbCache[m.glb + '_scene'] = glbCache[m.glb + '_scene'] || null; });
   list.forEach(m => { const g = buildModule(m, ctx); place(g, m); root.add(g); groups[m.id] = g; });
   const runs = counters(root, list, ctx, groups);
-  buildRoom(root, cfg, ctx, runs);
+  root.userData.walls = buildRoom(root, cfg, ctx, runs);
   addLights(root, cfg, list);
   return groups;
+}
+function collectMovers(root) { const out = []; root.traverse(o => { if (o.userData && o.userData.mv) out.push(o); }); return out; }
+/** k: 0 closed … 1 open. Doors swing ~95° on their hinge, drawers slide out. */
+function applyOpen(movers, k) {
+  const e = k * k * (3 - 2 * k);
+  movers.forEach(o => { const mv = o.userData.mv; if (mv.kind === 'door') o.rotation.y = mv.dir * e * 1.66; else o.position.z = mv.travel * e; });
 }
 function disposeTree(o) {
   o.traverse(c => { if (c.isMesh) { c.geometry.dispose(); const m = c.material; if (m && m.userData && m.userData.clone) { if (m.map) m.map.dispose(); m.dispose(); } } });
@@ -461,6 +501,13 @@ function disposeTree(o) {
 async function resolveGlbs(cfg) {
   await preload(cfg);
   for (const m of cfg.mods || []) if (m.glb) glbCache[m.glb + '_scene'] = await glbCache[m.glb];
+}
+/** Camera azimuth that faces the most fronts: U → from the D side, galley → from the C side, otherwise the corner view. */
+function defaultAz(cfg) {
+  const mods = cfg.mods || [], on = w => mods.some(m => m.wall === w);
+  if (on('C')) return 0;
+  if (on('D')) return Math.PI / 2;
+  return Math.PI / 4;
 }
 function camFor(cam, target, dist, az, polar) {
   cam.position.set(target.x + dist * Math.sin(polar) * Math.sin(az), target.y + dist * Math.cos(polar), target.z + dist * Math.sin(polar) * Math.cos(az));
@@ -492,7 +539,7 @@ class Viewer {
     this.scene = new T.Scene(); this.scene.environment = r.userData.env; this.scene.environmentIntensity = .65;
     this.cam = new T.PerspectiveCamera(38, 1, .05, 100);
     const c = this.ctl = new OrbitControls(this.cam, r.domElement);
-    Object.assign(c, { enableDamping: true, dampingFactor: .08, minPolarAngle: .25, maxPolarAngle: 1.47, minAzimuthAngle: .03, maxAzimuthAngle: Math.PI / 2 - .03, minDistance: 1, maxDistance: 16, screenSpacePanning: true });
+    Object.assign(c, { enableDamping: true, dampingFactor: .08, minPolarAngle: .25, maxPolarAngle: 1.47, minDistance: 1, maxDistance: 16, screenSpacePanning: true });
     c.addEventListener('change', () => this.dirty = true);
     this.root = new T.Group(); this.scene.add(this.root); this.groups = {};
     this.sel = new T.Group(); this.scene.add(this.sel); this.labels = [];
@@ -500,7 +547,13 @@ class Viewer {
     el.addEventListener('pointerdown', e => { this.pd = [e.clientX, e.clientY]; el.style.cursor = 'grabbing'; });
     el.addEventListener('pointerup', e => { el.style.cursor = 'grab'; if (!this.pd || Math.hypot(e.clientX - this.pd[0], e.clientY - this.pd[1]) > 5) return; this.pick(e); });
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(host); this.resize();
-    const loop = () => { this.raf = requestAnimationFrame(loop); if (this.tw) this.tw(); if (this.ctl.update() || this.dirty) { this.dirty = false; this.r.render(this.scene, this.cam); this.placeLabels(); } };
+    this.openK = 0; this.openTo = 0; this.movers = [];
+    const loop = () => {
+      this.raf = requestAnimationFrame(loop);
+      if (this.tw) this.tw();
+      if (this.openK !== this.openTo) { const d = this.openTo - this.openK, st = Math.sign(d) * Math.min(Math.abs(d), .045); this.openK += st; applyOpen(this.movers, this.openK); this.dirty = true; }
+      if (this.ctl.update() || this.dirty) { this.dirty = false; this.renderNow(); }
+    };
     loop();
   }
   resize() { const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1; this.r.setSize(w, h, false); this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); if (this.ready) this.renderNow(); else this.dirty = true; }
@@ -526,6 +579,7 @@ class Viewer {
       disposeTree(this.root); this.scene.remove(this.root);
       this.root = new T.Group(); this.scene.add(this.root);
       this.groups = buildScene(this.root, cfg);
+      this.movers = collectMovers(this.root); applyOpen(this.movers, this.openK);
       const rs = JSON.stringify(cfg.room);
       if (rs !== this.roomSig) { this.roomSig = rs; this.fit(true); }
       if (!this.ready) { this.ready = true; this.opts.onReady && this.opts.onReady(); }
@@ -533,7 +587,9 @@ class Viewer {
     Object.values(this.groups).forEach(g => { g.visible = cfg.altos !== false || !(g.userData.type === 'upper' || g.userData.type === 'hood'); });
     this.drawSel(); this.renderNow();
   }
-  renderNow() { this.dirty = false; this.r.render(this.scene, this.cam); this.placeLabels(); }
+  renderNow() { this.dirty = false; if (this.cfg) cutaway(this.root.userData.walls, this.cam, this.cfg); this.r.render(this.scene, this.cam); this.placeLabels(); }
+  /** Opens (true) or closes every door and drawer with a short animation. */
+  setOpen(open) { this.openTo = open ? 1 : 0; this.dirty = true; }
   label(text, pos, dark) {
     const d = document.createElement('div');
     d.textContent = text;
@@ -574,7 +630,7 @@ class Viewer {
     const vf = this.cam.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * this.cam.aspect);
     const dist = r / Math.sin(Math.min(vf, hf) / 2) * .7;
     const sph = new T.Spherical().setFromVector3(this.cam.position.clone().sub(this.ctl.target));
-    this.anim(c, dist, az != null ? az : (instant ? Math.PI / 4 : sph.theta), 1.18, instant);
+    this.anim(c, dist, az === 'auto' || (az == null && instant) ? defaultAz(this.cfg) : az != null ? az : sph.theta, 1.18, instant);
   }
   anim(target, dist, az, polar, instant) {
     const t0 = this.ctl.target.clone(), s0 = new T.Spherical().setFromVector3(this.cam.position.clone().sub(t0));
@@ -595,16 +651,20 @@ export function snapshot(cfg, o) {
   const job = queue.then(async () => {
     await init(); await resolveGlbs(cfg);
     if (!snapR) snapR = mkRenderer(true);
-    snapR.setPixelRatio(1); snapR.setSize(o.w, o.h, false);
+    // Supersample for clean edges (the JPEG comes out at up to 2× the requested size).
+    snapR.setPixelRatio(Math.max(1, Math.min(2, 2400 / o.w))); snapR.setSize(o.w, o.h, false);
     const scene = new T.Scene(); scene.background = new T.Color(cfg.bg || '#d3cec6'); scene.environment = snapR.userData.env; scene.environmentIntensity = .65;
     const root = new T.Group(); scene.add(root);
     const groups = buildScene(root, cfg);
+    root.traverse(l => { if (l.isDirectionalLight && l.castShadow) { l.shadow.mapSize.set(4096, 4096); l.shadow.radius = 4; } });
+    if (o.open) applyOpen(collectMovers(root), 1);
     const cam = new T.PerspectiveCamera(o.fov || 38, o.w / o.h, .05, 100);
     const bb = frameBox(groups, cfg, o.focusId), c = bb.getCenter(new T.Vector3()), r = bb.getSize(new T.Vector3()).length() / 2;
     if (!o.focusId) c.y = Math.min(c.y, 1.05);
     const k = o.w / o.h < 1.2 ? .95 : .78;
     const dist = o.focusId ? Math.max(1.1, r * 2.6) : r / Math.sin(cam.fov * Math.PI / 360) * k;
-    camFor(cam, c, dist, (o.ang != null ? o.ang : 45) * Math.PI / 180, o.polar || (o.focusId ? 1.0 : 1.18));
+    camFor(cam, c, dist, o.ang != null ? o.ang * Math.PI / 180 : defaultAz(cfg), o.polar || (o.focusId ? 1.0 : 1.18));
+    cutaway(root.userData.walls, cam, cfg);
     snapR.render(scene, cam);
     const url = snapR.domElement.toDataURL('image/jpeg', .88);
     disposeTree(root);
