@@ -43,7 +43,7 @@ export function LeftPanel(props: {
   ];
 
   return (
-    <aside style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
+    <aside className="ed-left" style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
       <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid var(--color-divider)' }}>
         {tabs.map((t) => (
           <button type="button"

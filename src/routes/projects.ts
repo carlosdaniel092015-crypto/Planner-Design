@@ -67,6 +67,11 @@ const CreateBody = z
     ptype: z.enum(['cocina', 'closet', 'vestidor']).optional().openapi({ description: 'Si no envías data, se crea con la plantilla del tipo.' }),
     currency: Currency.optional(),
     data: DataField.optional(),
+    clientRef: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{8,64}$/)
+      .optional()
+      .openapi({ description: 'Id local de un proyecto creado sin conexión. Si ya existe un proyecto tuyo con esa referencia se devuelve ese (200) en vez de crear otro.' }),
   })
   .openapi('ProyectoNuevo');
 
@@ -229,13 +234,21 @@ export function projectRoutes() {
       description: 'Valida `data` con el esquema de src/core y calcula en el servidor el estimado y el número de módulos. Sin `data`, usa la plantilla del prototipo.',
       security,
       request: body(CreateBody),
-      responses: { 201: json(ProjectDetail, 'Creado'), ...authErrors, ...pick(413) },
+      responses: { 201: json(ProjectDetail, 'Creado'), 200: json(ProjectDetail, 'Ya existía (misma clientRef)'), ...authErrors, ...pick(409, 413) },
     }),
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'project:create');
       const { db } = c.var.deps;
       const input = c.req.valid('json');
+      if (input.clientRef) {
+        const [prev] = await db.select().from(projects).where(and(eq(projects.organizationId, a.org.id), eq(projects.clientRef, input.clientRef))).limit(1);
+        if (prev) {
+          if (prev.ownerId !== a.user.id) throw new AppError(409, 'REFERENCIA_EN_USO', 'La referencia del proyecto ya está en uso.');
+          if (prev.deletedAt) throw notFound('El proyecto');
+          return c.json(await detail(db, a, prev), 200);
+        }
+      }
       const data: ProjectData = input.data ? parseProjectData(input.data) : parseProjectData(newProject(input.ptype ?? 'cocina', input.name));
       if (input.name) data.pname = input.name;
       await assertClient(db, a.org.id, input.clientId);
@@ -250,6 +263,7 @@ export function projectRoutes() {
             name: data.pname,
             data: data as Record<string, unknown>,
             currency: input.currency ?? a.org.baseCurrency,
+            clientRef: input.clientRef ?? null,
             ...rowValuesFrom(data, ctx),
           })
           .returning();

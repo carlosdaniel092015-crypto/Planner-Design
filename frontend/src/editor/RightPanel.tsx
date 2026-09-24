@@ -76,7 +76,7 @@ export function RightPanel(props: {
       { k: 'Precio estimado', v: fmtMoney(props.estimate.total, currency) },
     ];
     return (
-      <aside style={{ width: 320, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
+      <aside className="ed-right" style={{ width: 320, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
         {head}
         <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ padding: 16, border: '2px dashed var(--color-divider)', fontSize: 14, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)', display: 'flex', gap: 10 }}>
@@ -110,7 +110,7 @@ export function RightPanel(props: {
   const frenteOpts = props.materials.filter((m) => m.uses.includes('frentes'));
 
   return (
-    <aside style={{ width: 320, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
+    <aside className="ed-right" style={{ width: 320, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
       {head}
       <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'start' }}>

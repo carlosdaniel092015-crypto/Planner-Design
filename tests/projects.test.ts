@@ -51,6 +51,20 @@ describe('proyectos', () => {
     expect(r.data.name).toBe('Vestidor principal');
   });
 
+  it('crear con clientRef es idempotente (reintentos de la sincronización sin conexión)', async () => {
+    const body = { name: 'Creado sin conexión', ptype: 'closet', clientRef: 'local-abc12345' };
+    const a = await t.req('POST', '/projects', { user: d1, body });
+    expect(a.status).toBe(201);
+    const b = await t.req('POST', '/projects', { user: d1, body });
+    expect(b.status).toBe(200);
+    expect(b.data.id).toBe(a.data.id);
+    const other = await t.req('POST', '/projects', { user: d2, body });
+    expect(other.status).toBe(409);
+    expect(other.data.error.code).toBe('REFERENCIA_EN_USO');
+    const bad = await t.req('POST', '/projects', { user: d1, body: { clientRef: 'x y' } });
+    expect(bad.status).toBe(400);
+  });
+
   it('rechaza un JSON que no cumple el esquema (400) y uno de más de 2 MB (413)', async () => {
     const bad = await t.req('POST', '/projects', { user: d1, body: { data: { ...DEFAULT_KITCHEN, room: { A: -1 } } } });
     expect(bad.status).toBe(400);

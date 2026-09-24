@@ -49,7 +49,9 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - `src/db/` esquema, cliente (Neon / pg / PGlite), semilla, migrador
 - `src/lib/` errores, permisos, dinero, paginación, auditoría, límite de peticiones, OpenAPI
 - `src/services/` proyectos, precios, aprobaciones, archivos, biblioteca, correo, almacenamiento, exportaciones
-- `frontend/` React + Vite; importa el núcleo con `@core` (la misma copia que el servidor). `public/` trae el sistema de diseño, three.js
+- `frontend/` React + Vite; importa el núcleo con `@core` (la misma copia que el servidor). Es PWA: `frontend/sw.js` (el build inyecta
+  la lista de precarga) y `frontend/src/offline/` (IndexedDB por usuario + cola de sincronización). Las páginas leen y guardan proyectos
+  por `offline/sync.ts`, nunca directo con `api.saveProject`. `public/` trae el sistema de diseño, three.js
   y el visor 3D del prototipo; `public/prototipo/` es el prototipo original
 - `tests/` integración por recurso (`tests/helpers.ts` arma app + BD PGlite migrada)
 

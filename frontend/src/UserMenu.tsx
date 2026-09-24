@@ -40,7 +40,15 @@ export function UserMenu() {
               className="btn btn-ghost"
               style={{ justifyContent: 'flex-start' }}
               onClick={async () => {
-                await signOut();
+                const left = await signOut();
+                if (
+                  left &&
+                  !window.confirm(
+                    `Hay ${left === 1 ? 'un proyecto' : `${left} proyectos`} con cambios que todavía no se subieron (sin conexión). Si cierras sesión ahora se borrarán de este dispositivo. ¿Cerrar sesión de todos modos?`,
+                  )
+                )
+                  return;
+                if (left) await signOut(true);
                 nav('/login', { replace: true });
               }}
             >

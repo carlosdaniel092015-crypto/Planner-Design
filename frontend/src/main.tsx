@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth';
+import { PwaUpdater } from './offline/pwa';
 import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
 import { EditorPage } from './pages/Editor';
 import { HomePage } from './pages/Home';
@@ -11,6 +12,7 @@ const router = createBrowserRouter([
     element: (
       <AuthProvider>
         <Outlet />
+        <PwaUpdater />
       </AuthProvider>
     ),
     children: [
@@ -27,7 +29,8 @@ const router = createBrowserRouter([
 
 const style = document.createElement('style');
 style.textContent = `
-  html,body{margin:0;height:100%}
+  html,body{margin:0;height:100%;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+  button,a,input,select{touch-action:manipulation}
   :root{--sp-canvas:#e4e1dc}
   [data-theme="dark"]{--color-bg:#1d1c1b;--color-surface:#282726;--color-text:#eeecea;--color-divider:color-mix(in srgb,#eeecea 28%,transparent);--sp-canvas:#131211;--color-accent-100:#3a1c16;--color-accent-800:#ffc4b8;--color-accent-700:#ff9783;--color-neutral-100:#2d2b2b;--color-neutral-200:#343231;--color-neutral-800:#d7d3d3}
   a{color:var(--color-accent-700)}a:hover{color:var(--color-accent-600)}

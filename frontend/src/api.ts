@@ -12,13 +12,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const res = await fetch(`/api/v1${path}`, {
-    method,
-    credentials: 'include',
-    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+/** status 0 = the request never got an answer (offline, DNS, timeout). */
+export const isNetworkError = (e: unknown) => e instanceof ApiError && e.status === 0;
+/** Worth retrying later: no answer, rate limit or server trouble. */
+export const isTransient = (e: unknown) => e instanceof ApiError && (e.status === 0 || e.status === 429 || e.status >= 500);
+
+async function request<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, timeoutMs = 20_000): Promise<T> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`/api/v1${path}`, {
+      method,
+      credentials: 'include',
+      headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } catch {
+    throw new ApiError(0, 'SIN_CONEXION', 'Sin conexión con el servidor.');
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 204) return undefined as T;
   const data = res.headers.get('content-type')?.includes('json') ? await res.json().catch(() => null) : null;
   if (!res.ok) {
@@ -90,19 +105,20 @@ export interface Catalog {
 }
 
 export const api = {
-  me: () => request<Me>('GET', '/me'),
+  me: (timeoutMs?: number) => request<Me>('GET', '/me', undefined, {}, timeoutMs),
   signIn: (email: string, password: string) => request<Me>('POST', '/auth/sign-in', { email, password }),
   signOut: () => request<{ ok: true }>('POST', '/auth/sign-out'),
   forgot: (email: string) => request<{ ok: true }>('POST', '/auth/forgot-password', { email }),
   reset: (token: string, password: string) => request<{ ok: true }>('POST', '/auth/reset-password', { token, password }),
   acceptInvite: (token: string, password: string, name?: string) => request<Me>('POST', '/auth/accept-invite', { token, password, name }),
 
-  listProjects: () => request<{ items: ProjectSummary[]; nextCursor: string | null }>('GET', '/projects?limit=100'),
-  createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData }) => request<ProjectDetail>('POST', '/projects', body),
-  getProject: (id: string) => request<ProjectDetail>('GET', `/projects/${id}`),
+  listProjects: (timeoutMs?: number) => request<{ items: ProjectSummary[]; nextCursor: string | null }>('GET', '/projects?limit=100', undefined, {}, timeoutMs),
+  createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData; currency?: Currency; clientRef?: string }, timeoutMs?: number) =>
+    request<ProjectDetail>('POST', '/projects', body, {}, timeoutMs),
+  getProject: (id: string, timeoutMs?: number) => request<ProjectDetail>('GET', `/projects/${id}`, undefined, {}, timeoutMs),
   saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; data: ProjectData }) => request<ProjectDetail>('PUT', `/projects/${id}`, body),
   duplicateProject: (id: string) => request<ProjectDetail>('POST', `/projects/${id}/duplicate`),
   deleteProject: (id: string) => request<void>('DELETE', `/projects/${id}`),
 
-  catalog: () => request<Catalog>('GET', '/catalog'),
+  catalog: (timeoutMs?: number) => request<Catalog>('GET', '/catalog', undefined, {}, timeoutMs),
 };

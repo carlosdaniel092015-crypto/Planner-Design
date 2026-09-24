@@ -1,8 +1,10 @@
 import { DEFAULT_MATERIALS, iso, newProject, type ProjectKind } from '@core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, api, type ProjectSummary } from '../api';
+import { ApiError, type ProjectSummary } from '../api';
 import { canCreate, canEdit, useAuth } from '../auth';
+import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
+import { createProject, deleteProject, duplicateProject, isLocalId, listProjects, onSyncEvent } from '../offline/sync';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, STATUS, Svg, useToast } from '../ui';
 
@@ -25,23 +27,42 @@ export function HomePage() {
   const [creating, setCreating] = useState<ProjectKind | null>(null);
   const [toDelete, setToDelete] = useState<ProjectSummary | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
+  const [fromDevice, setFromDevice] = useState(false);
+  const sync = useSyncStatus();
+  const pending = new Set(sync?.pending ?? []);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
   const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30) }), []);
 
   const load = () =>
-    api
-      .listProjects()
-      .then((r) => setItems(r.items))
+    listProjects()
+      .then((r) => {
+        setItems(r.items);
+        setFromDevice(r.fromDevice);
+        setError(null);
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los proyectos.'));
   useEffect(() => {
     load();
+    // Reload when the queue settles (ids of offline projects change, conflict copies appear).
+    return onSyncEvent((e) => {
+      if (e.type === 'conflict') flash(`Se guardó "${e.copyName}". ${e.reason}`);
+      if (e.type === 'dropped') flash(e.message);
+      load();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const wasOnline = useRef(sync?.online);
+  useEffect(() => {
+    if (sync?.online && wasOnline.current === false) load();
+    wasOnline.current = sync?.online;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync?.online]);
 
   const create = async (k: ProjectKind) => {
     if (!canCreate(me)) return flash('Tu rol no permite crear proyectos.');
     setCreating(k);
     try {
-      const p = await api.createProject({ ptype: k });
+      const p = await createProject(k);
       nav(`/proyectos/${p.id}`);
     } catch (e) {
       flash(e instanceof ApiError ? e.message : 'No se pudo crear el proyecto.');
@@ -52,7 +73,7 @@ export function HomePage() {
   const duplicate = async (p: ProjectSummary) => {
     setMenu(null);
     try {
-      const d = await api.duplicateProject(p.id);
+      const d = await duplicateProject(p.id);
       flash(`Se creó "${d.name}"`);
       load();
     } catch (e) {
@@ -65,7 +86,7 @@ export function HomePage() {
     const p = toDelete;
     setToDelete(null);
     try {
-      await api.deleteProject(p.id);
+      await deleteProject(p.id);
       setItems((xs) => xs?.filter((x) => x.id !== p.id) ?? null);
       flash(`"${p.name}" eliminado`);
     } catch (e) {
@@ -74,11 +95,12 @@ export function HomePage() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 14, height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', background: 'var(--color-bg)', flex: 'none' }}>
         <Brand />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a className="btn btn-ghost" href="/prototipo/" title="Prototipo original de Claude Design">
+          <SyncBadge />
+          <a className="btn btn-ghost home-proto" href="/prototipo/" title="Prototipo original de Claude Design">
             <Icon name="circle-help" />
             Prototipo
           </a>
@@ -126,6 +148,12 @@ export function HomePage() {
             <span>Estado</span>
             <span />
           </div>
+          {fromDevice && (
+            <p style={{ fontSize: 13, color: MUTED, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Icon name="wifi-off" size={14} />
+              Sin conexión: ves la lista guardada en este dispositivo. Puedes abrir y editar los proyectos que ya abriste aquí; los cambios se subirán solos.
+            </p>
+          )}
           {error && <p style={{ color: 'var(--color-accent-700)' }}>{error}</p>}
           {!items && !error && <p style={{ color: MUTED }}>Cargando proyectos…</p>}
           {items?.length === 0 && (
@@ -139,7 +167,14 @@ export function HomePage() {
               <div key={p.id} className="proj-row proj-item" onClick={() => nav(`/proyectos/${p.id}`)} style={{ alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-divider)', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ height: 84, background: 'var(--sp-canvas)', overflow: 'hidden' }}>{p.coverUrl ? <img src={p.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Svg drawing={thumbs[p.type]} />}</div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 16 }}>{p.name}</div>
+                  <div style={{ fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {p.name}
+                    {pending.has(p.id) && (
+                      <span className="tag tag-neutral" title="Guardado en este dispositivo; se subirá al servidor cuando haya conexión" style={{ fontSize: 11 }}>
+                        {isLocalId(p.id) ? 'Nuevo · por subir' : 'Por subir'}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 13, color: MUTED }}>
                     {p.type === 'cocina' ? 'Cocina' : 'Closet'} · {p.moduleCount} módulos · {fmtMoney(p.estimate.amount, p.estimate.currency)}
                   </div>
@@ -217,6 +252,7 @@ export function HomePage() {
           .home-hero{grid-template-columns:minmax(0,1fr)!important}
           .home-hero h1{font-size:38px!important}
           .home-types{grid-template-columns:minmax(0,1fr)!important}
+          .home-proto,.sync-label{display:none!important}
           .proj-row{grid-template-columns:96px minmax(0,1fr) 44px}
           .proj-row>*:nth-child(3),.proj-row>*:nth-child(4){display:none}
           .proj-row>*:nth-child(5) .btn-secondary{display:none}

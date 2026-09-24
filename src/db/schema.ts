@@ -155,6 +155,8 @@ export const projects = pgTable(
     coverUrl: text('cover_url'),
     /** Version whose pricing snapshot freezes the amounts once approved (FK added in SQL to avoid a cycle). */
     approvedVersionId: uuid('approved_version_id'),
+    /** Id the browser gave a project created offline; makes the create idempotent when the sync retries. */
+    clientRef: text('client_ref'),
     deletedAt: ts('deleted_at'),
     ...timestamps,
   },
@@ -162,6 +164,7 @@ export const projects = pgTable(
     index('projects_org_updated_idx').on(t.organizationId, t.updatedAt.desc()),
     index('projects_org_status_idx').on(t.organizationId, t.status),
     index('projects_data_gin_idx').using('gin', t.data),
+    uniqueIndex('projects_org_client_ref_uq').on(t.organizationId, t.clientRef),
   ],
 );
 

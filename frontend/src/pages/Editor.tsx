@@ -19,14 +19,16 @@ import {
   validateProject,
 } from '@core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api, type Catalog, type CatalogMaterial, type ProjectDetail } from '../api';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ApiError, type Catalog, type CatalogMaterial, type ProjectDetail } from '../api';
 import { canEdit, FullScreenLoader, useAuth } from '../auth';
 import { BottomBar } from '../editor/BottomBar';
 import { installEngine, sceneCfg, type Viewer } from '../editor/engine';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
+import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
+import { clearDraft, getCatalog, getProject, type LocalSave, onSyncEvent, type SyncEvent, saveProject, stashDraft } from '../offline/sync';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, toUsd, useToast } from '../ui';
 
@@ -57,8 +59,10 @@ export function EditorPage() {
   const [altos, setAltos] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [dark, setDark] = useState(false);
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
+  // Phones and small tablets start with the 3D view clear; the panels slide over it.
+  const narrow = typeof window !== 'undefined' && window.innerWidth <= 900;
+  const [leftOpen, setLeftOpen] = useState(!narrow);
+  const [rightOpen, setRightOpen] = useState(!narrow);
   const [leftTab, setLeftTab] = useState<LeftTab>('modulos');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('Todos');
@@ -67,34 +71,60 @@ export function EditorPage() {
   const [curOpen, setCurOpen] = useState(false);
   const [tip, setTip] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ kind: 'saved', at: new Date().toISOString() });
-  const [conflict, setConflict] = useState<number | null>(null);
+  const [conflict, setConflict] = useState<Extract<SyncEvent, { type: 'conflict' }> | null>(null);
   const viewer = useRef<Viewer | null>(null);
-  const version = useRef(0);
   const dirty = useRef(false);
   const saving = useRef(false);
+  /** Current id: a project created offline gets its server id when it syncs. */
+  const pid = useRef(id);
+  /** Route change caused by that id swap (not a real navigation). */
+  const remapTarget = useRef<string | null>(null);
+  const sync = useSyncStatus();
+  const pending = !!sync?.pending.includes(pid.current);
 
-  // ---------- load ----------
+  const applyProject = useCallback((p: ProjectDetail) => {
+    pid.current = p.id;
+    setProject(p);
+    setData(p.data);
+    setName(p.name);
+    setCurrency(p.currency);
+    hist.current = [];
+    fut.current = [];
+    dirty.current = false;
+    setSave({ kind: 'saved', at: p.updatedAt });
+  }, []);
+  const followRemap = useCallback(
+    (to: string) => {
+      pid.current = to;
+      remapTarget.current = to;
+      setProject((p) => (p ? { ...p, id: to } : p));
+      nav(`/proyectos/${to}`, { replace: true });
+    },
+    [nav],
+  );
+
+  // ---------- load (this device first when it has unsent work; works offline) ----------
   useEffect(() => {
+    if (remapTarget.current === id) {
+      remapTarget.current = null;
+      return;
+    }
     let dead = false;
-    Promise.all([api.getProject(id), api.catalog()])
-      .then(([p, c]) => {
+    Promise.all([getProject(id), getCatalog()])
+      .then(([{ project: p, redirect }, c]) => {
         if (dead) return;
         installEngine(c.materials);
         setCatalog(c);
-        setProject(p);
-        setData(p.data);
-        setName(p.name);
-        setCurrency(p.currency);
-        version.current = p.version;
-        setSave({ kind: 'saved', at: p.updatedAt });
+        applyProject(p);
+        if (redirect) followRemap(redirect);
       })
       .catch((e) => !dead && setLoadError(e instanceof ApiError ? e.message : 'No se pudo abrir el proyecto.'));
     return () => {
       dead = true;
     };
-  }, [id]);
+  }, [id, applyProject, followRemap]);
 
-  const readOnly = !project || project.status === 'aprobado' || !canEdit(me, project.ownerId);
+  const readOnly = !project || project.status === 'aprobado' || !canEdit(me, project.ownerId) || conflict != null;
   const materialsByCode = useMemo<Record<string, CatalogMaterial>>(() => Object.fromEntries((catalog?.materials ?? []).map((m) => [m.code, m])), [catalog]);
   const rate = project?.pricesFrozen ? project.estimate.rate : (catalog?.pricing.exchangeRateDopPerUsd ?? 60);
   const ctx = catalog?.context;
@@ -135,50 +165,91 @@ export function EditorPage() {
     force((n) => n + 1);
   }, [data]);
 
-  // ---------- save ----------
-  const doSave = useCallback(
-    async (overrideVersion?: number) => {
-      if (!project || !data || readOnly || saving.current) return;
-      saving.current = true;
-      dirty.current = false;
-      setSave({ kind: 'saving' });
-      try {
-        const res = await api.saveProject(project.id, { version: overrideVersion ?? version.current, name: name.trim() || data.pname, currency, data: { ...data, pname: name.trim() || data.pname } });
-        version.current = res.version;
-        setProject((p) => (p ? { ...p, ...res, data: p.data } : res));
-        setSave(dirty.current ? { kind: 'dirty' } : { kind: 'saved', at: res.updatedAt });
-      } catch (e) {
-        dirty.current = true;
-        if (e instanceof ApiError && e.code === 'VERSION_DESACTUALIZADA') {
-          setConflict((e.details as { currentVersion?: number })?.currentVersion ?? null);
-          setSave({ kind: 'error', message: 'Conflicto de versión' });
-        } else if (e instanceof ApiError && e.code === 'PROYECTO_APROBADO') {
-          setProject((p) => (p ? { ...p, status: 'aprobado' } : p));
-          setSave({ kind: 'error', message: 'El proyecto ya está aprobado' });
-        } else setSave({ kind: 'error', message: e instanceof ApiError ? e.message : 'Sin conexión; se reintentará.' });
-      } finally {
-        saving.current = false;
-      }
-    },
-    [project, data, name, currency, readOnly],
+  // ---------- save: always to this device first; the sync queue uploads it ----------
+  const snapshot = (): LocalSave | null => {
+    if (!data) return null;
+    const nm = name.trim() || data.pname;
+    const est = ctx ? computeEstimate(data, ctx, currency) : null;
+    return { name: nm, currency, data: { ...data, pname: nm }, estimate: est ? { amount: est.total, currency, rate } : undefined, moduleCount: data.mods.length };
+  };
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const doSave = useCallback(async () => {
+    if (!project || !data || readOnly || saving.current) return;
+    saving.current = true;
+    dirty.current = false;
+    setSave({ kind: 'saving' });
+    try {
+      const payload = snapshotRef.current();
+      if (!payload) return;
+      const newId = await saveProject(pid.current, payload);
+      clearDraft(pid.current);
+      if (newId !== pid.current) followRemap(newId);
+      setSave(dirty.current ? { kind: 'dirty' } : { kind: 'saved', at: new Date().toISOString() });
+    } catch (e) {
+      dirty.current = true;
+      setSave({ kind: 'error', message: e instanceof ApiError ? e.message : 'No se pudo guardar en este dispositivo.' });
+    } finally {
+      saving.current = false;
+    }
+  }, [project, data, readOnly, followRemap]);
+
+  // Autosave shortly after the last change (it is a local write).
+  useEffect(() => {
+    if (save.kind !== 'dirty' || readOnly) return;
+    const t = setTimeout(() => doSave(), 800);
+    return () => clearTimeout(t);
+  }, [save, doSave, readOnly]);
+
+  // Sync results for this project.
+  useEffect(
+    () =>
+      onSyncEvent((e) => {
+        if (e.type === 'remap') {
+          if (e.from === pid.current) followRemap(e.to);
+        } else if (e.projectId !== pid.current) return;
+        else if (e.type === 'synced') setProject((p) => (p ? { ...p, ...e.project, data: p.data, name: p.name, currency: p.currency } : p));
+        else if (e.type === 'conflict') setConflict(e);
+        else if (e.type === 'dropped') flash(e.message);
+      }),
+    [followRemap, flash],
   );
 
-  // Autosave 2 s after the last change.
+  // Crash-proof draft: a synchronous copy of every unsaved change, replayed on the next start if the tab
+  // is killed before the IndexedDB write finishes (phones do this to background apps).
   useEffect(() => {
-    if (save.kind !== 'dirty' || readOnly || conflict != null) return;
-    const t = setTimeout(() => doSave(), 2000);
-    return () => clearTimeout(t);
-  }, [save, doSave, readOnly, conflict]);
+    if (!dirty.current) return;
+    const snap = snapshotRef.current();
+    if (snap) stashDraft(pid.current, snap);
+  }, [data, name, currency]);
 
-  // Warn before leaving with unsaved changes.
+  // Saving is a local write, so flush it whenever the page may go away (tab hidden, app closed on a
+  // phone, leaving the editor) instead of waiting for the autosave timer.
+  const saveRef = useRef(doSave);
+  saveRef.current = doSave;
   useEffect(() => {
-    const h = (e: BeforeUnloadEvent) => {
-      if (dirty.current) e.preventDefault();
+    const flush = () => {
+      if (!dirty.current) return;
+      const s = snapshotRef.current();
+      if (s) stashDraft(pid.current, s);
+      void saveRef.current();
     };
-    window.addEventListener('beforeunload', h);
-    return () => window.removeEventListener('beforeunload', h);
+    const onHide = () => document.visibilityState === 'hidden' && flush();
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (!dirty.current) return;
+      flush();
+      e.preventDefault();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      flush();
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', onUnload);
+    };
   }, []);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty.current && currentLocation.pathname !== nextLocation.pathname);
 
   // ---------- keyboard ----------
   useEffect(() => {
@@ -215,7 +286,7 @@ export function EditorPage() {
 
   if (loadError)
     return (
-      <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--color-bg)' }}>
+      <div style={{ height: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--color-bg)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 420 }}>
           <h2 style={{ margin: 0 }}>No se pudo abrir el proyecto</h2>
           <p style={{ margin: 0 }}>{loadError}</p>
@@ -259,11 +330,22 @@ export function EditorPage() {
     { k: 'cotas', icon: 'ruler', tip: 'Cotas', key: 'C', on: cotas, act: () => setCotas(!cotas) },
     { k: 'altos', icon: 'layers', tip: 'Mostrar altos', key: 'A', on: altos, act: () => setAltos(!altos) },
   ];
-  const saveLabel = save.kind === 'saving' ? 'Guardando…' : save.kind === 'dirty' ? 'Cambios sin guardar' : save.kind === 'error' ? save.message : `Guardado ${relativeTime(save.at).toLowerCase()}`;
+  const saveLabel =
+    save.kind === 'saving'
+      ? 'Guardando…'
+      : save.kind === 'dirty'
+        ? 'Cambios sin guardar'
+        : save.kind === 'error'
+          ? save.message
+          : pending
+            ? sync?.online
+              ? 'Guardado · subiendo…'
+              : 'Guardado en este dispositivo'
+            : `Guardado ${relativeTime(save.at).toLowerCase()}`;
   const flatView = view === 'planta' ? planDrawing : view === 'alzado' ? elevDrawing : null;
 
   return (
-    <div data-theme={dark ? 'dark' : 'light'} style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden', position: 'relative' }}>
+    <div data-theme={dark ? 'dark' : 'light'} style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden', position: 'relative' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 14, height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', background: 'var(--color-bg)', flex: 'none', minWidth: 0 }}>
         <Brand />
         <div style={{ width: 2, height: 28, background: 'var(--color-divider)', flex: 'none' }} />
@@ -303,9 +385,10 @@ export function EditorPage() {
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
           <span className="save-state" style={{ fontSize: 12, color: save.kind === 'error' ? 'var(--color-accent-700)' : MUTED, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, marginRight: 6 }}>
-            <Icon name={save.kind === 'saved' ? 'cloud-check' : save.kind === 'error' ? 'cloud-alert' : 'cloud-upload'} size={14} />
-            {readOnly ? 'Solo lectura' : saveLabel}
+            <Icon name={save.kind === 'error' ? 'cloud-alert' : save.kind === 'saved' && !pending ? 'cloud-check' : save.kind === 'saved' && !sync?.online ? 'hard-drive' : 'cloud-upload'} size={14} />
+            {readOnly && !conflict ? 'Solo lectura' : saveLabel}
           </span>
+          <SyncBadge compact />
           <div style={{ position: 'relative' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setCurOpen(!curOpen)} title="Moneda y tipo de cambio" aria-expanded={curOpen} style={{ height: 38, padding: '0 10px' }}>
               <Icon name="banknote" />
@@ -351,13 +434,13 @@ export function EditorPage() {
               </>
             )}
           </div>
-          <button type="button" className="btn btn-icon" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" onClick={undo} disabled={readOnly || !hist.current.length}>
+          <button type="button" className="btn btn-icon ed-hide-xs" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" onClick={undo} disabled={readOnly || !hist.current.length}>
             <Icon name="undo-2" size={18} />
           </button>
-          <button type="button" className="btn btn-icon" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
+          <button type="button" className="btn btn-icon ed-hide-xs" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
             <Icon name="redo-2" size={18} />
           </button>
-          <button type="button" className="btn btn-icon" title="Modo oscuro del editor" aria-label="Modo oscuro" onClick={() => setDark(!dark)}>
+          <button type="button" className="btn btn-icon ed-hide-xs" title="Modo oscuro del editor" aria-label="Modo oscuro" onClick={() => setDark(!dark)}>
             <Icon name={dark ? 'sun' : 'moon'} size={17} />
           </button>
           <div style={{ width: 2, height: 28, background: 'var(--color-divider)', margin: '0 4px' }} />
@@ -369,7 +452,7 @@ export function EditorPage() {
         </div>
       </header>
 
-      {readOnly && (
+      {readOnly && !conflict && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: project.status === 'aprobado' ? 'var(--color-accent-100)' : 'var(--color-neutral-200)', color: project.status === 'aprobado' ? 'var(--color-accent-800)' : 'var(--color-text)', fontSize: 13, borderBottom: '1px solid var(--color-divider)' }}>
           <Icon name={project.status === 'aprobado' ? 'lock' : 'eye'} size={15} />
           {project.status === 'aprobado' ? 'Proyecto aprobado: el diseño está bloqueado para producción. Duplícalo desde Mis proyectos para hacer cambios.' : 'Solo lectura: este proyecto es de otro diseñador o tu rol no permite editar.'}
@@ -377,7 +460,8 @@ export function EditorPage() {
       )}
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div className="ed-body" style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
+          {(leftOpen || rightOpen) && <div className="ed-scrim" onClick={() => (setLeftOpen(false), setRightOpen(false))} />}
           {leftOpen ? (
             <LeftPanel
               tab={leftTab}
@@ -400,7 +484,7 @@ export function EditorPage() {
               readOnly={readOnly}
             />
           ) : (
-            <div style={{ width: 48, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 8 }}>
+            <div className="ed-rail ed-rail-left" style={{ width: 48, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 8 }}>
               <button type="button" className="btn btn-icon" onClick={() => setLeftOpen(true)} title="Mostrar panel" aria-label="Mostrar panel">
                 <Icon name="panel-left-open" size={18} />
               </button>
@@ -544,7 +628,7 @@ export function EditorPage() {
               }}
             />
           ) : (
-            <div style={{ width: 48, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
+            <div className="ed-rail ed-rail-right" style={{ width: 48, flex: 'none', borderLeft: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
               <button type="button" className="btn btn-icon" onClick={() => setRightOpen(true)} title="Mostrar propiedades" aria-label="Mostrar propiedades">
                 <Icon name="panel-right-open" size={18} />
               </button>
@@ -568,51 +652,36 @@ export function EditorPage() {
 
       {conflict != null && (
         <Dialog
-          title="Alguien más guardó cambios"
-          onClose={() => setConflict(null)}
+          title="Tus cambios se guardaron como copia"
+          onClose={() => {}}
           actions={
             <>
-              <button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>
-                Recargar (descartar mis cambios)
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={async () => {
+                  const r = await getProject(pid.current).catch(() => null);
+                  setConflict(null);
+                  if (r) applyProject(r.project);
+                }}
+              >
+                Ver la versión actual
               </button>
-              <button type="button"
+              <button
+                type="button"
                 className="btn btn-primary"
                 onClick={() => {
-                  const v = conflict;
+                  dirty.current = false;
                   setConflict(null);
-                  doSave(v);
+                  nav(`/proyectos/${conflict.copyId}`);
                 }}
               >
-                Guardar mi versión encima
+                Abrir mi copia
               </button>
             </>
           }
         >
-          Este proyecto se guardó desde otra pestaña o por otra persona (versión {conflict}). Puedes recargar para ver esa versión o reemplazarla con tus cambios.
-        </Dialog>
-      )}
-      {blocker.state === 'blocked' && (
-        <Dialog
-          title="Tienes cambios sin guardar"
-          onClose={() => blocker.reset()}
-          actions={
-            <>
-              <button type="button" className="btn btn-secondary" onClick={() => blocker.proceed()}>
-                Salir sin guardar
-              </button>
-              <button type="button"
-                className="btn btn-primary"
-                onClick={async () => {
-                  await doSave();
-                  blocker.proceed();
-                }}
-              >
-                Guardar y salir
-              </button>
-            </>
-          }
-        >
-          Si sales ahora perderás los cambios que aún no se guardaron.
+          {conflict.reason} Para que no se pierda nada, tu versión quedó guardada en el proyecto «{conflict.copyName}». Este proyecto conserva la versión del servidor.
         </Dialog>
       )}
       {toast}
@@ -621,8 +690,26 @@ export function EditorPage() {
         .pname:focus{border-color:var(--color-accent)!important;outline:none;background:var(--color-surface)!important}
         .lib-card:hover{border-color:var(--color-accent)!important}
         .tab-btn:hover,.val-btn:hover{background:color-mix(in srgb,var(--color-text) 5%,transparent)!important}
-        @media (max-width: 1200px){.phase-label,.save-state{display:none!important}}
-        @media (max-width: 900px){.phases,.minimap{display:none!important}}
+        @media (max-width: 1440px){.phase-label{display:none!important}}
+        @media (max-width: 1100px){.save-state{display:none!important}}
+        @media (max-width: 700px){.brand-name{display:none!important}}
+        @media (max-width: 900px){
+          .phases,.minimap{display:none!important}
+          .ed-body>aside{position:absolute;top:0;bottom:0;z-index:30;width:min(88vw,340px)!important;box-shadow:var(--shadow-lg)}
+          .ed-body .ed-left{left:0}
+          .ed-body .ed-right{right:0}
+          .ed-scrim{position:absolute;inset:0;z-index:29;background:rgba(0,0,0,.25)}
+        }
+        @media (min-width: 901px){.ed-scrim{display:none}}
+        @media (max-width: 560px){
+          .ed-hide-xs,.bb-hide-xs,.bb-first{display:none!important}
+          .bb-row{gap:8px!important;padding:6px 10px!important;justify-content:space-between}
+          header{gap:6px!important;padding:0 8px!important}
+          /* the collapsed side rails float over the 3D view instead of taking width */
+          .ed-rail{position:absolute;z-index:20;width:auto!important;border:0!important;background:var(--color-bg);box-shadow:var(--shadow-sm);padding:4px!important}
+          .ed-rail-left{left:8px;bottom:8px}
+          .ed-rail-right{right:8px;bottom:8px}
+        }
       `}</style>
       <span hidden>{fmtMoney(0, currency)}</span>
     </div>
