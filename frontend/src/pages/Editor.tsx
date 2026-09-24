@@ -862,7 +862,7 @@ export function EditorPage() {
           <div className="alts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 14 }}>
             {alts.map((a) => (
               <div key={a.label} style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', border: `2px solid ${a.current ? 'var(--color-accent)' : 'var(--color-divider)'}` }}>
-                <div style={{ height: 190, background: 'var(--sp-canvas)', padding: 8 }}>
+                <div className="alt-art" style={{ height: 190, background: 'var(--sp-canvas)', padding: 8 }}>
                   <Svg drawing={a.art} title={a.label} />
                 </div>
                 <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--color-text)' }}>
@@ -943,6 +943,7 @@ export function EditorPage() {
         .ed-mstep.on .ed-mnum{background:var(--color-accent);border-color:var(--color-accent);color:#fff}
         @media (min-width: 561px){.ed-mtool{display:none!important}}
         @media (max-width: 360px){.ed-mstep:not(.on) .ed-mlabel{display:none}}
+        @media (max-width: 700px){.alt-art{height:130px!important}}
         @media (max-width: 700px){.bb-issues{grid-template-columns:minmax(0,1fr)!important;max-height:45dvh!important}}
         @media (max-width: 560px){
           .ed-hide-xs,.bb-hide-xs,.bb-first{display:none!important}
