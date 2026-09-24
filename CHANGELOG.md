@@ -3,6 +3,15 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.2.0 · 2026-09-24
+
+### Mi cuenta
+- Nueva página **Mi cuenta** (menú de cuenta): cambiar el nombre y la contraseña (cierra la sesión en los demás dispositivos).
+- **Borrar mi cuenta**: elimina tus proyectos, accesos compartidos, sesiones y contraseña y anonimiza tu nombre y correo. El último administrador debe nombrar a otro antes.
+
+### Legal
+- Páginas públicas de **Política de privacidad** (`/privacidad`) y **Términos de uso** (`/terminos`), enlazadas desde el inicio de sesión y Mi cuenta.
+
 ## 1.1.0 · 2026-09-24
 
 ### Administración

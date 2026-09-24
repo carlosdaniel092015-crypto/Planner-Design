@@ -5,7 +5,9 @@ import { AuthProvider, RequireAuth } from './auth';
 import './offline/install';
 import { PwaUpdater } from './offline/pwa';
 import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
+import { AccountPage } from './pages/Account';
 import { AdminPage } from './pages/Admin';
+import { PrivacyPage, TermsPage } from './pages/Legal';
 import { EditorPage } from './pages/Editor';
 import { HomePage } from './pages/Home';
 import { PublicApprovalPage } from './pages/PublicApproval';
@@ -28,6 +30,9 @@ const router = createBrowserRouter([
       { path: '/', element: <RequireAuth><HomePage /></RequireAuth> },
       { path: '/proyectos/:id', element: <RequireAuth><EditorPage /></RequireAuth> },
       { path: '/admin', element: <RequireAuth><AdminPage /></RequireAuth> },
+      { path: '/cuenta', element: <RequireAuth><AccountPage /></RequireAuth> },
+      { path: '/privacidad', element: <PrivacyPage /> },
+      { path: '/terminos', element: <TermsPage /> },
       { path: '*', element: <RequireAuth><HomePage /></RequireAuth> },
     ],
   },

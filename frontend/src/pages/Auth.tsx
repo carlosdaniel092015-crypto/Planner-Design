@@ -67,6 +67,7 @@ export function LoginPage() {
   return (
     <Shell kicker="Acceso" title="Diseña cocinas y closets a medida." lead="Inicia sesión para ver tus proyectos, editarlos en 3D y enviarlos a tus clientes para su aprobación.">
       <h2 style={{ margin: 0, fontSize: 24 }}>Iniciar sesión</h2>
+      {params.get('borrada') && <p style={{ margin: 0, fontSize: 14 }}>Tu cuenta se borró. Gracias por usar Planner.</p>}
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="field">
           <label htmlFor="email">Correo</label>
@@ -85,6 +86,9 @@ export function LoginPage() {
       <Link to="/olvide" style={{ fontSize: 14 }}>
         ¿Olvidaste tu contraseña?
       </Link>
+      <span style={{ fontSize: 12, color: MUTED }}>
+        Al entrar aceptas los <Link to="/terminos">términos de uso</Link> y la <Link to="/privacidad">política de privacidad</Link>.
+      </span>
     </Shell>
   );
 }
