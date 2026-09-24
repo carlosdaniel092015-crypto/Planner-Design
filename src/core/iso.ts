@@ -76,7 +76,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     } else poly([Q(t0, z0), Q(t1, z0), Q(t1, z1), Q(t0, z1)], '#cfc6b8', '#ffffff', 2);
   }
   const key = (m: ModuleInstance) => {
-    const g = geo(m);
+    const g = geo(m, p.room);
     return ((g.x0 + g.x1) / 2) * s + ((g.y0 + g.y1) / 2) * c - (m.type === 'upper' || m.type === 'hood' ? 1 : 0);
   };
   const list = mods.filter((m) => o.altos !== false || (m.type !== 'upper' && m.type !== 'hood')).slice().sort((x, y) => key(x) - key(y));
@@ -84,7 +84,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
   const col = (code: string, fb: string) => materials[code]?.color ?? fb;
   let selM: ModuleInstance | null = null;
   for (const m of list) {
-    const g = geo(m);
+    const g = geo(m, p.room);
     const [z0, z1] = zr(m, zoc);
     const C = { f: col(m.fre || p.mats.frentes, '#c49a6c'), b: col(m.cue || p.mats.cuerpo, '#eeebe6'), c: col(p.mats.encimera, '#e9e7e2'), hd: col(p.mats.jaladeras, '#2a2928') };
     const isB = m.wall === 'B';
@@ -94,6 +94,13 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const FP = (u: number, v: number): V3 => (isB ? [g.x1 + 0.3, g.y0 + u * m.w, z0 + v * (z1 - z0)] : [g.x0 + u * m.w, g.y1 + 0.3, z0 + v * (z1 - z0)]);
     const R = (u0: number, u1: number, a0: number, a1: number, fill: string, st?: string, sw?: number) => poly([FP(u0, a0), FP(u1, a0), FP(u1, a1), FP(u0, a1)], fill, st || shade(fill, -0.3), sw || 0.4, ex);
     const L = (u0: number, a0: number, u1: number, a1: number, st: string, sw: number) => line([FP(u0, a0), FP(u1, a1)], st, sw, ex);
+    // Walls C and D face away from this camera: draw the carcass (and countertop) as plain boxes.
+    if (m.wall === 'C' || m.wall === 'D') {
+      const color = m.type === 'fridge' || m.type === 'hood' ? '#c5c8c9' : C.b;
+      box(g.x0, g.x1, g.y0, g.y1, m.type === 'hood' ? z0 : m.type === 'fridge' ? 0 : z0, m.type === 'fridge' ? m.h : z1, color, ex);
+      if (m.type === 'base') box(g.x0 - (m.wall === 'C' ? 2 : 0), g.x1, g.y0 - (m.wall === 'D' ? 2 : 0), g.y1, z1, z1 + 4, C.c);
+      continue;
+    }
     if (m.type === 'hood') {
       const cx = isB ? (g.y0 + g.y1) / 2 : (g.x0 + g.x1) / 2;
       if (isB) {
@@ -178,7 +185,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
   }
   if (selM) {
     const m = selM as ModuleInstance;
-    const g = geo(m);
+    const g = geo(m, p.room);
     const [z0, z1b] = zr(m, zoc);
     const zt = m.type === 'base' ? z1b + 4 : z1b;
     const zb = m.type === 'upper' || m.type === 'hood' ? z0 : 0;

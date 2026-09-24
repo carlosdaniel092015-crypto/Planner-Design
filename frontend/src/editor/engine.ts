@@ -28,7 +28,7 @@ interface ProtoMat {
 
 declare global {
   interface Window {
-    SPEngine?: { MATS: Record<string, ProtoMat>; geo: typeof geo; zr: typeof zr };
+    SPEngine?: { MATS: Record<string, ProtoMat>; geo: (m: Parameters<typeof geo>[0]) => ReturnType<typeof geo>; zr: typeof zr; room: { A: number; B: number } };
     __resources?: Record<string, string>;
   }
 }
@@ -46,7 +46,9 @@ export function installEngine(materials: CatalogMaterial[]) {
     };
   }
   if (!MATS.blanco) MATS.blanco = { name: 'Blanco', type: 'Melamina', c: '#eeebe6' };
-  window.SPEngine = { MATS, geo, zr };
+  const room = window.SPEngine?.room ?? { A: 360, B: 300 };
+  // geo() needs the room size for walls C and D; sceneCfg() keeps it current.
+  window.SPEngine = { MATS, geo: (m) => geo(m, window.SPEngine?.room), zr, room };
   window.__resources = Object.fromEntries(THREE_FILES.map((p) => [`th_${p.replace(/[^a-z0-9]/gi, '_')}`, `/vendor/three/${p}`]));
 }
 
@@ -54,12 +56,42 @@ export interface Viewer {
   update(cfg: unknown): Promise<void>;
   dispose(): void;
   zoomBy(f: number): void;
-  fit(instant?: boolean, az?: number): void;
+  /** az: radians, or 'auto' for the angle that faces the most fronts. */
+  fit(instant?: boolean, az?: number | 'auto'): void;
   setAngle(deg: number): void;
+  /** Opens (true) or closes all doors and drawers, animated. */
+  setOpen(open: boolean): void;
 }
 interface Renderer {
   init(): Promise<void>;
   createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null) => void; onReady?: () => void }): Promise<Viewer>;
+  snapshot(cfg: unknown, o: SnapOptions): Promise<string | null>;
+}
+
+export interface SnapOptions {
+  w: number;
+  h: number;
+  /** Camera azimuth in degrees (45 = corner view). */
+  ang?: number;
+  /** Frame one module (detail view). */
+  focusId?: number;
+  /** Render with doors and drawers open. */
+  open?: boolean;
+}
+
+const snapCache = new Map<string, Promise<string | null>>();
+/** Offscreen photo-real render (JPEG data URL), cached by scene + options; null when WebGL is unavailable. */
+export function snapshot(cfg: unknown, o: SnapOptions): Promise<string | null> {
+  const key = JSON.stringify([cfg, o]);
+  let p = snapCache.get(key);
+  if (!p) {
+    p = loadRenderer()
+      .then((r) => r.snapshot(cfg, o))
+      .catch(() => null);
+    snapCache.set(key, p);
+    if (snapCache.size > 40) snapCache.delete(snapCache.keys().next().value!);
+  }
+  return p;
 }
 
 let rendererP: Promise<Renderer> | null = null;
@@ -72,6 +104,7 @@ export const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 
 
 /** Scene config the renderer expects (prototype sceneCfg()). */
 export function sceneCfg(p: ProjectData, extra: { sel: number | null; cotas: boolean; altos: boolean; dark: boolean }) {
+  if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
     mods: p.mods,
     mats: p.mats,

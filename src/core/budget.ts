@@ -1,7 +1,8 @@
 // Estimate (presupuesto). Structure follows the prototype's totals() — modules + countertop,
 // installation %, discount %, manual overrides — with catalogue-driven prices (USD/m² boards,
 // hardware, labour) plus waste, margin and tax (ITBIS) from the organisation's settings.
-// Manual amounts stored in the project (pOv, pBase, priceAdj.counter/final) are in USD, as in the prototype.
+// Manual amounts stored in the project (pOv, pBase, priceAdj.counter/final) are in the organisation's base currency.
+// Tax: priceAdj.taxRate overrides the organisation rate for one project (0 = sin ITBIS).
 import { frontCounts, parts } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { Currency, PricingContext, Rounding } from './types';
@@ -87,16 +88,17 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
   const cur = currency ?? s.baseCurrency;
   const rate = s.exchangeRateDopPerUsd;
   const conv = (amount: number, from: Currency) => convert(amount, from, cur, rate);
-  const usd = (amount: number) => conv(amount, 'USD');
+  const manualAmount = (amount: number) => conv(amount, s.baseCurrency);
+  const taxRate = project.priceAdj.taxRate ?? s.taxRate;
   const waste = 1 + s.wasteRate;
   const missing = new Set<string>();
 
   const lines: EstimateLine[] = project.mods.map((m) => {
     const def = ctx.modules[m.code];
     const base = { id: m.id, code: m.code, name: m.name, w: m.w };
-    if (m.pOv != null) return { ...base, basis: 'manual', materials: 0, hardware: 0, labor: 0, total: usd(m.pOv) };
+    if (m.pOv != null) return { ...base, basis: 'manual', materials: 0, hardware: 0, labor: 0, total: manualAmount(m.pOv) };
     if (m.pBase != null) {
-      const total = usd(m.pBase * (m.w / (m.w0 || m.w)));
+      const total = manualAmount(m.pBase * (m.w / (m.w0 || m.w)));
       return { ...base, basis: 'precio_base', materials: 0, hardware: 0, labor: total, total };
     }
     if (m.type === 'fridge' || m.type === 'hood' || m.glb) {
@@ -126,7 +128,7 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
   const areaM2 = bases.reduce((a, m) => a + m.w * m.d, 0) / 10_000;
   const top = ctx.materials[project.mats.encimera];
   const manualCounter = project.priceAdj.counter != null;
-  const counterTotal = manualCounter ? usd(project.priceAdj.counter!) : top ? areaM2 * waste * conv(top.priceM2, top.priceCurrency) : 0;
+  const counterTotal = manualCounter ? manualAmount(project.priceAdj.counter!) : top ? areaM2 * waste * conv(top.priceM2, top.priceCurrency) : 0;
 
   const subtotal = lines.reduce((a, l) => a + l.total, 0) + counterTotal;
   const margin = subtotal * s.marginRate;
@@ -139,16 +141,16 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
   let taxBase: number;
   let total: number;
   if (manual) {
-    gross = usd(project.priceAdj.final!);
-    taxBase = gross / (1 + s.taxRate);
+    gross = manualAmount(project.priceAdj.final!);
+    taxBase = gross / (1 + taxRate);
     total = round2(gross);
   } else {
     if (s.pricesIncludeTax) {
       gross = net;
-      taxBase = net / (1 + s.taxRate);
+      taxBase = net / (1 + taxRate);
     } else {
       taxBase = net;
-      gross = net * (1 + s.taxRate);
+      gross = net * (1 + taxRate);
     }
     total = applyRounding(gross, s.rounding);
   }
@@ -166,7 +168,7 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
     discount: round2(discount),
     taxBase: round2(taxBase),
     taxName: s.taxName,
-    taxRate: s.taxRate,
+    taxRate,
     tax: round2(gross - taxBase),
     pricesIncludeTax: s.pricesIncludeTax,
     roundingAdjustment: round2(total - gross),

@@ -8,8 +8,8 @@ if (!url || !email || !password) {
   console.error('Faltan DATABASE_URL, SEED_ADMIN_EMAIL o SEED_ADMIN_PASSWORD.');
   process.exit(1);
 }
-if (password.length < 10) {
-  console.error('SEED_ADMIN_PASSWORD debe tener al menos 10 caracteres.');
+if (password.length < 8) {
+  console.error('SEED_ADMIN_PASSWORD debe tener al menos 8 caracteres.');
   process.exit(1);
 }
 
@@ -19,7 +19,8 @@ try {
     orgName: process.env.SEED_ORG_NAME ?? 'Stephanny Planner',
     slug: process.env.SEED_ORG_SLUG ?? 'stephanny',
     admin: { name: process.env.SEED_ADMIN_NAME ?? 'Administrador', email, password },
-    rate: 60,
+    rate: Number(process.env.SEED_RATE ?? 60),
+    currency: process.env.SEED_CURRENCY === 'USD' ? 'USD' : 'DOP',
   });
   console.info(`Semilla lista: organización "${org.name}" (${org.slug}), admin ${admin.email}.`);
 } finally {

@@ -1,5 +1,5 @@
 {
-  "id": "cbd96420-c510-4721-8e23-b0f1d3b63861",
+  "id": "c0efda5b-2194-4804-8362-e7561043b8f7",
   "prevId": "328ff021-5f21-4aeb-a01f-2a70152bfd3f",
   "version": "7",
   "dialect": "postgresql",
@@ -227,6 +227,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "signature_png": {
+          "name": "signature_png",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "pdf_file_id": {
           "name": "pdf_file_id",
@@ -1922,12 +1928,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "client_ref": {
-          "name": "client_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "deleted_at": {
           "name": "deleted_at",
           "type": "timestamp with time zone",
@@ -2005,27 +2005,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
-          "with": {}
-        },
-        "projects_org_client_ref_uq": {
-          "name": "projects_org_client_ref_uq",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "client_ref",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
           "with": {}
         }
       },

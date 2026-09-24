@@ -74,7 +74,10 @@ async function fromSkp(bytes: Uint8Array): Promise<{ glb: Uint8Array; warnings: 
     names = parseSkp(buf).materials.map((m) => ({ name: m.name, rgb: [m.color.r, m.color.g, m.color.b] }));
   } catch (e) {
     if ((e as { status?: number }).status === 422) throw e;
-    throw unprocessable('MODELO_INVALIDO', `No se pudo leer el archivo de SketchUp: ${(e as Error).message}`);
+    throw unprocessable(
+      'MODELO_INVALIDO',
+      `No se pudo leer el archivo de SketchUp (${(e as Error).message}). En SketchUp usa Archivo → Exportar → Modelo 3D como COLLADA (.dae) o 3DS (.3ds) y súbelo.`,
+    );
   }
   // openskp's GLB has unnamed materials; name them after the SketchUp material with the same colour
   // so they can be mapped to the planner's material slots.

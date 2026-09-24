@@ -37,6 +37,8 @@ export interface ModuleShape {
   cook?: number;
   appl?: number;
   oven?: number;
+  /** URL of the GLB model for modelo3d modules (drawn instead of the parametric box). */
+  glb?: string;
 }
 
 export interface MaterialDefinition {

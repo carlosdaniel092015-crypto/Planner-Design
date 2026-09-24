@@ -159,7 +159,7 @@ export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
   return { module: row, model };
 }
 
-export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthContext, id: string, patch: z.infer<typeof LibraryModuleInput>) {
+export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthContext, id: string, patch: Partial<z.infer<typeof LibraryModuleInput>>) {
   let model: ModelInspection | null = null;
   if (patch.modelFileId) {
     const f = await getFile(db, a.org.id, patch.modelFileId);

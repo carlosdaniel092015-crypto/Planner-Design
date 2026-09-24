@@ -19,6 +19,10 @@ interface OutboxEntry {
   name: string;
   currency: Currency;
   data: ProjectData | null;
+  /** Editor phase (1 especificaciones, 2 diseño, 3 aprobación). */
+  phase?: number;
+  /** New cover photo uploaded for Mis proyectos (sent once, then kept by the server). */
+  coverUrl?: string;
   seq: number;
   at: string;
   /** clientRef of the conflict copy, stored before the request so a retry reuses it. */
@@ -296,6 +300,8 @@ export async function getProject(requested: string): Promise<{ project: ProjectD
 export interface LocalSave {
   name: string;
   currency: Currency;
+  phase?: number;
+  coverUrl?: string;
   data: ProjectData;
   estimate?: ProjectDetail['estimate'];
   moduleCount?: number;
@@ -308,11 +314,18 @@ export async function saveProject(requested: string, s: LocalSave): Promise<stri
     const rec = await d.get<ProjectDetail>('projects', id);
     if (!rec) throw NO_DATA('El proyecto no está en este dispositivo.');
     const now = new Date().toISOString();
-    await d.put('projects', id, { ...rec, name: s.name, currency: s.currency, data: s.data, updatedAt: now, ...(s.estimate ? { estimate: s.estimate } : {}), ...(s.moduleCount != null ? { moduleCount: s.moduleCount } : {}) });
+    await d.put('projects', id, {
+      ...rec,
+      name: s.name,
+      currency: s.currency,
+      data: s.data,
+      updatedAt: now,
+      ...(s.phase != null ? { phase: s.phase } : {}),
+      ...(s.coverUrl ? { coverUrl: s.coverUrl } : {}), ...(s.estimate ? { estimate: s.estimate } : {}), ...(s.moduleCount != null ? { moduleCount: s.moduleCount } : {}) });
     const prev = await d.get<OutboxEntry>('outbox', id);
     const entry: OutboxEntry = prev
-      ? { ...prev, kind: prev.kind === 'create' ? 'create' : 'save', name: s.name, currency: s.currency, data: s.data, seq: prev.seq + 1, at: now }
-      : { projectId: id, kind: 'save', baseVersion: rec.version, name: s.name, currency: s.currency, data: s.data, seq: 1, at: now };
+      ? { ...prev, kind: prev.kind === 'create' ? 'create' : 'save', name: s.name, currency: s.currency, data: s.data, phase: s.phase ?? prev.phase, coverUrl: s.coverUrl ?? prev.coverUrl, seq: prev.seq + 1, at: now }
+      : { projectId: id, kind: 'save', baseVersion: rec.version, name: s.name, currency: s.currency, data: s.data, phase: s.phase, coverUrl: s.coverUrl, seq: 1, at: now };
     await d.put('outbox', id, entry);
     return id;
   });
@@ -441,6 +454,21 @@ export function schedule(ms: number) {
   timer = setTimeout(() => void syncNow(), ms);
 }
 
+/** Pushes the queue now and tells whether this project has nothing left to upload. */
+export async function flushProject(requested: string): Promise<boolean> {
+  if (!db) return false;
+  const id = await resolveProjectId(requested);
+  for (let i = 0; i < 3; i++) {
+    while (running) await new Promise((r) => setTimeout(r, 100));
+    await syncNow();
+    while (running) await new Promise((r) => setTimeout(r, 100));
+    const left = await (await D()).get<OutboxEntry>('outbox', await resolveProjectId(id));
+    if (!left) return true;
+    if (!status.online || status.needsLogin) return false;
+  }
+  return false;
+}
+
 export async function syncNow(): Promise<void> {
   if (!db || status.needsLogin) return;
   if (running) {
@@ -497,7 +525,7 @@ async function pushCreate(snap: OutboxEntry) {
     await d.put('kv', `remap:${snap.projectId}`, res.id);
     const latest = cur ?? snap;
     if (latest.kind === 'delete') await d.put('outbox', res.id, { ...latest, projectId: res.id, baseVersion: res.version });
-    else if (!same(res.data, latest.data)) {
+    else if (!same(res.data, latest.data) || (latest.phase != null && latest.phase !== res.phase) || latest.coverUrl) {
       // Edits made while offline after the create (or a retried create that returned the first attempt).
       await d.put('outbox', res.id, { ...latest, kind: 'save', projectId: res.id, baseVersion: res.version, copyRef: undefined });
       await d.put('projects', res.id, { ...res, name: latest.name, currency: latest.currency, data: latest.data! });
@@ -538,7 +566,14 @@ async function settleSaved(snap: OutboxEntry, res: ProjectDetail) {
 async function pushSave(snap: OutboxEntry) {
   let reason: string;
   try {
-    const res = await api.saveProject(snap.projectId, { version: snap.baseVersion, name: snap.name, currency: snap.currency, data: snap.data! });
+    const res = await api.saveProject(snap.projectId, {
+      version: snap.baseVersion,
+      name: snap.name,
+      currency: snap.currency,
+      data: snap.data!,
+      ...(snap.phase != null ? { phase: snap.phase } : {}),
+      ...(snap.coverUrl ? { coverUrl: snap.coverUrl } : {}),
+    });
     return settleSaved(snap, res);
   } catch (e) {
     if (!(e instanceof ApiError) || isTransient(e) || e.status === 401) throw e;

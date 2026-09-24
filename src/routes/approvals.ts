@@ -25,6 +25,9 @@ const Link = z
   })
   .openapi('EnlaceAprobacion');
 
+/** PNG data URL from the signature pad (≈ 20–80 KB at 470×130). */
+const Signature = z.string().max(400_000).regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, 'La firma debe ser una imagen PNG.');
+
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 const linkJson = (l: typeof approvalLinks.$inferSelect) => ({
   id: l.id,
@@ -49,6 +52,7 @@ const Approval = z
     signerEmail: z.string().nullable(),
     comment: z.string().nullable(),
     snapshotSha256: z.string(),
+    signature: z.string().nullable(),
     createdAt: z.iso.datetime(),
   })
   .openapi('Aprobacion');
@@ -62,6 +66,7 @@ const approvalJson = (a: typeof approvals.$inferSelect) => ({
   signerEmail: a.signerEmail,
   comment: a.comment,
   snapshotSha256: a.snapshotSha256,
+  signature: a.signaturePng,
   createdAt: a.createdAt.toISOString(),
 });
 
@@ -138,7 +143,7 @@ export function approvalRoutes() {
       summary: 'Aprobar internamente (usuario autenticado)',
       description: 'Rechaza (422) si hay errores de validación. Congela versión y precios; el importe ya no cambia con la tasa.',
       security,
-      request: { params: IdParam, ...body(z.object({ signerName: z.string().min(1).max(160) }).openapi({ example: { signerName: 'Familia Ortega (firma en tienda)' } })) },
+      request: { params: IdParam, ...body(z.object({ signerName: z.string().min(1).max(160), signature: Signature.optional() }).openapi({ example: { signerName: 'Familia Ortega (firma en tienda)' } })) },
       responses: { 200: json(z.object({ approval: Approval, versionId: z.uuid() })), ...authErrors, ...pick(409, 422) },
     }),
     async (c) => {
@@ -146,7 +151,8 @@ export function approvalRoutes() {
       const { id } = c.req.valid('param');
       const p = await getProject(c.var.deps.db, a, id);
       assertCan(a.user, 'project:approve', { access: p.access });
-      const out = await approveInternal(c.var.deps, a, id, c.req.valid('json').signerName, meta(c));
+      const input = c.req.valid('json');
+      const out = await approveInternal(c.var.deps, a, id, input.signerName, meta(c), input.signature);
       return c.json({ approval: approvalJson(out.approval), versionId: out.version.id }, 200);
     },
   );
@@ -232,7 +238,7 @@ export function publicRoutes() {
           project: { name: row.name, type: data.ptype, client: data.client?.nombre ?? null, version: version.version },
           views: projectFiles.filter((f) => f.kind === 'render').map((f) => ({ name: f.name, url: f.variants.view2k ?? f.blobUrl, thumb: f.variants.thumb ?? null })),
           plan: plan(data) as unknown as Record<string, unknown>,
-          elevations: { A: elev(data, 'A', ctx.materials), B: elev(data, 'B', ctx.materials) } as unknown as Record<string, unknown>,
+          elevations: Object.fromEntries((['A', 'B', 'C', 'D'] as const).filter((w) => w === 'A' || w === 'B' || data.mods.some((m) => m.wall === w)).map((w) => [w, elev(data, w, ctx.materials)])) as Record<string, unknown>,
           materials: [...used].map((code) => {
             const m = ctx.materials[code];
             return { code, name: m?.name ?? code, type: m?.type ?? '', color: m?.color ?? null, groups: m?.groups ?? [] };
@@ -267,6 +273,7 @@ export function publicRoutes() {
               signerName: z.string().min(1).max(160),
               signerEmail: z.email().optional(),
               comment: z.string().max(4000).optional(),
+              signature: Signature.optional(),
               accepted: z.literal(true, { error: 'Debes aceptar los términos para continuar.' }),
             })
             .openapi({ example: { decision: 'aprobado', signerName: 'María Ortega', signerEmail: 'maria@ejemplo.com', accepted: true } }),

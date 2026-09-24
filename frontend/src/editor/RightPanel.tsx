@@ -1,7 +1,7 @@
 import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type ProjectData, ranges } from '@core';
 import { useEffect, useState } from 'react';
 import type { CatalogMaterial } from '../api';
-import { fmtMoney, fromUsd, Icon, MUTED, Svg } from '../ui';
+import { fmtMoney, Icon, MUTED, Svg } from '../ui';
 import { frontThumb } from './engine';
 
 const HERRAJES = ['Bisagra cierre suave 110°', 'Bisagra push-to-open', 'Corredera oculta cierre suave', 'Carrusel esquinero 3/4'];
@@ -72,7 +72,7 @@ export function RightPanel(props: {
       { k: 'Metros lineales', v: `${(floor.reduce((a, m) => a + m.w, 0) / 100).toFixed(1).replace('.', ',')} m` },
       { k: 'Encimera', v: props.materialsByCode[data.mats.encimera]?.name ?? data.mats.encimera },
       { k: 'Frentes', v: props.materialsByCode[data.mats.frentes]?.name ?? data.mats.frentes },
-      ...(data.prefs.presupuesto ? [{ k: 'Presupuesto objetivo', v: fmtMoney(fromUsd(data.prefs.presupuesto / 18, currency, rate), currency) }] : []),
+      ...(data.prefs.presupuesto ? [{ k: 'Presupuesto objetivo', v: fmtMoney(data.prefs.presupuesto, currency) }] : []),
       { k: 'Precio estimado', v: fmtMoney(props.estimate.total, currency) },
     ];
     return (

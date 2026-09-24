@@ -41,7 +41,7 @@ export const MeSchema = z
     },
   });
 
-const Password = z.string().min(10, 'La contraseña debe tener al menos 10 caracteres.').max(200);
+const Password = z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.').max(200);
 const Ok = z.object({ ok: z.literal(true) });
 
 const signIn = createRoute({

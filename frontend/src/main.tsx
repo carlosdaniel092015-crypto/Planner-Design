@@ -7,8 +7,11 @@ import { PwaUpdater } from './offline/pwa';
 import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
 import { EditorPage } from './pages/Editor';
 import { HomePage } from './pages/Home';
+import { PublicApprovalPage } from './pages/PublicApproval';
 
 const router = createBrowserRouter([
+  // Client approval link: no session, no /me call.
+  { path: '/p/:token', element: <PublicApprovalPage /> },
   {
     element: (
       <AuthProvider>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
 import { canCreate, isOwner, useAuth } from '../auth';
+import { LibraryDialog } from '../library/LibraryDialog';
 import { ShareDialog } from '../ShareDialog';
 import { InstallButton } from '../offline/install';
 import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
@@ -34,6 +35,7 @@ export function HomePage() {
   const [sharing, setSharing] = useState<ProjectSummary | null>(null);
   const sync = useSyncStatus();
   const pending = new Set(sync?.pending ?? []);
+  const [libOpen, setLibOpen] = useState(false);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
   const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30) }), []);
 
@@ -106,6 +108,10 @@ export function HomePage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <SyncBadge />
           <InstallButton />
+          <button type="button" className="btn btn-secondary home-lib" onClick={() => setLibOpen(true)} title="Bibliotecas de texturas y módulos" style={{ height: 38 }}>
+            <Icon name="library" size={16} />
+            <span className="install-label">Bibliotecas</span>
+          </button>
           <a className="btn btn-ghost home-proto" href="/prototipo/" title="Prototipo original de Claude Design">
             <Icon name="circle-help" />
             Prototipo
@@ -113,6 +119,7 @@ export function HomePage() {
           <UserMenu />
         </div>
       </header>
+      {libOpen && <LibraryDialog canWrite={canCreate(me)} onClose={() => setLibOpen(false)} onChanged={() => flash('Biblioteca actualizada')} />}
       <main style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '44px 32px 72px' }} className="home">
           <div className="home-hero" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)', alignItems: 'end', gap: 32, paddingBottom: 24, borderBottom: '2px solid var(--color-divider)' }}>

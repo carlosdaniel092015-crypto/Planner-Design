@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   BACK_PANEL_MATERIAL,
   frontCounts,
@@ -12,7 +12,7 @@ import {
   type Recipe,
 } from '../core';
 import type { DbOrTx } from '../db/client';
-import { hardwarePrices, materials, moduleDefinitions } from '../db/schema';
+import { files, hardwarePrices, materials, moduleDefinitions } from '../db/schema';
 import type { Organization } from '../lib/context';
 
 type ModuleRow = typeof moduleDefinitions.$inferSelect;
@@ -32,7 +32,7 @@ export function settingsOf(org: Organization): PricingSettings {
   };
 }
 
-export function moduleRowToDef(r: ModuleRow): ModuleDefinition {
+export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDefinition {
   const recipe = (r.recipe ?? { fr: [] }) as Recipe;
   const flag = (v: unknown) => (v ? 1 : undefined);
   return {
@@ -49,6 +49,7 @@ export function moduleRowToDef(r: ModuleRow): ModuleDefinition {
     cook: flag(recipe.cook),
     appl: flag(recipe.appl),
     oven: flag(recipe.oven),
+    ...(modelUrl ? { glb: modelUrl } : {}),
     projectType: r.projectType,
     source: r.source,
     unitPrice: r.unitPrice,
@@ -138,9 +139,12 @@ export async function loadPricingContext(db: DbOrTx, org: Organization): Promise
     db.select().from(materials).where(eq(materials.organizationId, org.id)),
     db.select().from(hardwarePrices).where(eq(hardwarePrices.organizationId, org.id)),
   ]);
+  const modelIds = [...new Set(mods.map((r) => r.modelFileId).filter((x): x is string => !!x))];
+  const models = modelIds.length ? await db.select({ id: files.id, url: files.blobUrl }).from(files).where(and(eq(files.organizationId, org.id), inArray(files.id, modelIds))) : [];
+  const urlOf = new Map(models.map((f) => [f.id, f.url]));
   return {
     settings: settingsOf(org),
-    modules: Object.fromEntries(mods.map((r) => [r.code, moduleRowToDef(r)])),
+    modules: Object.fromEntries(mods.map((r) => [r.code, moduleRowToDef(r, r.modelFileId ? urlOf.get(r.modelFileId) : null)])),
     materials: Object.fromEntries(mats.map((r) => [r.code, materialRowToDef(r)])),
     hardware: Object.fromEntries(hw.map((r) => [r.code, hardwareRowToDef(r)])),
   };

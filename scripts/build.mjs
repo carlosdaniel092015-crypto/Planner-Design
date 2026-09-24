@@ -5,7 +5,7 @@ import { build as viteBuild } from 'vite';
 
 await rm('dist', { recursive: true, force: true });
 await build({
-  entryPoints: { server: 'src/server.ts', migrate: 'src/db/migrate.ts', seed: 'src/db/seed.ts' },
+  entryPoints: { server: 'src/server.ts', migrate: 'src/db/migrate.ts', seed: 'src/db/seed.ts', 'to-dop': 'src/db/to-dop.ts' },
   outdir: 'dist',
   bundle: true,
   platform: 'node',

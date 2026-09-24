@@ -36,10 +36,10 @@ export const moduleSchema = z
     fre: z.string().max(60).optional(),
     /** GLB url (library modules made from a 3D model). */
     glb: z.string().max(2000).optional(),
-    /** Library module base price in USD and the width it refers to. */
+    /** Library module base price (base currency) and the width it refers to. */
     pBase: z.number().min(0).optional(),
     w0: z.number().positive().optional(),
-    /** Manual price override in USD. */
+    /** Manual price override (base currency). */
     pOv: z.number().min(0).optional(),
     libId: z.string().max(80).optional(),
     moduleVersion: z.number().int().positive().optional(),
@@ -76,10 +76,12 @@ export const priceAdjSchema = z.object({
   inst: z.number().min(0).max(100).default(8),
   /** Discount %. */
   desc: z.number().min(0).max(100).default(0),
-  /** Manual final price (USD, tax included). */
+  /** Manual final price (base currency, tax included). */
   final: z.number().min(0).nullable().default(null),
-  /** Manual countertop price (USD). */
+  /** Manual countertop price (base currency). */
   counter: z.number().min(0).nullable().default(null),
+  /** Tax rate for this project only (0 = sin impuesto); null uses the organisation's rate. */
+  taxRate: z.number().min(0).max(1).nullable().default(null),
 });
 
 export const projectDataSchema = z
@@ -111,7 +113,7 @@ export const projectDataSchema = z
       jaladeras: z.string().min(1),
     }),
     client: z.object({ nombre: z.string().optional(), tel: z.string().optional(), dir: z.string().optional() }).loose().optional(),
-    priceAdj: priceAdjSchema.default({ inst: 8, desc: 0, final: null, counter: null }),
+    priceAdj: priceAdjSchema.default({ inst: 8, desc: 0, final: null, counter: null, taxRate: null }),
     /** Hardware labels per module id (display only). */
     herr: z.record(z.string(), z.string()).optional(),
     pdfOpts: z.record(z.string(), z.boolean()).optional(),

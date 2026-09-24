@@ -20,6 +20,7 @@ const APPROVABLE = { ...DEFAULT_KITCHEN, pts: DEFAULT_KITCHEN.pts.map((p) => (p.
 const create = async (data: unknown = APPROVABLE) => (await t.req('POST', '/projects', { user: dis, body: { data } })).data;
 const send = async (id: string, days = 14) => t.req('POST', `/projects/${id}/approval-links`, { user: dis, body: { recipientEmail: 'cliente@ejemplo.com', expiresInDays: days } });
 const accept = { signerName: 'María Ortega', accepted: true };
+const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('aprobación pública', () => {
   it('flujo completo: enviar, abrir, aprobar; correo al cliente y al dueño', async () => {
@@ -46,7 +47,7 @@ describe('aprobación pública', () => {
 
     const noAccept = await t.req('POST', `/public/approvals/${s.data.token}`, { body: { decision: 'aprobado', signerName: 'X' } });
     expect(noAccept.status).toBe(400);
-    const ok = await t.req('POST', `/public/approvals/${s.data.token}`, { body: { decision: 'aprobado', ...accept }, headers: { 'user-agent': 'Prueba/1.0', 'x-forwarded-for': '203.0.113.9' } });
+    const ok = await t.req('POST', `/public/approvals/${s.data.token}`, { body: { decision: 'aprobado', ...accept, signature: SIG }, headers: { 'user-agent': 'Prueba/1.0', 'x-forwarded-for': '203.0.113.9' } });
     expect(ok.status).toBe(200);
     const detail = await t.req('GET', `/projects/${p.id}`, { user: dis });
     expect(detail.data).toMatchObject({ status: 'aprobado', pricesFrozen: true });
@@ -54,6 +55,9 @@ describe('aprobación pública', () => {
     const hist = await t.req('GET', `/projects/${p.id}/approval-links`, { user: dis });
     expect(hist.data.approvals[0]).toMatchObject({ decision: 'aprobado', signerName: 'María Ortega', linkId: s.data.link.id });
     expect(hist.data.approvals[0].snapshotSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(hist.data.approvals[0].signature).toBe(SIG);
+    const badSig = await t.req('POST', `/projects/${p.id}/approve-internal`, { user: dis, body: { signerName: 'Yo', signature: 'javascript:alert(1)' } });
+    expect(badSig.status).toBe(400);
 
     // The workshop sees it once the designer shares it, and downloads the cut list.
     expect((await t.req('GET', `/projects/${p.id}`, { user: taller })).status).toBe(404);

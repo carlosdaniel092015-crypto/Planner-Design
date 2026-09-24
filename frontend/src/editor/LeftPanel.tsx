@@ -4,7 +4,7 @@ import type { Catalog, CatalogMaterial } from '../api';
 import { Icon, MUTED, Svg } from '../ui';
 import { frontThumb } from './engine';
 
-export type LeftTab = 'modulos' | 'materiales';
+export type LeftTab = 'modulos' | 'materiales' | 'electro';
 
 export function LeftPanel(props: {
   tab: LeftTab;
@@ -25,6 +25,9 @@ export function LeftPanel(props: {
   setApplyTo: (a: 'todo' | 'modulo') => void;
   onMaterial: (group: 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras', code: string) => void;
   readOnly: boolean;
+  onPick: (id: number) => void;
+  /** Opens Bibliotecas on the given tab (omitted when the role can't upload). */
+  onLibrary?: (tab: 'tex' | 'mod') => void;
 }) {
   const { data, catalog, materialsByCode } = props;
   const defs = useMemo(() => {
@@ -40,7 +43,10 @@ export function LeftPanel(props: {
   const tabs: { k: LeftTab; label: string; icon: string }[] = [
     { k: 'modulos', label: 'Módulos', icon: 'layout-grid' },
     { k: 'materiales', label: 'Materiales', icon: 'palette' },
+    { k: 'electro', label: 'Electro', icon: 'refrigerator' },
   ];
+  // Prototype elecList: modules that hold an appliance, sink or cooktop.
+  const elec = data.mods.filter((m) => m.appl || m.oven || m.sink || m.cook || m.type === 'fridge' || m.type === 'hood');
 
   return (
     <aside className="ed-left" style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
@@ -78,6 +84,12 @@ export function LeftPanel(props: {
               <Icon name="search" size={15} style={{ position: 'absolute', left: 10, top: 10, opacity: 0.55 }} />
               <input className="input" placeholder="Buscar módulo o código" value={props.q} onChange={(e) => props.setQ(e.target.value)} style={{ paddingLeft: 32, width: '100%' }} />
             </div>
+            {props.onLibrary && (
+              <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('mod')} style={{ justifyContent: 'flex-start', height: 36 }}>
+                <Icon name="upload" size={15} />
+                Subir módulos (JSON / GLB / 3DS)
+              </button>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {cats.map((c) => {
                 const on = props.cat === c;
@@ -121,6 +133,12 @@ export function LeftPanel(props: {
 
       {props.tab === 'materiales' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {props.onLibrary && (
+              <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('tex')} style={{ justifyContent: 'flex-start', height: 36 }}>
+                <Icon name="upload" size={15} />
+                Subir texturas (JPG / PNG)
+              </button>
+            )}
           <div>
             <div style={{ fontSize: 12, marginBottom: 6, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)' }}>Aplicar a</div>
             <div className="seg" style={{ display: 'flex' }}>
@@ -165,6 +183,29 @@ export function LeftPanel(props: {
               </div>
             );
           })}
+        </div>
+      )}
+      {props.tab === 'electro' && (
+        <div style={{ flex: 1, overflow: 'auto', padding: '6px 14px 14px' }}>
+          {elec.length === 0 && <p style={{ fontSize: 13, color: MUTED }}>{data.ptype === 'cocina' ? 'La escena aún no tiene electrodomésticos.' : 'Este proyecto no lleva electrodomésticos.'}</p>}
+          {elec.map((m) => (
+            <button
+              type="button"
+              key={m.id}
+              className="val-btn"
+              onClick={() => props.onPick(m.id)}
+              style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 0', width: '100%', border: 0, borderBottom: '1px solid var(--color-divider)', background: props.sel?.id === m.id ? 'var(--color-accent-100)' : 'transparent', cursor: 'pointer', font: 'inherit', color: 'var(--color-text)', textAlign: 'left' }}
+            >
+              <span style={{ width: 26, height: 26, display: 'grid', placeItems: 'center', background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 12, fontWeight: 800, flex: 'none' }}>{m.id}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{m.oven ? `Horno (en ${m.name.toLowerCase()})` : m.sink ? `Fregadero (en ${m.name.toLowerCase()})` : m.cook ? `Parrilla (en ${m.name.toLowerCase()})` : m.name}</span>
+                <span style={{ display: 'block', fontSize: 12, color: MUTED }}>
+                  {m.w} × {m.h} × {m.d} cm · Muro {m.wall === 'F' ? 'isla' : m.wall}
+                </span>
+              </span>
+              <span className="tag tag-neutral">{m.type === 'fridge' ? 'Libre' : m.oven ? 'En columna' : m.sink || m.cook ? 'Bajo encimera' : 'Empotrado'}</span>
+            </button>
+          ))}
         </div>
       )}
     </aside>

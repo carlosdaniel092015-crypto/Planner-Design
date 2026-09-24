@@ -1,6 +1,6 @@
 {
-  "id": "b61da090-c7d4-4594-abb2-6799af4a75a6",
-  "prevId": "cbd96420-c510-4721-8e23-b0f1d3b63861",
+  "id": "29d70907-2afb-4bb9-8d61-58d19016cba7",
+  "prevId": "c0efda5b-2194-4804-8362-e7561043b8f7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -227,6 +227,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "signature_png": {
+          "name": "signature_png",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "pdf_file_id": {
           "name": "pdf_file_id",

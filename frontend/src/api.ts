@@ -137,7 +137,8 @@ export const api = {
   createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData; currency?: Currency; clientRef?: string }, timeoutMs?: number) =>
     request<ProjectDetail>('POST', '/projects', body, {}, timeoutMs),
   getProject: (id: string, timeoutMs?: number) => request<ProjectDetail>('GET', `/projects/${id}`, undefined, {}, timeoutMs),
-  saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; data: ProjectData }) => request<ProjectDetail>('PUT', `/projects/${id}`, body),
+  saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; phase?: number; coverUrl?: string | null; data: ProjectData }) =>
+    request<ProjectDetail>('PUT', `/projects/${id}`, body),
   duplicateProject: (id: string) => request<ProjectDetail>('POST', `/projects/${id}/duplicate`),
   deleteProject: (id: string) => request<void>('DELETE', `/projects/${id}`),
 
@@ -147,4 +148,53 @@ export const api = {
   directory: () => request<{ items: Person[] }>('GET', '/users/directory'),
 
   catalog: (timeoutMs?: number) => request<Catalog>('GET', '/catalog', undefined, {}, timeoutMs),
+
+  approvalLinks: (id: string) => request<{ links: ApprovalLink[]; approvals: Approval[] }>('GET', `/projects/${id}/approval-links`),
+  sendToClient: (id: string, body: { recipientEmail: string; expiresInDays: number }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string }>('POST', `/projects/${id}/approval-links`, body),
+  revokeLink: (linkId: string) => request<ApprovalLink>('POST', `/approval-links/${linkId}/revoke`),
+  approveInternal: (id: string, body: { signerName: string; signature?: string }) => request<{ approval: Approval; versionId: string }>('POST', `/projects/${id}/approve-internal`, body),
+  publicView: (token: string) => request<PublicView>('GET', `/public/approvals/${token}`),
+  publicDecide: (token: string, body: { decision: 'aprobado' | 'cambios'; signerName: string; signerEmail?: string; comment?: string; signature?: string; accepted: true }) =>
+    request<{ ok: true; decision: string; approvalId: string }>('POST', `/public/approvals/${token}`, body),
 };
+
+export interface ApprovalLink {
+  id: string;
+  projectId: string;
+  versionId: string;
+  recipientEmail: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  openedAt: string | null;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+export interface Approval {
+  id: string;
+  projectId: string;
+  versionId: string;
+  linkId: string | null;
+  decision: 'aprobado' | 'cambios';
+  signerName: string;
+  signerEmail: string | null;
+  comment: string | null;
+  snapshotSha256: string;
+  signature: string | null;
+  createdAt: string;
+}
+
+export interface PublicView {
+  organization: { name: string; logoUrl: string | null; brandColor: string | null; terms: string };
+  project: { name: string; type: string; client: string | null; version: number };
+  views: { name: string; url: string; thumb: string | null }[];
+  plan: import('@core').Drawing;
+  elevations: Record<string, import('@core').Drawing>;
+  materials: { code: string; name: string; type: string; color: string | null; groups: string[] }[];
+  estimate: Money;
+  estimateDetail: import('@core').Estimate;
+  pdfUrl: string | null;
+  canApprove: boolean;
+  expiresAt: string;
+  data: ProjectData;
+}
