@@ -12,13 +12,15 @@ import {
   type ValidationIssue,
 } from '../core';
 import type { DbOrTx } from '../db/client';
-import { projects, projectVersions } from '../db/schema';
+import { projectShares, projects, projectVersions } from '../db/schema';
 import type { AuthContext } from '../lib/context';
 import { AppError, notFound } from '../lib/errors';
-import { can } from '../lib/permissions';
+import { can, type ProjectAccess } from '../lib/permissions';
 import { isSnapshot, loadPricingContext, type PricingSnapshot, snapshotFor } from './catalog';
 
 export type ProjectRow = typeof projects.$inferSelect;
+/** A project row as seen by the caller: `access` says whether they own it or it was shared with them. */
+export type AccessibleProject = ProjectRow & { access: ProjectAccess };
 export type VersionRow = typeof projectVersions.$inferSelect;
 
 export function parseProjectData(raw: unknown): ProjectData {
@@ -33,15 +35,30 @@ export function parseProjectData(raw: unknown): ProjectData {
   return r.data;
 }
 
-/** Loads a project of the caller's organisation. Other orgs, deleted rows and (for taller) non-approved projects → 404. */
-export async function getProject(db: DbOrTx, a: AuthContext, id: string): Promise<ProjectRow> {
+/** The caller's access to a project row: owner, shared (ver / editar) or none. */
+export async function accessOf(db: DbOrTx, a: AuthContext, row: ProjectRow): Promise<ProjectAccess | null> {
+  if (row.ownerId === a.user.id) return 'propietario';
+  const [sh] = await db
+    .select({ access: projectShares.access })
+    .from(projectShares)
+    .where(and(eq(projectShares.projectId, row.id), eq(projectShares.userId, a.user.id)))
+    .limit(1);
+  return sh?.access ?? null;
+}
+
+/**
+ * Loads a project the caller can see: their own or one shared with them, in their organisation.
+ * Anything else (other orgs, other people's private projects, deleted rows) → 404, never 403.
+ */
+export async function getProject(db: DbOrTx, a: AuthContext, id: string): Promise<AccessibleProject> {
   const [row] = await db
     .select()
     .from(projects)
     .where(and(eq(projects.id, id), eq(projects.organizationId, a.org.id), isNull(projects.deletedAt)))
     .limit(1);
-  if (!row || !can(a.user, 'project:read', { ownerId: row.ownerId, status: row.status })) throw notFound('El proyecto');
-  return row;
+  const access = row ? await accessOf(db, a, row) : null;
+  if (!row || !can(a.user, 'project:read', { access })) throw notFound('El proyecto');
+  return { ...row, access: access! };
 }
 
 export async function getVersion(db: DbOrTx, projectId: string, versionId: string): Promise<VersionRow> {

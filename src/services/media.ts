@@ -3,7 +3,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { unprocessable } from '../lib/errors';
 
 // ---------- content sniffing (real bytes, not the extension) ----------
-export type Sniffed = 'jpeg' | 'png' | 'webp' | 'glb' | 'gltf' | 'pdf' | 'zip' | 'hdr' | 'exr' | 'text' | 'unknown';
+export type Sniffed = 'jpeg' | 'png' | 'webp' | 'glb' | 'gltf' | 'skp' | '3ds' | 'pdf' | 'zip' | 'hdr' | 'exr' | 'text' | 'unknown';
 
 export function sniff(b: Uint8Array): Sniffed {
   const s = (o: number, n: number) => String.fromCharCode(...b.subarray(o, o + n));
@@ -11,6 +11,13 @@ export function sniff(b: Uint8Array): Sniffed {
   if (b[0] === 0x89 && s(1, 3) === 'PNG') return 'png';
   if (s(0, 4) === 'RIFF' && s(8, 4) === 'WEBP') return 'webp';
   if (s(0, 4) === 'glTF') return 'glb';
+  if (b[0] === 0xff && b[1] === 0xfe && b[2] === 0xff && b[3] === 0x0e) return 'skp';
+  // .3ds: main chunk 0x4D4D whose length fits the file, followed by the version (0x0002) or editor (0x3D3D) chunk
+  if (b.length >= 16 && b[0] === 0x4d && b[1] === 0x4d) {
+    const len = b[2]! | (b[3]! << 8) | (b[4]! << 16) | (b[5]! << 24);
+    const next = b[6]! | (b[7]! << 8);
+    if (len >= 16 && len <= b.length && (next === 0x0002 || next === 0x3d3d)) return '3ds';
+  }
   if (s(0, 5) === '%PDF-') return 'pdf';
   if (b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04) return 'zip';
   if (s(0, 2) === '#?') return 'hdr';
@@ -27,6 +34,8 @@ export const MIME: Record<Sniffed, string> = {
   webp: 'image/webp',
   glb: 'model/gltf-binary',
   gltf: 'model/gltf+json',
+  skp: 'application/vnd.sketchup.skp',
+  '3ds': 'application/x-3ds',
   pdf: 'application/pdf',
   zip: 'application/zip',
   hdr: 'image/vnd.radiance',

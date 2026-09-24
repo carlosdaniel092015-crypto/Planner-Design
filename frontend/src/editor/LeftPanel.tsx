@@ -49,7 +49,7 @@ export function LeftPanel(props: {
   const elec = data.mods.filter((m) => m.appl || m.oven || m.sink || m.cook || m.type === 'fridge' || m.type === 'hood');
 
   return (
-    <aside style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
+    <aside className="ed-left" style={{ width: 300, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg)' }}>
       <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid var(--color-divider)' }}>
         {tabs.map((t) => (
           <button type="button"

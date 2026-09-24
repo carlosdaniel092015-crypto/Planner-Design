@@ -4,7 +4,8 @@ import type { DbOrTx } from '../db/client';
 import { files } from '../db/schema';
 import type { AuthContext } from '../lib/context';
 import { AppError, notFound, unprocessable } from '../lib/errors';
-import { MIME, processImage, type Sniffed, sniff } from './media';
+import { inspectModel, MIME, processImage, type Sniffed, sniff } from './media';
+import { convertModel } from './model-import';
 import type { Storage } from './storage';
 
 export type FileKind = 'render' | 'pdf' | 'dxf' | 'csv' | 'textura' | 'modelo3d' | 'hdri' | 'miniatura' | 'otro';
@@ -15,7 +16,11 @@ const MB = 1024 * 1024;
 /** Size limit, accepted declared content types and accepted real formats per kind. */
 export const KIND_RULES: Record<FileKind, { maxBytes: number; types: string[]; formats: Sniffed[] }> = {
   textura: { maxBytes: 20 * MB, types: ['image/jpeg', 'image/png', 'image/webp'], formats: ['jpeg', 'png', 'webp'] },
-  modelo3d: { maxBytes: 50 * MB, types: ['model/gltf-binary', 'model/gltf+json', 'application/octet-stream'], formats: ['glb', 'gltf'] },
+  modelo3d: {
+    maxBytes: 80 * MB,
+    types: ['model/gltf-binary', 'model/gltf+json', 'application/vnd.sketchup.skp', 'application/x-3ds', 'image/x-3ds', 'application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
+    formats: ['glb', 'gltf', 'skp', '3ds', 'zip'],
+  },
   hdri: { maxBytes: 30 * MB, types: ['image/vnd.radiance', 'image/x-exr', 'application/octet-stream'], formats: ['hdr', 'exr'] },
   pdf: { maxBytes: 30 * MB, types: ['application/pdf'], formats: ['pdf'] },
   render: { maxBytes: 15 * MB, types: ['image/jpeg', 'image/png', 'image/webp'], formats: ['jpeg', 'png', 'webp'] },
@@ -87,15 +92,35 @@ async function storeFileRow(
     await storage.delete(input.url).catch(() => {});
     throw new AppError(413, 'ARCHIVO_DEMASIADO_GRANDE', `El archivo supera el máximo de ${rule.maxBytes / MB} MB para ${input.kind}.`);
   }
-  const format = sniff(bytes);
+  let format = sniff(bytes);
   if (!rule.formats.includes(format)) {
     await storage.delete(input.url).catch(() => {});
     throw unprocessable('CONTENIDO_INVALIDO', `El contenido del archivo no corresponde a ${input.kind} (se detectó: ${format === 'unknown' ? 'desconocido' : format}).`);
   }
   let width: number | null = null;
   let height: number | null = null;
+  let url = input.url;
+  let size = bytes.byteLength;
   const variants: FileRow['variants'] = { original: input.url };
   const meta: Record<string, unknown> = { format };
+  if (input.kind === 'modelo3d' && (format === 'skp' || format === '3ds' || format === 'zip')) {
+    // SketchUp / 3ds Max → embedded GLB; the row points at the GLB and keeps the original upload in variants.original.
+    let converted: Awaited<ReturnType<typeof convertModel>>;
+    try {
+      converted = await convertModel(bytes, input.name);
+      if (converted) await inspectModel(converted.glb);
+    } catch (e) {
+      await storage.delete(input.url).catch(() => {});
+      throw e;
+    }
+    if (converted) {
+      const base = input.name.replace(/\.[^.]+$/, '');
+      url = (await storage.put(pathFor(a.org.id, 'modelo3d', `${base}.glb`), converted.glb, MIME.glb)).url;
+      format = 'glb';
+      size = converted.glb.byteLength;
+      Object.assign(meta, { format, source: converted.source, sourceName: converted.sourceName, warnings: converted.warnings });
+    }
+  }
   if (format === 'jpeg' || format === 'png' || format === 'webp') {
     const img = await processImage(bytes);
     width = img.width;
@@ -115,9 +140,9 @@ async function storeFileRow(
       width,
       height,
       name: input.name.slice(0, 200),
-      blobUrl: input.url,
+      blobUrl: url,
       contentType: MIME[format],
-      size: bytes.byteLength,
+      size,
       meta,
       createdBy: a.user.id,
     })

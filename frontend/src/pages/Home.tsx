@@ -1,9 +1,13 @@
 import { DEFAULT_MATERIALS, iso, newProject, type ProjectKind } from '@core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, api, type ProjectSummary } from '../api';
-import { canCreate, canEdit, useAuth } from '../auth';
+import { ApiError, type ProjectSummary } from '../api';
+import { canCreate, isOwner, useAuth } from '../auth';
 import { LibraryDialog } from '../library/LibraryDialog';
+import { ShareDialog } from '../ShareDialog';
+import { InstallButton } from '../offline/install';
+import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
+import { createProject, deleteProject, duplicateProject, isLocalId, listProjects, onSyncEvent } from '../offline/sync';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, STATUS, Svg, useToast } from '../ui';
 
@@ -26,24 +30,46 @@ export function HomePage() {
   const [creating, setCreating] = useState<ProjectKind | null>(null);
   const [toDelete, setToDelete] = useState<ProjectSummary | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
+  const [fromDevice, setFromDevice] = useState(false);
+  const [tab, setTab] = useState<'todos' | 'mios' | 'compartidos'>('todos');
+  const [sharing, setSharing] = useState<ProjectSummary | null>(null);
+  const sync = useSyncStatus();
+  const pending = new Set(sync?.pending ?? []);
   const [libOpen, setLibOpen] = useState(false);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
   const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30) }), []);
 
   const load = () =>
-    api
-      .listProjects()
-      .then((r) => setItems(r.items))
+    listProjects()
+      .then((r) => {
+        setItems(r.items);
+        setFromDevice(r.fromDevice);
+        setError(null);
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los proyectos.'));
   useEffect(() => {
     load();
+    // Reload when the queue settles (ids of offline projects change, conflict copies appear).
+    return onSyncEvent((e) => {
+      if (e.type === 'conflict') flash(`Se guardó "${e.copyName}". ${e.reason}`);
+      if (e.type === 'dropped') flash(e.message);
+      load();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const shown = items?.filter((p) => (tab === 'todos' ? true : tab === 'mios' ? p.access === 'propietario' : p.access !== 'propietario')) ?? null;
+  const wasOnline = useRef(sync?.online);
+  useEffect(() => {
+    if (sync?.online && wasOnline.current === false) load();
+    wasOnline.current = sync?.online;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync?.online]);
 
   const create = async (k: ProjectKind) => {
     if (!canCreate(me)) return flash('Tu rol no permite crear proyectos.');
     setCreating(k);
     try {
-      const p = await api.createProject({ ptype: k });
+      const p = await createProject(k);
       nav(`/proyectos/${p.id}`);
     } catch (e) {
       flash(e instanceof ApiError ? e.message : 'No se pudo crear el proyecto.');
@@ -54,7 +80,7 @@ export function HomePage() {
   const duplicate = async (p: ProjectSummary) => {
     setMenu(null);
     try {
-      const d = await api.duplicateProject(p.id);
+      const d = await duplicateProject(p.id);
       flash(`Se creó "${d.name}"`);
       load();
     } catch (e) {
@@ -67,7 +93,7 @@ export function HomePage() {
     const p = toDelete;
     setToDelete(null);
     try {
-      await api.deleteProject(p.id);
+      await deleteProject(p.id);
       setItems((xs) => xs?.filter((x) => x.id !== p.id) ?? null);
       flash(`"${p.name}" eliminado`);
     } catch (e) {
@@ -76,22 +102,24 @@ export function HomePage() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', overflow: 'hidden' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 14, height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', background: 'var(--color-bg)', flex: 'none' }}>
         <Brand />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => setLibOpen(true)} title="Bibliotecas de texturas y módulos" style={{ height: 38 }}>
+          <SyncBadge />
+          <InstallButton />
+          <button type="button" className="btn btn-secondary home-lib" onClick={() => setLibOpen(true)} title="Bibliotecas de texturas y módulos" style={{ height: 38 }}>
             <Icon name="library" size={16} />
-            Bibliotecas
+            <span className="install-label">Bibliotecas</span>
           </button>
-          <a className="btn btn-ghost" href="/prototipo/" title="Prototipo original de Claude Design">
+          <a className="btn btn-ghost home-proto" href="/prototipo/" title="Prototipo original de Claude Design">
             <Icon name="circle-help" />
             Prototipo
           </a>
           <UserMenu />
         </div>
       </header>
-      {libOpen && <LibraryDialog canWrite={canEdit(me)} onClose={() => setLibOpen(false)} onChanged={() => flash('Biblioteca actualizada')} />}
+      {libOpen && <LibraryDialog canWrite={canCreate(me)} onClose={() => setLibOpen(false)} onChanged={() => flash('Biblioteca actualizada')} />}
       <main style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '44px 32px 72px' }} className="home">
           <div className="home-hero" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)', alignItems: 'end', gap: 32, paddingBottom: 24, borderBottom: '2px solid var(--color-divider)' }}>
@@ -124,7 +152,21 @@ export function HomePage() {
 
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginTop: 56, paddingBottom: 12, borderBottom: '2px solid var(--color-divider)' }}>
             <h2 style={{ margin: 0, fontSize: 28 }}>Mis proyectos</h2>
-            <span style={{ fontSize: 13, color: MUTED }}>{items ? `${items.length} ${items.length === 1 ? 'proyecto' : 'proyectos'}` : ''}</span>
+            <span style={{ fontSize: 13, color: MUTED }}>{shown ? `${shown.length} ${shown.length === 1 ? 'proyecto' : 'proyectos'}` : ''}</span>
+          </div>
+          <div role="tablist" aria-label="Filtrar proyectos" style={{ display: 'flex', gap: 4, marginTop: 12, flexWrap: 'wrap' }}>
+            {(
+              [
+                ['todos', 'Todos'],
+                ['mios', 'Míos'],
+                ['compartidos', 'Compartidos conmigo'],
+              ] as const
+            ).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'btn btn-primary' : 'btn btn-ghost'} onClick={() => setTab(k)} style={{ height: 34 }}>
+                {l}
+                {k === 'compartidos' && items ? ` (${items.filter((p) => p.access !== 'propietario').length})` : ''}
+              </button>
+            ))}
           </div>
           <div className="proj-row proj-head" style={{ padding: '10px 0', fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: MUTED, borderBottom: '1px solid var(--color-divider)' }}>
             <span>Vista</span>
@@ -133,23 +175,50 @@ export function HomePage() {
             <span>Estado</span>
             <span />
           </div>
+          {fromDevice && (
+            <p style={{ fontSize: 13, color: MUTED, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Icon name="wifi-off" size={14} />
+              Sin conexión: ves la lista guardada en este dispositivo. Puedes abrir y editar los proyectos que ya abriste aquí; los cambios se subirán solos.
+            </p>
+          )}
           {error && <p style={{ color: 'var(--color-accent-700)' }}>{error}</p>}
           {!items && !error && <p style={{ color: MUTED }}>Cargando proyectos…</p>}
-          {items?.length === 0 && (
+          {tab === 'compartidos' && shown?.length === 0 && (
+            <div style={{ padding: 24, border: '2px dashed var(--color-divider)', marginTop: 16, fontSize: 14, color: MUTED }}>Nadie te ha compartido proyectos todavía.</div>
+          )}
+          {tab !== 'compartidos' && shown?.length === 0 && (
             <div style={{ padding: 24, border: '2px dashed var(--color-divider)', marginTop: 16, fontSize: 14, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)' }}>
               Todavía no tienes proyectos. Elige Cocina, Closet o Vestidor arriba para empezar.
             </div>
           )}
-          {items?.map((p) => {
+          {shown?.map((p) => {
             const st = STATUS[p.status] ?? STATUS.borrador!;
             return (
               <div key={p.id} className="proj-row proj-item" onClick={() => nav(`/proyectos/${p.id}`)} style={{ alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-divider)', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ height: 84, background: 'var(--sp-canvas)', overflow: 'hidden' }}>{p.coverUrl ? <img src={p.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Svg drawing={thumbs[p.type]} />}</div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 16 }}>{p.name}</div>
+                  <div style={{ fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {p.name}
+                    {pending.has(p.id) && (
+                      <span className="tag tag-neutral" title="Guardado en este dispositivo; se subirá al servidor cuando haya conexión" style={{ fontSize: 11 }}>
+                        {isLocalId(p.id) ? 'Nuevo · por subir' : 'Por subir'}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 13, color: MUTED }}>
                     {p.type === 'cocina' ? 'Cocina' : 'Closet'} · {p.moduleCount} módulos · {fmtMoney(p.estimate.amount, p.estimate.currency)}
                   </div>
+                  {p.access !== 'propietario' ? (
+                    <div style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="users" size={13} />
+                      De {p.ownerName ?? 'otra persona'} · {p.access === 'editar' ? 'puedes editar' : 'solo ver'}
+                    </div>
+                  ) : p.shareCount > 0 ? (
+                    <div style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: MUTED }}>
+                      <Icon name="users" size={13} />
+                      Compartido con {p.shareCount} {p.shareCount === 1 ? 'persona' : 'personas'}
+                    </div>
+                  ) : null}
                 </div>
                 <span style={{ fontSize: 14 }}>{relativeTime(p.updatedAt)}</span>
                 <span>
@@ -175,19 +244,25 @@ export function HomePage() {
                   <>
                     <div style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={(e) => (e.stopPropagation(), setMenu(null))} />
                     <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 'calc(100% - 8px)', zIndex: 21, width: 200, background: 'var(--color-surface)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column' }}>
+                      {!isLocalId(p.id) && (
+                        <button type="button" className="btn btn-ghost" onClick={() => (setMenu(null), setSharing(p))} style={{ justifyContent: 'flex-start' }}>
+                          <Icon name="share-2" />
+                          {isOwner(me, p.access) ? 'Compartir' : 'Personas con acceso'}
+                        </button>
+                      )}
                       {canCreate(me) && (
                         <button type="button" className="btn btn-ghost" onClick={() => duplicate(p)} style={{ justifyContent: 'flex-start' }}>
                           <Icon name="copy" />
                           Duplicar
                         </button>
                       )}
-                      {canEdit(me, p.ownerId) && (
+                      {isOwner(me, p.access) && (
                         <button type="button" className="btn btn-ghost" onClick={() => (setMenu(null), setToDelete(p))} style={{ justifyContent: 'flex-start', color: 'var(--color-accent-700)' }}>
                           <Icon name="trash-2" />
                           Eliminar
                         </button>
                       )}
-                      {!canCreate(me) && !canEdit(me, p.ownerId) && <span style={{ padding: 12, fontSize: 13, color: MUTED }}>Solo lectura</span>}
+
                     </div>
                   </>
                 )}
@@ -214,6 +289,18 @@ export function HomePage() {
           "{toDelete.name}" dejará de aparecer en tu lista. Un administrador puede recuperarlo desde la base de datos si fue un error.
         </Dialog>
       )}
+      {sharing && me && (
+        <ShareDialog
+          projectId={sharing.id}
+          projectName={sharing.name}
+          myAccess={sharing.access}
+          meId={me.user.id}
+          onClose={() => {
+            setSharing(null);
+            load();
+          }}
+        />
+      )}
       {toast}
       <style>{`
         .type-card:hover{border-color:var(--color-accent)!important}
@@ -224,6 +311,7 @@ export function HomePage() {
           .home-hero{grid-template-columns:minmax(0,1fr)!important}
           .home-hero h1{font-size:38px!important}
           .home-types{grid-template-columns:minmax(0,1fr)!important}
+          .home-proto,.sync-label,.install-label{display:none!important}
           .proj-row{grid-template-columns:96px minmax(0,1fr) 44px}
           .proj-row>*:nth-child(3),.proj-row>*:nth-child(4){display:none}
           .proj-row>*:nth-child(5) .btn-secondary{display:none}

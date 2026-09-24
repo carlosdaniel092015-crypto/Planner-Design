@@ -74,14 +74,14 @@ export function BottomBar(props: {
           ))}
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 16px', minHeight: 56 }}>
+      <div className="bb-row" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 16px', minHeight: 56 }}>
         <button type="button"
           onClick={() => setValOpen(!valOpen)}
           aria-expanded={valOpen}
           className="val-btn"
           style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: '1px solid var(--color-divider)', padding: '7px 12px', font: 'inherit', fontSize: 13, color: 'var(--color-text)', cursor: 'pointer' }}
         >
-          <strong>Validación</strong>
+          <strong className="bb-hide-xs">Validación</strong>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <Icon name="circle-check" size={15} style={{ color: '#2f7d4f' }} />
             {count('ok')}
@@ -96,7 +96,7 @@ export function BottomBar(props: {
           </span>
           <Icon name={valOpen ? 'chevron-down' : 'chevron-up'} size={15} />
         </button>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: first ? ICON[first.st][1] : MUTED }}>{first ? first.text : 'Sin módulos en la escena'}</span>
+        <span className="bb-first" style={{ flex: 1, minWidth: 0, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: first ? ICON[first.st][1] : MUTED }}>{first ? first.text : 'Sin módulos en la escena'}</span>
         <div style={{ position: 'relative' }}>
           <button type="button" onClick={() => setPriceOpen(!priceOpen)} title="Editar precio" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: '4px 6px', font: 'inherit', color: 'var(--color-text)', cursor: 'pointer' }}>
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.15 }}>
@@ -191,8 +191,8 @@ export function BottomBar(props: {
             </>
           )}
         </div>
-        <button type="button" className="btn btn-primary" onClick={props.onApproval} style={{ height: 40 }}>
-          Continuar a aprobación
+        <button type="button" className="btn btn-primary" onClick={props.onApproval} style={{ height: 40 }} title="Continuar a aprobación" aria-label="Continuar a aprobación">
+          <span className="bb-hide-xs">Continuar a aprobación</span>
           <Icon name="arrow-right" />
         </button>
       </div>

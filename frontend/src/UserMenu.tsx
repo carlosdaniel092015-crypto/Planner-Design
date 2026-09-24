@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
+import { InstallButton } from './offline/install';
 import { Icon, initials, MUTED } from './ui';
 
 const ROLE: Record<string, string> = { admin: 'Administrador', disenador: 'Diseñador', taller: 'Taller', lectura: 'Solo lectura' };
@@ -32,6 +33,7 @@ export function UserMenu() {
                 {me.organization.name} · <span className="tag tag-neutral">{ROLE[me.user.role] ?? me.user.role}</span>
               </span>
             </div>
+            <InstallButton variant="menu" />
             <a className="btn btn-ghost" href="/api/v1/docs" target="_blank" rel="noreferrer" style={{ justifyContent: 'flex-start' }}>
               <Icon name="book-open" />
               Documentación de la API
@@ -40,7 +42,15 @@ export function UserMenu() {
               className="btn btn-ghost"
               style={{ justifyContent: 'flex-start' }}
               onClick={async () => {
-                await signOut();
+                const left = await signOut();
+                if (
+                  left &&
+                  !window.confirm(
+                    `Hay ${left === 1 ? 'un proyecto' : `${left} proyectos`} con cambios que todavía no se subieron (sin conexión). Si cierras sesión ahora se borrarán de este dispositivo. ¿Cerrar sesión de todos modos?`,
+                  )
+                )
+                  return;
+                if (left) await signOut(true);
                 nav('/login', { replace: true });
               }}
             >

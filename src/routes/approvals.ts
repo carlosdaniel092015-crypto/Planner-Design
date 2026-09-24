@@ -99,7 +99,7 @@ export function approvalRoutes() {
       const a = requireAuth(c);
       const { id } = c.req.valid('param');
       const p = await getProject(c.var.deps.db, a, id);
-      assertCan(a.user, 'project:send', { ownerId: p.ownerId });
+      assertCan(a.user, 'project:send', { access: p.access });
       const { recipientEmail, expiresInDays } = c.req.valid('json');
       const out = await createApprovalLink(c.var.deps, a, id, recipientEmail, expiresInDays);
       return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id }, 201);
@@ -128,7 +128,7 @@ export function approvalRoutes() {
       const [l] = await db.select({ projectId: approvalLinks.projectId }).from(approvalLinks).where(eq(approvalLinks.id, c.req.valid('param').id));
       if (l) {
         const p = await getProject(db, a, l.projectId);
-        assertCan(a.user, 'project:send', { ownerId: p.ownerId });
+        assertCan(a.user, 'project:send', { access: p.access });
       }
       const { link } = await revokeLink(db, a, c.req.valid('param').id);
       return c.json(linkJson(link), 200);
@@ -150,7 +150,7 @@ export function approvalRoutes() {
       const a = requireAuth(c);
       const { id } = c.req.valid('param');
       const p = await getProject(c.var.deps.db, a, id);
-      assertCan(a.user, 'project:approve', { ownerId: p.ownerId });
+      assertCan(a.user, 'project:approve', { access: p.access });
       const input = c.req.valid('json');
       const out = await approveInternal(c.var.deps, a, id, input.signerName, meta(c), input.signature);
       return c.json({ approval: approvalJson(out.approval), versionId: out.version.id }, 200);
@@ -165,7 +165,7 @@ export function approvalRoutes() {
     const a = requireAuth(c);
     const { db } = c.var.deps;
     const row = await getProject(db, a, c.req.valid('param').id);
-    assertCan(a.user, 'project:export', { status: row.status });
+    assertCan(a.user, 'project:export', { access: row.access, status: row.status });
     const { ctx } = await pricingFor(db, a, row);
     const csv = cutlistCsv(corte(parseProjectData(row.data), ctx.materials));
     return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="lista-de-corte-${slug(row.name)}.csv"` });
@@ -175,7 +175,7 @@ export function approvalRoutes() {
     const a = requireAuth(c);
     const { db } = c.var.deps;
     const row = await getProject(db, a, c.req.valid('param').id);
-    assertCan(a.user, 'project:export', { status: row.status });
+    assertCan(a.user, 'project:export', { access: row.access, status: row.status });
     const { ctx } = await pricingFor(db, a, row);
     const dxf = cutlistDxf(corte(parseProjectData(row.data), ctx.materials), row.name);
     return c.body(dxf, 200, { 'Content-Type': 'application/dxf', 'Content-Disposition': `attachment; filename="piezas-${slug(row.name)}.dxf"` });

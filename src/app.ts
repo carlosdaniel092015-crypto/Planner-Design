@@ -152,8 +152,10 @@ export function createApp(opts: CreateAppOptions) {
           styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'],
           fontSrc: ["'self'", 'data:', 'https://unpkg.com', 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-          connectSrc: ["'self'", 'blob:', 'data:', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
+          // The service worker (offline PWA) fetches fonts and uploaded media under this policy too.
+          connectSrc: ["'self'", 'blob:', 'data:', 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.public.blob.vercel-storage.com'],
           workerSrc: ["'self'", 'blob:'],
+          manifestSrc: ["'self'"],
         },
     });
     const files = serveStatic({ root });

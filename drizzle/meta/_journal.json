@@ -22,6 +22,13 @@
       "when": 1790207905664,
       "tag": "0002_approval_signature",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790247624495,
+      "tag": "0003_client_ref_y_compartidos",
+      "breakpoints": true
     }
   ]
 }

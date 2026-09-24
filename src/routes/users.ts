@@ -61,8 +61,31 @@ const patch = createRoute({
   responses: { 200: json(UserSchema), ...authErrors, ...pick(409) },
 });
 
+const directory = createRoute({
+  method: 'get',
+  path: '/directory',
+  tags: ['Usuarios'],
+  summary: 'Personas activas de la organización, para compartir proyectos',
+  description: 'Cualquier usuario con sesión. Solo nombre, correo y rol; no incluye a quien llama.',
+  security,
+  responses: {
+    200: json(z.object({ items: z.array(z.object({ id: z.uuid(), name: z.string(), email: z.email(), role: RoleSchema })) })),
+    ...authErrors,
+  },
+});
+
 export function userRoutes() {
   const r = router();
+
+  r.openapi(directory, async (c) => {
+    const a = requireAuth(c);
+    const rows = await c.var.deps.db
+      .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+      .from(users)
+      .where(and(eq(users.organizationId, a.org.id), eq(users.active, true), ne(users.id, a.user.id)))
+      .orderBy(asc(users.name));
+    return c.json({ items: rows }, 200);
+  });
 
   r.openapi(list, async (c) => {
     const a = requireAuth(c);

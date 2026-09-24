@@ -27,6 +27,7 @@ export const materialSourceEnum = pgEnum('material_source', ['estandar', 'subido
 export const fileKindEnum = pgEnum('file_kind', ['render', 'pdf', 'dxf', 'csv', 'textura', 'modelo3d', 'hdri', 'miniatura', 'otro']);
 export const decisionEnum = pgEnum('approval_decision', ['aprobado', 'cambios']);
 export const tokenPurposeEnum = pgEnum('token_purpose', ['reset', 'invite']);
+export const shareAccessEnum = pgEnum('share_access', ['ver', 'editar']);
 
 const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: 'number' });
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -155,6 +156,8 @@ export const projects = pgTable(
     coverUrl: text('cover_url'),
     /** Version whose pricing snapshot freezes the amounts once approved (FK added in SQL to avoid a cycle). */
     approvedVersionId: uuid('approved_version_id'),
+    /** Id the browser gave a project created offline; makes the create idempotent when the sync retries. */
+    clientRef: text('client_ref'),
     deletedAt: ts('deleted_at'),
     ...timestamps,
   },
@@ -162,7 +165,27 @@ export const projects = pgTable(
     index('projects_org_updated_idx').on(t.organizationId, t.updatedAt.desc()),
     index('projects_org_status_idx').on(t.organizationId, t.status),
     index('projects_data_gin_idx').using('gin', t.data),
+    uniqueIndex('projects_org_client_ref_uq').on(t.organizationId, t.clientRef),
   ],
+);
+
+/** A project is private to its owner; these rows give other users of the same organisation access to it. */
+export const projectShares = pgTable(
+  'project_shares',
+  {
+    id: id(),
+    organizationId: orgId(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    access: shareAccessEnum('access').notNull().default('ver'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('project_shares_project_user_uq').on(t.projectId, t.userId), index('project_shares_user_idx').on(t.userId)],
 );
 
 export const projectVersions = pgTable(

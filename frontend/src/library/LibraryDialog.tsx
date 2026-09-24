@@ -3,7 +3,7 @@ import { DEFAULT_MODULES } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
 import { Icon, MUTED } from '../ui';
-import { formatOf, MODEL_EXT, SKP_HELP, toGlb } from './convert';
+import { formatOf, MODEL_EXT, toGlb } from './convert';
 import { type LibModule, type LibTexture, lib, uploadFile } from './upload';
 
 type Tab = 'tex' | 'mod';
@@ -108,13 +108,11 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           out.push(`${f.name}: formato no admitido. Usa JSON, ${MODEL_EXT.join(', ')}.`);
           continue;
         }
-        if (fmt === 'skp') {
-          out.push(`${f.name}: ${SKP_HELP}`);
-          continue;
-        }
         let glb: Blob = f;
         let name = f.name;
-        if (fmt !== 'glb' && fmt !== 'gltf') {
+        // SketchUp: the server converts it to GLB when the upload is registered (services/model-import.ts).
+        if (fmt === 'skp') setBusy(`Subiendo y convirtiendo ${f.name} (${i + 1} de ${files.length})…`);
+        else if (fmt !== 'glb' && fmt !== 'gltf') {
           setBusy(`Convirtiendo ${f.name} a GLB (${i + 1} de ${files.length})…`);
           const c = await toGlb(f);
           glb = c.glb;
@@ -268,7 +266,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                 <div style={{ fontSize: 13, color: MUTED }}>
                   {tab === 'tex'
                     ? 'JPG, PNG o WebP. Detectamos madera, piedra y metal por el nombre del archivo; puedes ajustarlo después.'
-                    : 'JSON con módulos paramétricos, o modelos 3D: GLB/glTF, 3DS, OBJ, COLLADA (.dae) y FBX (se convierten a GLB). SketchUp (.skp): expórtalo como .dae o .3ds.'}
+                    : 'JSON con módulos paramétricos, o modelos 3D: GLB/glTF, 3DS, OBJ, COLLADA (.dae) y FBX (se convierten a GLB). SketchUp (.skp) se convierte en el servidor.'}
                 </div>
               </div>
               <span className="btn btn-primary">Elegir archivos</span>

@@ -31,6 +31,8 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - **Multi-tenant**: toda consulta filtra por `organization_id` tomado de la sesión (`c.var.auth.org.id`), nunca del cliente.
   Un recurso de otra organización responde 404, no 403.
 - **Permisos**: toda ruta protegida llama `requirePermission(c, action, resource?)` (`src/lib/permissions.ts`).
+  **Proyectos privados:** solo los ve su dueño o a quien se los compartieron (`project_shares`, acceso `ver`/`editar`), admin incluido.
+  Cargar siempre con `getProject` (trae `access`) y pasar `{ access }` a los `assertCan('project:…')`; sin `access` se niega.
   Añadir una acción nueva = añadirla a la matriz y a `tests/permissions.test.ts`.
 - **Auditoría**: crear/actualizar/eliminar/enviar/aprobar/precios/roles → `audit(...)` dentro de la misma transacción.
 - **Dinero**: `numeric` en la BD, `number` redondeado a 2 decimales en la API (`src/lib/money.ts`).
@@ -49,7 +51,9 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - `src/db/` esquema, cliente (Neon / pg / PGlite), semilla, migrador
 - `src/lib/` errores, permisos, dinero, paginación, auditoría, límite de peticiones, OpenAPI
 - `src/services/` proyectos, precios, aprobaciones, archivos, biblioteca, correo, almacenamiento, exportaciones
-- `frontend/` React + Vite; importa el núcleo con `@core` (la misma copia que el servidor). `public/` trae el sistema de diseño, three.js
+- `frontend/` React + Vite; importa el núcleo con `@core` (la misma copia que el servidor). Es PWA: `frontend/sw.js` (el build inyecta
+  la lista de precarga) y `frontend/src/offline/` (IndexedDB por usuario + cola de sincronización). Las páginas leen y guardan proyectos
+  por `offline/sync.ts`, nunca directo con `api.saveProject`. `public/` trae el sistema de diseño, three.js
   y el visor 3D del prototipo; `public/prototipo/` es el prototipo original
 - `tests/` integración por recurso (`tests/helpers.ts` arma app + BD PGlite migrada)
 

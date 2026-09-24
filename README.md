@@ -19,9 +19,30 @@ App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (siste
 - **Editor:**
   - vistas 3D, planta y alzado;
   - biblioteca de módulos, materiales, propiedades, validación y precio;
-  - guardado automático con control de versión, que avisa si alguien más guardó;
+  - guardado automático en el dispositivo, que se sube solo al servidor (ver "Aplicación instalable y sin conexión");
   - deshacer y rehacer;
   - precios en USD y DOP.
+
+### Proyectos privados y compartidos
+
+- **Cada proyecto es privado:** solo lo ve su dueño. Esto vale para todos los roles, incluido el administrador; el taller ve únicamente lo que le compartan.
+- **Compartir** (botón de personas en el editor, o "Compartir" en el menú de cada proyecto): el dueño elige a alguien de su organización y el acceso:
+  - **Solo ver:** abre el proyecto y descarga planos y lista de corte.
+  - **Puede editar:** además lo modifica y lo envía a aprobación. Solo roles admin y diseñador; el taller y lectura solo pueden "ver".
+- Quien lo recibe ve **el mismo proyecto** (no una copia), con los cambios del dueño, en la pestaña **"Compartidos conmigo"**.
+- **Solo el dueño** elimina el proyecto y cambia o quita accesos; quien lo recibió puede salir de él.
+- Un proyecto no compartido responde **404** a los demás, igual que uno de otra organización. Compartir y quitar acceso queda en la auditoría.
+- API: `GET/PUT/DELETE /projects/{id}/shares[/{userId}]`, `GET /users/directory` y `GET /projects?scope=todos|mios|compartidos`.
+
+### Aplicación instalable y sin conexión (PWA)
+
+- **Instalable** en celular, tablet y computadora ("Agregar a la pantalla de inicio" / "Instalar app"). El editor se adapta: en pantallas chicas los paneles se abren encima del 3D.
+- **Funciona sin internet:** un service worker (`frontend/sw.js`; el build le inyecta la lista de archivos) guarda la app, three.js, los íconos y el visor. Las texturas y modelos se guardan al usarse.
+- **Los proyectos viven primero en el dispositivo** (`frontend/src/offline`): IndexedDB con **una base por usuario** y una cola de cambios. Cada cambio se guarda al instante en el dispositivo y se sube cuando hay conexión (al reconectar, cada 30 s y al guardar). Además se deja una copia síncrona del borrador por si el sistema cierra la app antes de terminar de escribir.
+- Se pueden **abrir** sin conexión los proyectos ya abiertos en ese dispositivo (la lista descarga en segundo plano los 40 más recientes). También se pueden **crear, duplicar y eliminar**. Un proyecto creado sin conexión recibe su id del servidor al sincronizar (`clientRef` hace que el reintento no lo duplique).
+- **Conflictos:** si otra persona guardó mientras tanto, si el proyecto se aprobó o si ya no hay permiso de edición, tu versión no se pierde. Se guarda como un proyecto nuevo "… (copia sin conexión)" y el editor te lo avisa.
+- **Sesión:** si no hay conexión, la app abre con el último usuario de ese dispositivo. **Cerrar sesión borra del dispositivo** sus proyectos, la cola y los archivos guardados; si quedan cambios sin subir, pide confirmación. Si se cierra sesión sin conexión, la sesión del servidor se cierra al volver internet.
+- **Sin conexión no está disponible:** subir texturas o modelos, enviar a aprobación ni nada que necesite al servidor en el momento.
 
 **Siguientes etapas:** asistente de especificaciones, bibliotecas propias (texturas y GLB), pantalla de aprobación con PDF y enlace al cliente, y lista de corte.
 
@@ -160,6 +181,8 @@ La imagen incluye `HEALTHCHECK` contra `/api/v1/health`. El proceso cierra con `
 2. `PUT uploadUrl` con los bytes y el mismo `Content-Type`.
 3. `POST /api/v1/files` con `{ kind, blobUrl, name, projectId? }`. El servidor valida el contenido real y genera las variantes: 256 px y 2K para imágenes.
 4. Para texturas y módulos: `POST /api/v1/library/textures` o `/library/modules` con los `fileId`.
+
+**Modelos 3D:** se aceptan GLB/glTF, **SketchUp (.skp)**, **3ds Max (.3ds)** o un **ZIP** con el `.3ds` y sus texturas PNG/JPG (hasta 80 MB). SKP y 3DS se convierten a GLB al registrarlos; el archivo apunta al GLB, el original queda en `variants.original` y `meta` trae `source`, `sourceName` y los avisos (por ejemplo, las unidades deducidas de un .3ds).
 
 Si configuras `BLOB_READ_WRITE_TOKEN`, el paso 1 devuelve `mode: "blob"` y un token. En ese caso, en el paso 2 se usa `put()` de `@vercel/blob/client`.
 
