@@ -54,9 +54,11 @@ function grain(g, x0, y0, w, h, c, r, n) {
   }
   g.globalAlpha = 1;
 }
+// Colour fidelity: textures keep the catalogue colour (the prototype muted them 20–30 %, which washed out every finish).
+const WOOD_MUTE = .04;
 function woodTex(hex) {
   return ctex('wood' + hex, 512, 1024, (g, w, h, r) => {
-    const c = mute(hexRgb(hex), .3); g.fillStyle = rgb(c, 1); g.fillRect(0, 0, w, h);
+    const c = mute(hexRgb(hex), WOOD_MUTE); g.fillStyle = rgb(c, 1); g.fillRect(0, 0, w, h);
     for (let i = 0; i < 16; i++) { g.globalAlpha = .3; g.fillStyle = rgb(c, .88 + r() * .22); g.fillRect(r() * w, 0, 18 + r() * 70, h); }
     g.globalAlpha = 1; grain(g, 0, 0, w, h, c, r, 240); noise(g, w, h, r, 9);
   });
@@ -120,15 +122,17 @@ function M(key, fn) { return matCache[key] || (matCache[key] = fn()); }
 const std = (key, p) => M(key, () => new T.MeshStandardMaterial(p));
 const mats = {
   plinth: () => std('plinth', { color: 0x2b2a28, roughness: .7 }),
-  steel: () => std('steel', { color: 0xd4d6d7, metalness: .7, roughness: .34 }),
-  chrome: () => std('chrome', { color: 0xe8e8e8, metalness: 1, roughness: .08 }),
+  // Metals get their look from reflections: brighter environment on them only (the room stays calibrated).
+  // Brushed stainless: part diffuse so it reads light grey like the real thing, not a dark mirror of the studio.
+  steel: () => std('steel', { color: 0xc9cccd, metalness: .55, roughness: .32, envMapIntensity: 1.6 }),
+  chrome: () => std('chrome', { color: 0xf0f0f0, metalness: 1, roughness: .08, envMapIntensity: 2 }),
   blackGlass: () => std('bglass', { color: 0x0d0d0d, metalness: .3, roughness: .06 }),
   gola: () => std('gola', { color: 0x1e1e1e, metalness: .6, roughness: .45 }),
   frame: () => std('frame', { color: 0x2a2a2a, metalness: .4, roughness: .5 }),
   trim: () => std('trim', { color: 0xf4f2ee, roughness: .6 }),
   glass: () => M('glass', () => new T.MeshStandardMaterial({ color: 0xcfe0e6, metalness: .1, roughness: .04, transparent: true, opacity: .22 })),
   sky: () => M('sky', () => new T.MeshBasicMaterial({ map: skyTex() })),
-  wall: () => std('wall', { map: plainTex('#ece6dc', 5), roughness: .95 }),
+  wall: () => std('wall', { map: plainTex('#e8e6e2', 5), roughness: .95 }),
   led: () => M('led', () => new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff1d6, emissiveIntensity: 2.2 })),
   edge: () => std('edge', { color: 0xcfc8bc, roughness: .9 })
 };
@@ -142,14 +146,15 @@ function baseMat(id) {
       if (tx) p.map = tx; else p.color = new T.Color(m.c);
       p.roughness = m.rough != null ? m.rough : .5; ud.tile = ud.tileH = (m.tile || 60) / 100;
       if (/Acero|Latón|Aluminio|Metal/.test(t)) p.metalness = .9;
-    } else if (/Acero/.test(t)) Object.assign(p, { color: new T.Color(m.c), metalness: 1, roughness: .28 });
+    } else if (/Acero/.test(t)) Object.assign(p, { color: new T.Color('#c3c6c8'), metalness: .6, roughness: .3 });
     else if (/Latón/.test(t)) Object.assign(p, { color: new T.Color('#b9a275'), metalness: 1, roughness: .38 });
     else if (/Aluminio/.test(t)) Object.assign(p, { color: new T.Color(m.c), metalness: .6, roughness: .42 });
     else if (/Cuarzo/.test(t)) { phys = true; p.map = stoneTex(m.c, false); Object.assign(p, { roughness: .2, clearcoat: .35, clearcoatRoughness: .25, bumpMap: p.map, bumpScale: .15 }); ud.tile = ud.tileH = .6; }
     else if (/Granito/.test(t)) { phys = true; p.map = stoneTex(m.c, true); Object.assign(p, { roughness: .16, clearcoat: .45, clearcoatRoughness: .2, bumpMap: p.map, bumpScale: .2 }); ud.tile = ud.tileH = .6; }
     else if (m.wood) { p.map = woodTex(m.c); p.roughness = /Chapa/.test(t) ? .42 : .56; p.bumpMap = p.map; p.bumpScale = .35; ud.tile = .6; ud.tileH = 1.2; }
-    else if (/Lacado/.test(t)) { phys = true; Object.assign(p, { color: new T.Color(muteHex(m.c, .15)), roughness: .46, clearcoat: .2, clearcoatRoughness: .5 }); }
-    else { p.map = plainTex(muteHex(m.c, .2), 4); p.roughness = .62; }
+    else if (/Lacado/.test(t)) { phys = true; Object.assign(p, { color: new T.Color(m.c), roughness: .46, clearcoat: .2, clearcoatRoughness: .5 }); }
+    else { p.map = plainTex(m.c, 4); p.roughness = .62; }
+    if (p.metalness > .5) p.envMapIntensity = 1.8;
     const mat = phys ? new T.MeshPhysicalMaterial(p) : new T.MeshStandardMaterial(p);
     mat.userData = ud; return mat;
   });
@@ -466,8 +471,8 @@ function cutaway(walls, cam, cfg) {
 }
 function addLights(root, cfg, mods) {
   const A = cfg.room.A / 100, Bw = cfg.room.B / 100;
-  root.add(new T.HemisphereLight(0xf6f5f2, 0xa8a49c, .7));
-  const sun = new T.DirectionalLight(0xfff7ec, 1.7);
+  root.add(new T.HemisphereLight(0xf6f5f2, 0xa8a49c, HEMI));
+  const sun = new T.DirectionalLight(0xfff7ec, SUN);
   sun.position.set(A + 3.4, 4.6, Bw * .7 + .6); sun.target.position.set(A * .3, 0, Bw * .3);
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera, ext = Math.max(A, Bw) * .9 + 1; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = .5; sc.far = 18;
@@ -519,9 +524,11 @@ function frameBox(groups, cfg, focusId) {
   else { Object.values(groups).forEach(g => bb.expandByObject(g)); if (bb.isEmpty()) bb.set(new T.Vector3(0, 0, 0), new T.Vector3(cfg.room.A / 100, 2.2, cfg.room.B / 100)); }
   return bb;
 }
+// Khronos PBR Neutral keeps base colours faithful; exposure/lights are calibrated so a lit front ≈ its catalogue hex.
+const EXPOSURE = 1, ENV = .5, HEMI = .55, SUN = 1.7;
 function mkRenderer(preserve) {
   const r = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: !!preserve });
-  r.outputColorSpace = T.SRGBColorSpace; r.toneMapping = T.AgXToneMapping || T.NeutralToneMapping || T.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
+  r.outputColorSpace = T.SRGBColorSpace; r.toneMapping = T.NeutralToneMapping || T.ACESFilmicToneMapping; r.toneMappingExposure = EXPOSURE;
   r.shadowMap.enabled = true; r.shadowMap.type = T.PCFSoftShadowMap;
   const pm = new T.PMREMGenerator(r); r.userData = { env: pm.fromScene(new RoomEnvironment(), .04).texture }; pm.dispose();
   return r;
@@ -536,7 +543,7 @@ class Viewer {
     host.appendChild(r.domElement);
     this.ov = document.createElement('div'); this.ov.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden';
     host.appendChild(this.ov);
-    this.scene = new T.Scene(); this.scene.environment = r.userData.env; this.scene.environmentIntensity = .65;
+    this.scene = new T.Scene(); this.scene.environment = r.userData.env; this.scene.environmentIntensity = ENV;
     this.cam = new T.PerspectiveCamera(38, 1, .05, 100);
     const c = this.ctl = new OrbitControls(this.cam, r.domElement);
     Object.assign(c, { enableDamping: true, dampingFactor: .08, minPolarAngle: .25, maxPolarAngle: 1.47, minDistance: 1, maxDistance: 16, screenSpacePanning: true });
@@ -653,7 +660,7 @@ export function snapshot(cfg, o) {
     if (!snapR) snapR = mkRenderer(true);
     // Supersample for clean edges (the JPEG comes out at up to 2× the requested size).
     snapR.setPixelRatio(Math.max(1, Math.min(2, 2400 / o.w))); snapR.setSize(o.w, o.h, false);
-    const scene = new T.Scene(); scene.background = new T.Color(cfg.bg || '#d3cec6'); scene.environment = snapR.userData.env; scene.environmentIntensity = .65;
+    const scene = new T.Scene(); scene.background = new T.Color(cfg.bg || '#d3cec6'); scene.environment = snapR.userData.env; scene.environmentIntensity = ENV;
     const root = new T.Group(); scene.add(root);
     const groups = buildScene(root, cfg);
     root.traverse(l => { if (l.isDirectionalLight && l.castShadow) { l.shadow.mapSize.set(4096, 4096); l.shadow.radius = 4; } });
