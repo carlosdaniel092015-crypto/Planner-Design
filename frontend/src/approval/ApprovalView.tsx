@@ -47,6 +47,9 @@ export function ApprovalView(props: {
   /** Can edit, send and approve (owner designer or admin, project not approved). */
   canManage: boolean;
   orgName: string;
+  /** Organisation logo and brand colour for the PDF (Administración → Organización). */
+  orgLogo?: string | null;
+  orgColor?: string | null;
   commit: (next: ProjectData) => void;
   /** Saves pending edits; resolves false when the save failed. */
   ensureSaved: () => Promise<boolean>;
@@ -343,6 +346,8 @@ export function ApprovalView(props: {
             return pages;
           }}
           header={props.orgName}
+          logo={props.orgLogo ?? null}
+          color={props.orgColor ?? null}
           pname={project.name}
         />
       )}
@@ -546,6 +551,8 @@ function PdfTab(props: {
   busy: boolean;
   render: (k: Record<PdfKey, boolean>) => PdfPage[];
   header: string;
+  logo: string | null;
+  color: string | null;
   pname: string;
 }) {
   const { data } = props;
@@ -598,14 +605,14 @@ function PdfTab(props: {
                 <div data-pdf-page="1" style={{ aspectRatio: '297/210', background: '#ffffff', color: '#201e1d', boxShadow: 'var(--shadow-md)', padding: 10, display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden', fontFamily: 'var(--font-body)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 7, letterSpacing: '.08em', textTransform: 'uppercase', borderBottom: '1.5px solid #201e1d', paddingBottom: 3 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ width: 8, height: 8, background: '#ec3013' }} />
+                      {props.logo ? <img src={props.logo} alt="" style={{ height: 10, maxWidth: 60, objectFit: 'contain' }} /> : <span style={{ width: 8, height: 8, background: props.color ?? '#ec3013' }} />}
                       {props.header}
                     </span>
                     <span>{num}</span>
                   </div>
                   {pg.cover && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'end', gap: 3 }}>
-                      <div style={{ fontSize: 6, letterSpacing: '.1em', textTransform: 'uppercase', color: '#ae1800' }}>Proyecto de {kind} a medida</div>
+                      <div style={{ fontSize: 6, letterSpacing: '.1em', textTransform: 'uppercase', color: props.color ?? '#ae1800' }}>Proyecto de {kind} a medida</div>
                       <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1 }}>{props.pname}</div>
                       <div style={{ fontSize: 7 }}>{[client.nombre, client.tel].filter(Boolean).join(' · ') || 'Cliente por definir'}</div>
                       <div style={{ fontSize: 7 }}>{client.dir}</div>

@@ -7,7 +7,7 @@ const actor = (role: Role) => ({ id: me, role });
 
 describe('can(user, action, resource)', () => {
   it('admin: todo lo de la organización, pero los proyectos solo si son suyos o se los compartieron', () => {
-    for (const a of ['user:manage', 'pricing:write', 'catalog:admin', 'library:write'] as Action[]) expect(can(actor('admin'), a, { ownerId: other })).toBe(true);
+    for (const a of ['user:manage', 'pricing:write', 'catalog:admin', 'library:write', 'org:manage', 'audit:read'] as Action[]) expect(can(actor('admin'), a, { ownerId: other })).toBe(true);
     expect(can(actor('admin'), 'project:read', { access: null })).toBe(false);
     expect(can(actor('admin'), 'project:delete', { access: 'editar' })).toBe(false);
     expect(can(actor('admin'), 'project:delete', { access: 'propietario' })).toBe(true);
@@ -35,6 +35,8 @@ describe('can(user, action, resource)', () => {
     expect(can(d, 'pricing:write')).toBe(false);
     expect(can(d, 'catalog:admin')).toBe(false);
     expect(can(d, 'user:manage')).toBe(false);
+    expect(can(d, 'org:manage')).toBe(false);
+    expect(can(d, 'audit:read')).toBe(false);
   });
 
   it('taller: solo lo que le compartan, descarga planos y listas de corte, nunca edita', () => {

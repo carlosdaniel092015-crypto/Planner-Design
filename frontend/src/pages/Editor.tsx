@@ -593,6 +593,8 @@ export function EditorPage() {
           issues={issues}
           canManage={!readOnly}
           orgName={me?.organization.name ?? 'Planner'}
+          orgLogo={me?.organization.logoUrl}
+          orgColor={me?.organization.brandColor}
           commit={commit}
           ensureSaved={ensureOnServer}
           onStatus={onStatus}

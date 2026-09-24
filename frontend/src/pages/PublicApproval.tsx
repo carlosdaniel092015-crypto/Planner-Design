@@ -78,7 +78,7 @@ export function PublicApprovalPage() {
 
   if (done)
     return (
-      <Shell org={v.organization.name}>
+      <Shell org={v.organization.name} logo={v.organization.logoUrl} color={v.organization.brandColor}>
         <div style={{ maxWidth: 560, margin: '12vh auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '0 16px' }}>
           <Icon name={done === 'aprobado' ? 'badge-check' : 'message-square'} size={34} style={{ color: 'var(--color-accent)' }} />
           <h1 style={{ margin: 0, fontSize: 30 }}>{done === 'aprobado' ? '¡Gracias! Tu proyecto quedó aprobado' : 'Recibimos tus comentarios'}</h1>
@@ -92,7 +92,7 @@ export function PublicApprovalPage() {
     );
 
   return (
-    <Shell org={v.organization.name}>
+    <Shell org={v.organization.name} logo={v.organization.logoUrl} color={v.organization.brandColor}>
       <main style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 16px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
         <div>
           <div style={{ fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--color-accent-700)' }}>Propuesta para revisar · versión {v.project.version}</div>
@@ -209,11 +209,19 @@ export function PublicApprovalPage() {
   );
 }
 
-function Shell({ children, org }: { children: React.ReactNode; org?: string }) {
+function Shell({ children, org, logo, color }: { children: React.ReactNode; org?: string; logo?: string | null; color?: string | null }) {
   return (
-    <div data-theme="light" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}>
+    <div
+      data-theme="light"
+      // The organisation's brand colour drives the page accent (buttons, highlights).
+      style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', ...(color ? ({ '--color-accent': color } as React.CSSProperties) : {}) }}
+    >
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)' }}>
-        <span style={{ width: 32, height: 32, background: 'var(--color-accent)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>{(org ?? 'P').slice(0, 1).toUpperCase()}</span>
+        {logo ? (
+          <img src={logo} alt={org ?? ''} style={{ height: 36, maxWidth: 160, objectFit: 'contain' }} />
+        ) : (
+          <span style={{ width: 32, height: 32, background: color ?? 'var(--color-accent)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>{(org ?? 'P').slice(0, 1).toUpperCase()}</span>
+        )}
         <strong style={{ fontSize: 16 }}>{org ?? 'Propuesta de diseño'}</strong>
       </header>
       {children}

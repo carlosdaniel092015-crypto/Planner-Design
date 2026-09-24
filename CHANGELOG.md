@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.1.0 · 2026-09-24
+
+### Administración
+- Nueva sección **Administración** (menú de cuenta): organización, usuarios, precios, catálogo, clientes y auditoría.
+- Organización: nombre, **logo**, color de marca y texto que acepta el cliente; se ven en la página de aprobación y en el PDF.
+- Usuarios: invitar por correo, cambiar rol y activar o desactivar.
+- Precios: tasa de cambio, ITBIS, merma, margen y redondeo; ajuste masivo con vista previa.
+- Catálogo: precio y activo de cada módulo, material y herraje.
+- Clientes: crear, editar y eliminar (los diseñadores también tienen acceso).
+- Auditoría: quién hizo qué y cuándo.
+
 ## 1.0.0 · 2026-09-24
 
 ### Diseño
