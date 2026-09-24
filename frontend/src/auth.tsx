@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { type Access, ApiError, api, isTransient, type Me } from './api';
-import { pendingCount, resumeAfterLogin, setOwnerName, startSync, syncNow, wipeUser } from './offline/sync';
+import { pendingCount, resumeAfterLogin, setOwnerName, startSync, syncNow, waitIdle, wipeUser } from './offline/sync';
 
 // The last signed-in user, so the app opens without a connection. Cleared on sign-out.
 const ME_KEY = 'planner:me';
@@ -99,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         if (isTransient(e)) ls.set(PENDING_SIGNOUT, '1');
       }
+      await waitIdle();
       await wipeUser(me.user.id).catch(() => {});
       ls.set(ME_KEY, null);
       setMeState(null);

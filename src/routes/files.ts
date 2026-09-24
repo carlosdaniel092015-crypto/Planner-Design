@@ -104,8 +104,11 @@ export function fileRoutes() {
       const { db, storage } = c.var.deps;
       const input = c.req.valid('json');
       await assertCanWrite(db, a, input.projectId, input.kind);
-      const row = await registerFile(db, storage, a, input);
-      await audit(db, a, 'crear', 'file', row.id, { kind: row.kind, size: row.size });
+      const row = await db.transaction(async (tx) => {
+        const f = await registerFile(tx, storage, a, input);
+        await audit(tx, a, 'crear', 'file', f.id, { kind: f.kind, size: f.size });
+        return f;
+      });
       return c.json(fileJson(row), 201);
     },
   );
@@ -128,6 +131,11 @@ export function fileRoutes() {
       const { db, storage } = c.var.deps;
       const f = await getFile(db, a.org.id, c.req.valid('param').id);
       assertCan(a.user, 'file:delete', { ownerId: f.createdBy });
+      // A private project's files follow the project: only people who can edit it may delete them (admins included).
+      if (f.projectId) {
+        const p = await getProject(db, a, f.projectId);
+        assertCan(a.user, 'project:update', { access: p.access });
+      }
       await db.transaction(async (tx) => {
         await tx.delete(files).where(eq(files.id, f.id));
         await audit(tx, a, 'eliminar', 'file', f.id, { name: f.name });

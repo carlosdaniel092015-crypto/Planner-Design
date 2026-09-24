@@ -1,6 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
-import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
-import { users } from '../db/schema';
+import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
+import { sessions, users, verificationTokens } from '../db/schema';
 import { audit } from '../lib/audit';
 import { conflict, notFound } from '../lib/errors';
 import { authErrors, body, IdParam, json, pick, router, security } from '../lib/openapi';
@@ -133,6 +133,11 @@ export function userRoutes() {
         if (Number(n) === 0) throw conflict('ULTIMO_ADMIN', 'La organización debe conservar al menos un administrador activo.');
       }
       const [u] = await tx.update(users).set(input).where(eq(users.id, id)).returning();
+      // A deactivated user loses their sessions and any pending invitation or reset link (otherwise accepting it reactivates them).
+      if (input.active === false) {
+        await tx.delete(sessions).where(eq(sessions.userId, id));
+        await tx.delete(verificationTokens).where(and(eq(verificationTokens.userId, id), isNull(verificationTokens.usedAt)));
+      }
       if (input.role && input.role !== cur.role) await audit(tx, a, 'cambiar_rol', 'user', id, { from: cur.role, to: input.role });
       else await audit(tx, a, 'actualizar', 'user', id, input);
       return u!;

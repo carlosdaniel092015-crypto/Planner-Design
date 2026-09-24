@@ -1,11 +1,11 @@
 // Logical backups: every table as JSON (gzip), portable across Postgres versions and PGlite, no pg_dump needed.
 // Restore goes into an empty, migrated database, parents before children.
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { eq, getTableName, is } from 'drizzle-orm';
 import { getTableConfig, PgTable, PgTimestamp } from 'drizzle-orm/pg-core';
-import type { DbOrTx } from './client';
+import type { Db } from './client';
 import * as schema from './schema';
 
 export interface BackupFile {
@@ -33,17 +33,24 @@ function ordered(): PgTable[] {
   return out;
 }
 
-export async function dumpDatabase(db: DbOrTx): Promise<BackupFile> {
+/** Reads every table inside one snapshot, so rows written during the dump never leave a child without its parent. */
+export async function dumpDatabase(db: Db): Promise<BackupFile> {
   const out: BackupFile = { format: 'planner-backup', version: 1, createdAt: new Date().toISOString(), tables: {} };
-  for (const t of ordered()) out.tables[getTableName(t)] = (await db.select().from(t)) as Record<string, unknown>[];
+  await db.transaction(
+    async (tx) => {
+      for (const t of ordered()) out.tables[getTableName(t)] = (await tx.select().from(t)) as Record<string, unknown>[];
+    },
+    { isolationLevel: 'repeatable read', accessMode: 'read only' },
+  );
   return out;
 }
 
-/** Inserts a backup into an empty database that already has the migrations applied. */
-export async function restoreDatabase(db: DbOrTx, backup: BackupFile) {
+/** Inserts a backup into an empty database that already has the migrations applied (all or nothing). */
+export async function restoreDatabase(db: Db, backup: BackupFile) {
   if (backup.format !== 'planner-backup') throw new Error('El archivo no es un respaldo de Planner.');
+  return db.transaction(async (tx) => {
   const counts: Record<string, number> = {};
-  const deferred: { id: unknown; approvedVersionId: unknown }[] = [];
+  const deferred: { id: unknown; approvedVersionId: unknown; updatedAt: unknown }[] = [];
   for (const t of ordered()) {
     const name = getTableName(t);
     const cols = getTableConfig(t).columns;
@@ -55,26 +62,41 @@ export async function restoreDatabase(db: DbOrTx, backup: BackupFile) {
     });
     // projects ↔ project_versions reference each other: insert projects without the approved version, then set it.
     if (name === 'projects') {
-      for (const r of rows) if (r.approvedVersionId) deferred.push({ id: r.id, approvedVersionId: r.approvedVersionId });
+      for (const r of rows) if (r.approvedVersionId) deferred.push({ id: r.id, approvedVersionId: r.approvedVersionId, updatedAt: r.updatedAt });
       rows = rows.map((r) => ({ ...r, approvedVersionId: null }));
     }
-    for (let i = 0; i < rows.length; i += 500) await db.insert(t).values(rows.slice(i, i + 500) as never);
+    for (let i = 0; i < rows.length; i += 500) await tx.insert(t).values(rows.slice(i, i + 500) as never);
     counts[name] = rows.length;
   }
-  for (const d of deferred) await db.update(schema.projects).set({ approvedVersionId: d.approvedVersionId as string }).where(eq(schema.projects.id, d.id as string));
+  // updatedAt is set explicitly: otherwise its $onUpdate would stamp every approved project with the restore time.
+  for (const d of deferred)
+    await tx
+      .update(schema.projects)
+      .set({ approvedVersionId: d.approvedVersionId as string, updatedAt: d.updatedAt as Date })
+      .where(eq(schema.projects.id, d.id as string));
   return counts;
+  });
 }
 
 export const encodeBackup = (b: BackupFile) => gzipSync(Buffer.from(JSON.stringify(b)));
 export const decodeBackup = (bytes: Uint8Array) => JSON.parse(gunzipSync(bytes).toString('utf8')) as BackupFile;
 
-/** Writes planner-YYYYMMDD-HHMMSS.json.gz into dir and keeps the newest `keep` files. */
-export async function writeBackup(db: DbOrTx, dir: string, keep = 14) {
+/** Positive integer from the environment, or the fallback when missing or invalid (e.g. BACKUP_KEEP=abc). */
+export function envInt(value: string | undefined, fallback: number, min = 1) {
+  const n = Number(value);
+  return value?.trim() && Number.isFinite(n) && n >= min ? Math.floor(n) : fallback;
+}
+
+/** Writes planner-YYYYMMDD-HHMMSS.json.gz into dir and keeps the newest `keep` files (at least 1). */
+export async function writeBackup(db: Db, dir: string, keep = 14) {
+  keep = Math.max(1, Math.floor(keep) || 14);
   await mkdir(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
   const file = join(dir, `planner-${stamp}.json.gz`);
   const bytes = encodeBackup(await dumpDatabase(db));
-  await writeFile(file, bytes);
+  // Written under a temporary name and renamed, so an interrupted backup never looks like the newest one.
+  await writeFile(`${file}.tmp`, bytes);
+  await rename(`${file}.tmp`, file);
   const old = (await readdir(dir)).filter((f) => /^planner-\d{8}-\d{6}\.json\.gz$/.test(f)).sort().reverse().slice(keep);
   for (const f of old) await rm(join(dir, f), { force: true });
   return { file, bytes: bytes.byteLength };

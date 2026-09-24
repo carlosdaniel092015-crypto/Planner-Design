@@ -358,7 +358,7 @@ export function projectRoutes() {
       const data = parseProjectData(input.data);
       await assertClient(db, a.org.id, input.clientId);
       // The cover must be a file this organisation uploaded, not an arbitrary external URL.
-      if (input.coverUrl && !urlBelongsToOrg(input.coverUrl, a.org.id)) throw unprocessable('PORTADA_NO_VALIDA', 'La portada debe ser una imagen subida a tu organización.');
+      if (input.coverUrl && !urlBelongsToOrg(c.var.deps.storage, input.coverUrl, a.org.id)) throw unprocessable('PORTADA_NO_VALIDA', 'La portada debe ser una imagen subida a tu organización.');
       const row = await db.transaction(async (tx) => {
         const cur = await getProject(tx, a, id);
         assertCan(a.user, 'project:update', { access: cur.access, status: cur.status });

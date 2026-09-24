@@ -145,6 +145,12 @@ export async function wipeUser(uid: string) {
   if ('caches' in window) for (const k of await caches.keys()) if (k.startsWith('media')) await caches.delete(k);
 }
 
+/** Waits for an upload in progress to finish (bounded), so a late answer can't land after the user signs out. */
+export async function waitIdle(maxMs = 25_000) {
+  const until = Date.now() + maxMs;
+  while (running && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+}
+
 export function pendingCount() {
   return status.pending.length;
 }
@@ -424,8 +430,11 @@ export async function deleteProject(requested: string): Promise<void> {
   const id = await resolveId(d, requested);
   const entry = await d.get<OutboxEntry>('outbox', id);
   if (entry?.kind === 'create') {
+    // Kept as a delete marker: if the create is already on its way to the server, pushCreate sees it and
+    // queues the delete of the new server project instead of bringing it back. Otherwise push() just drops it.
     await locked(async (dd) => {
-      await dd.del('outbox', id);
+      const cur = await dd.get<OutboxEntry>('outbox', id);
+      if (cur) await dd.put('outbox', id, { ...cur, kind: 'delete', blocked: undefined });
       await dd.del('projects', id);
     });
     return refreshPending();
@@ -506,13 +515,15 @@ export async function syncNow(): Promise<void> {
           schedule(backoff);
           break;
         }
-        if (err instanceof ApiError && err.status === 402) {
-          // Plan limit: keep the work on this device, stop retrying until the app restarts (or the plan changes).
+        if (err instanceof ApiError && (err.status === 402 || e.kind === 'create')) {
+          // Plan limit, or a create the server refuses (too big, no permission…): keep the work on this device and
+          // stop retrying until the app restarts (or the plan changes), telling the user why.
           await locked(async (dd) => {
             const cur = await dd.get<OutboxEntry>('outbox', e.projectId);
             if (cur) await dd.put('outbox', e.projectId, { ...cur, blocked: err.message });
           });
-          emit({ type: 'dropped', projectId: e.projectId, message: `${err.message} Tu trabajo sigue guardado en este dispositivo.` });
+          const why = err.status === 402 ? err.message : `No se pudo subir «${e.name}»: ${err.message}`;
+          emit({ type: 'dropped', projectId: e.projectId, message: `${why} Tu trabajo sigue guardado en este dispositivo.` });
           continue;
         }
         console.warn('sync', err);
@@ -531,6 +542,8 @@ export async function syncNow(): Promise<void> {
 }
 
 async function push(snap: OutboxEntry) {
+  // A project created and deleted on this device before it ever reached the server.
+  if (snap.kind === 'delete' && isLocalId(snap.projectId)) return locked((d) => d.del('outbox', snap.projectId));
   if (snap.kind === 'create') return pushCreate(snap);
   if (snap.kind === 'delete') return pushDelete(snap);
   return pushSave(snap);

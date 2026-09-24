@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_KITCHEN } from '../src/core';
-import { dumpDatabase, readBackup, restoreDatabase, writeBackup } from '../src/db/backup-lib';
+import { dumpDatabase, envInt, readBackup, restoreDatabase, writeBackup } from '../src/db/backup-lib';
 import { connect } from '../src/db/client';
 import { setup, type Ctx } from './helpers';
 
@@ -38,15 +38,37 @@ describe('respaldos', () => {
     expect(after.approvedVersionId).toBe(before.approvedVersionId);
     expect(after.status).toBe('aprobado');
     expect(JSON.stringify(after.data)).toBe(JSON.stringify(before.data));
+    // Row for row identical, dates included (the approved project keeps its updatedAt).
+    expect(JSON.parse(JSON.stringify(again.tables))).toEqual(backup.tables);
     await fresh.close();
+  });
+
+  it('una restauración que falla no deja datos a medias', async () => {
+    const backup = await dumpDatabase(t.db);
+    const broken = { ...backup, tables: { ...backup.tables, project_versions: [{ ...backup.tables.project_versions![0]!, projectId: '00000000-0000-0000-0000-000000000000' }] } };
+    const fresh = await connect('pglite://memory');
+    await fresh.migrate(resolve('drizzle'));
+    await expect(restoreDatabase(fresh.db, broken)).rejects.toThrow();
+    expect((await dumpDatabase(fresh.db)).tables.organizations).toHaveLength(0);
+    await fresh.close();
+  });
+
+  it('valores de entorno no válidos usan el predeterminado', () => {
+    expect(envInt(undefined, 14)).toBe(14);
+    expect(envInt('abc', 14)).toBe(14);
+    expect(envInt('0', 14)).toBe(14);
+    expect(envInt('', 24)).toBe(24);
+    expect(envInt('7', 14)).toBe(7);
   });
 
   it('conserva solo los últimos N respaldos', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'planner-bak-'));
     for (let i = 0; i < 3; i++) {
-      await writeBackup(t.db, dir, 2);
+      await writeBackup(t.db, dir, Number.NaN);
       await new Promise((r) => setTimeout(r, 1100));
     }
+    expect((await readdir(dir)).filter((f) => f.endsWith('.json.gz'))).toHaveLength(3);
+    await writeBackup(t.db, dir, 2);
     expect((await readdir(dir)).filter((f) => f.endsWith('.json.gz'))).toHaveLength(2);
   });
 });

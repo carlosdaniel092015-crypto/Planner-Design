@@ -13,13 +13,18 @@ if (password.length < 8) {
   process.exit(1);
 }
 
+const rate = Number(process.env.SEED_RATE ?? 60);
+if (!Number.isFinite(rate) || rate <= 0) {
+  console.error('SEED_RATE debe ser un número positivo (pesos dominicanos por dólar).');
+  process.exit(1);
+}
 const handle = await connect(url);
 try {
   const { org, admin } = await seedOrganization(handle.db, {
     orgName: process.env.SEED_ORG_NAME ?? 'Planner',
     slug: process.env.SEED_ORG_SLUG ?? 'stephanny',
     admin: { name: process.env.SEED_ADMIN_NAME ?? 'Administrador', email, password },
-    rate: Number(process.env.SEED_RATE ?? 60),
+    rate,
     currency: process.env.SEED_CURRENCY === 'USD' ? 'USD' : 'DOP',
   });
   console.info(`Semilla lista: organización "${org.name}" (${org.slug}), admin ${admin.email}.`);

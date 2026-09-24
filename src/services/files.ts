@@ -46,10 +46,10 @@ const safeName = (n: string) =>
 
 export const pathFor = (orgId: string, kind: FileKind, name: string) => `${orgId}/${kind}/${randomUUID()}-${safeName(name)}`;
 
-/** The org prefix of a stored URL (first path segment after the storage base). */
-export function urlBelongsToOrg(url: string, orgId: string) {
+/** True if the URL is a file of this store inside the organization's folder (path resolved by the store, so `%2F..` can't escape it). */
+export function urlBelongsToOrg(storage: Storage, url: string, orgId: string) {
   try {
-    return decodeURIComponent(new URL(url).pathname).includes(`/${orgId}/`);
+    return storage.keyOf(url)?.startsWith(`${orgId}/`) ?? false;
   } catch {
     return false;
   }
@@ -62,7 +62,7 @@ export async function registerFile(
   a: AuthContext,
   input: { projectId?: string | null; kind: FileKind; blobUrl: string; name: string },
 ): Promise<FileRow> {
-  if (!storage.owns(input.blobUrl) || !urlBelongsToOrg(input.blobUrl, a.org.id))
+  if (!urlBelongsToOrg(storage, input.blobUrl, a.org.id))
     throw unprocessable('URL_NO_PERMITIDA', 'La URL no corresponde a un archivo subido con un token de esta organización.');
   let bytes: Uint8Array;
   try {
