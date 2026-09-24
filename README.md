@@ -181,6 +181,28 @@ Son 60 pruebas de integración en `tests/`. Cada archivo levanta la app con un P
 
 La imagen incluye `HEALTHCHECK` contra `/api/v1/health`. El proceso cierra con `SIGTERM` de forma ordenada.
 
+### Respaldos y monitoreo
+
+**Respaldos automáticos.** La imagen trae `BACKUP_DIR=/data/backups`: cada 24 h (la primera, 5 minutos después de arrancar) el
+servidor guarda toda la base de datos como `planner-AAAAMMDD-HHMMSS.json.gz` en el volumen y conserva los 14 más recientes.
+Ajusta con `BACKUP_INTERVAL_HOURS` y `BACKUP_KEEP`; deja `BACKUP_DIR` vacío para apagarlo. El respaldo es lógico (JSON por
+tabla), así que no depende de la versión de Postgres.
+
+- **Respaldo manual:** en la *Console* del servicio, `node dist/backup.js` (o `npm run db:backup` en local).
+- **Copia fuera del servidor:** el respaldo y los archivos (`/data/uploads`) viven en el mismo volumen. Descarga
+  `/data/backups` y `/data/uploads` con regularidad, o activa los respaldos del volumen y de Postgres en Easypanel.
+- **Restaurar:** crea una base de datos **vacía**, apunta `DATABASE_URL` a ella y corre
+  `node dist/restore.js /data/backups/planner-AAAAMMDD-HHMMSS.json.gz`. Aplica las migraciones, se niega si la base ya
+  tiene datos e inserta todo en orden. Los archivos se restauran copiando `/data/uploads`.
+
+**Monitoreo.**
+
+- **Disponibilidad:** configura un monitor externo (UptimeRobot, Better Stack, etc.) contra `https://tudominio.com/api/v1/health`;
+  responde 503 si la base de datos no contesta. `GET /api/v1/version` dice qué versión y commit están desplegados.
+- **Errores:** los errores del servidor salen en *Easypanel → Logs* como `[error no controlado]`. Los errores de JavaScript en los
+  dispositivos de los usuarios llegan a `POST /api/v1/client-errors` y quedan en el mismo log como una línea JSON con
+  `"source":"navegador"`, la versión, la organización y el usuario. Los respaldos dejan `[respaldo]` en el log.
+
 ### Conexión con el frontend
 
 - El frontend llama a `/api/v1/*` con `credentials: 'include'`.

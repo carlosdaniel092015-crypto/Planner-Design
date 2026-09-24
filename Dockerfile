@@ -19,12 +19,13 @@ ENV NODE_ENV=production \
     PORT=3000 \
     RUN_MIGRATIONS=true \
     MIGRATIONS_DIR=/app/drizzle \
-    UPLOADS_DIR=/data/uploads
+    UPLOADS_DIR=/data/uploads \
+    BACKUP_DIR=/data/backups
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY drizzle ./drizzle
-RUN mkdir -p /data/uploads && chown -R node:node /data
+RUN mkdir -p /data/uploads /data/backups && chown -R node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 3000
