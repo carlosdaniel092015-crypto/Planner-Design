@@ -62,6 +62,9 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - Los cambios van por pull request hacia `main`. **Autorización permanente del dueño:** en cuanto el PR pase las comprobaciones
   de CI (`.github/workflows/ci.yml`), fusionarlo a `main` sin volver a preguntar (merge commit). Si CI falla, corregir y reintentar;
   nunca fusionar en rojo.
+- **Versiones de la app (semver)**: cada PR que cambie la app sube `version` en `package.json` y añade su entrada en `CHANGELOG.md`
+  (en español, lo ve el usuario en "Novedades"): parche 1.0.x correcciones · menor 1.x.0 funciones · mayor x.0.0 cambios incompatibles.
+  El frontend la muestra (`__APP_VERSION__`) y el servidor la expone en `GET /api/v1/version`.
 
 ## Despliegue
 

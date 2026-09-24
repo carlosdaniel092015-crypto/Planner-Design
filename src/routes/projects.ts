@@ -101,6 +101,7 @@ const VersionSummary = z
     note: z.string().nullable(),
     estimate: MoneySchema,
     createdBy: z.uuid().nullable(),
+    createdByName: z.string().nullable().optional().openapi({ description: 'Quién la creó (solo en el historial).' }),
     createdAt: z.iso.datetime(),
   })
   .openapi('VersionResumen');
@@ -498,7 +499,11 @@ export function projectRoutes() {
       const { db } = c.var.deps;
       const row = await getProject(db, a, c.req.valid('param').id);
       const cur = c.req.valid('query').currency;
-      return c.json({ items: (await listVersions(db, row.id)).map((v) => versionSummary(v, cur)) }, 200);
+      const rows = await listVersions(db, row.id);
+      const names = new Map(
+        (await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.organizationId, a.org.id))).map((u) => [u.id, u.name]),
+      );
+      return c.json({ items: rows.map((v) => ({ ...versionSummary(v, cur), createdByName: v.createdBy ? (names.get(v.createdBy) ?? null) : null })) }, 200);
     },
   );
 

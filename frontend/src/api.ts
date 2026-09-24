@@ -69,6 +69,16 @@ export interface Share {
   createdAt: string;
 }
 
+export interface ProjectVersion {
+  id: string;
+  version: number;
+  note: string | null;
+  estimate: Money;
+  createdBy: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+}
+
 export interface Person {
   id: string;
   name: string;
@@ -141,6 +151,10 @@ export const api = {
     request<ProjectDetail>('PUT', `/projects/${id}`, body),
   duplicateProject: (id: string) => request<ProjectDetail>('POST', `/projects/${id}/duplicate`),
   deleteProject: (id: string) => request<void>('DELETE', `/projects/${id}`),
+
+  versions: (id: string) => request<{ items: ProjectVersion[] }>('GET', `/projects/${id}/versions`),
+  createVersion: (id: string, note?: string) => request<ProjectVersion>('POST', `/projects/${id}/versions`, { note }),
+  restoreVersion: (id: string, vid: string) => request<ProjectDetail>('POST', `/projects/${id}/versions/${vid}/restore`),
 
   shares: (id: string) => request<{ owner: { userId: string; name: string; email: string; role: Role } | null; myAccess: Access; items: Share[] }>('GET', `/projects/${id}/shares`),
   share: (id: string, userId: string, access: 'ver' | 'editar') => request<Share>('PUT', `/projects/${id}/shares/${userId}`, { access }),

@@ -9,6 +9,8 @@ COPY tsconfig.json ./
 COPY scripts ./scripts
 COPY src ./src
 COPY frontend ./frontend
+# Shown in the app's "Novedades" (imported by the frontend build).
+COPY CHANGELOG.md ./
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime

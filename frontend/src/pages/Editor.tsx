@@ -24,6 +24,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, type Catalog, type CatalogMaterial, type ProjectDetail } from '../api';
 import { canCreate, canEdit, FullScreenLoader, useAuth } from '../auth';
 import { ShareDialog } from '../ShareDialog';
+import { VersionsDialog } from '../editor/VersionsDialog';
 import { BottomBar } from '../editor/BottomBar';
 import { installEngine, sceneCfg, snapshot, type Viewer } from '../editor/engine';
 import { uploadFile } from '../library/upload';
@@ -84,6 +85,7 @@ export function EditorPage() {
   const [applyTo, setApplyTo] = useState<'todo' | 'modulo'>('todo');
   const [replaceMode, setReplaceMode] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [tip, setTip] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ kind: 'saved', at: new Date().toISOString() });
   const [conflict, setConflict] = useState<Extract<SyncEvent, { type: 'conflict' }> | null>(null);
@@ -523,6 +525,9 @@ export function EditorPage() {
           <button type="button" className="btn btn-icon ed-hide-xs" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
             <Icon name="redo-2" size={18} />
           </button>
+          <button type="button" className="btn btn-icon ed-hide-xs" title="Versiones del proyecto" aria-label="Versiones" onClick={() => setVersionsOpen(true)}>
+            <Icon name="history" size={17} />
+          </button>
           <button type="button" className="btn btn-icon ed-hide-xs" title="Bibliotecas de texturas y módulos" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
             <Icon name="library" size={17} />
           </button>
@@ -559,6 +564,9 @@ export function EditorPage() {
         </button>
         <button type="button" className="btn btn-icon ed-mtool" title="Rehacer" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
           <Icon name="redo-2" size={18} />
+        </button>
+        <button type="button" className="btn btn-icon ed-mtool" title="Versiones" aria-label="Versiones" onClick={() => setVersionsOpen(true)}>
+          <Icon name="history" size={17} />
         </button>
         <button type="button" className="btn btn-icon ed-mtool" title="Bibliotecas" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
           <Icon name="library" size={17} />
@@ -828,6 +836,24 @@ export function EditorPage() {
         >
           {conflict.reason} Para que no se pierda nada, tu versión quedó guardada en el proyecto «{conflict.copyName}». Este proyecto conserva la versión del servidor.
         </Dialog>
+      )}
+      {versionsOpen && (
+        <VersionsDialog
+          projectId={pid.current}
+          canEdit={!readOnly}
+          ensureOnServer={ensureOnServer}
+          onClose={() => setVersionsOpen(false)}
+          onRestored={() => {
+            // Refresh this device's copy from the server (nothing is pending after ensureOnServer).
+            getProject(pid.current)
+              .then((r) => {
+                applyProject(r.project);
+                if (catalog) setCurrency(catalog.pricing.baseCurrency);
+                flash(`Versión restaurada · ${r.project.name}`);
+              })
+              .catch(() => flash('Versión restaurada; recarga el proyecto para verla.'));
+          }}
+        />
       )}
       {shareOpen && me && (
         <ShareDialog
