@@ -3,6 +3,13 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.6.0 · 2026-09-24
+
+### Especificaciones más flexibles
+- **Ventanas:** nueva columna «Del piso» para indicar a qué altura empieza cada ventana; se refleja en el alzado y el 3D.
+- **Instalaciones:** ahora puedes cambiar el muro y la distancia de cada punto, o tocar «Mover» y luego el muro en la planta.
+- **Preferencias:** además de las opciones rápidas, puedes escribir la altura de alacenas (30–120 cm), el zócalo (5–30 cm) y el presupuesto exacto. En closets y vestidores, los colgados y zapateras también aceptan el número escrito.
+
 ## 1.5.1 · 2026-09-24
 
 ### Correcciones (revisión completa del código)

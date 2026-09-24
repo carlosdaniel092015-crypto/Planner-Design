@@ -98,6 +98,15 @@ describe('distribución automática', () => {
     expect(p.mods.filter((m) => m.type === 'upper').every((m) => m.h === 90)).toBe(true);
   });
 
+  it('acepta una altura de alacenas escrita a mano', () => {
+    const { p } = design('cocina', 'L', (q) => {
+      q.prefs.alacena = '80 cm';
+    });
+    const uppers = p.mods.filter((m) => m.type === 'upper');
+    expect(uppers.length).toBeGreaterThan(0);
+    expect(uppers.every((m) => m.h === 80)).toBe(true);
+  });
+
   it('funciona en espacios chicos, techos bajos y sin instalaciones', () => {
     const small = design('cocina', 'L', (q) => {
       q.room = { A: 200, B: 180, H: 230 };
