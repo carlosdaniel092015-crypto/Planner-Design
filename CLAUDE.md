@@ -26,6 +26,7 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - **Errores**: lanzar `AppError` (`src/lib/errors.ts`) con `code` en MAYÚSCULAS_CON_GUIONES y `message` en español.
   La respuesta siempre es `{ error: { code, message, details? } }`.
   - 400 cuerpo mal formado · 401 sin sesión · 403 sin permiso · 404 no existe **o es de otra organización**
+  - 402 el plan de la organización no incluye la función o llegó a su límite (`PLAN_REQUERIDO`, `src/lib/plans.ts`)
   - 409 conflicto de versión o de estado · 410 enlace caducado/revocado/usado · 413 demasiado grande
   - 422 regla de negocio (proyecto con errores, archivo no válido) · 429 límite de peticiones
 - **Multi-tenant**: toda consulta filtra por `organization_id` tomado de la sesión (`c.var.auth.org.id`), nunca del cliente.

@@ -23,6 +23,20 @@ App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (siste
   - deshacer y rehacer;
   - precios en USD y DOP.
 
+### Planes y pagos
+
+Planes por organización (`src/lib/plans.ts`): **Gratis** (2 usuarios, 5 proyectos activos), **Profesional** (10 usuarios,
+proyectos ilimitados, enlace al cliente con firma, logo y color propios, CSV/DXF) y **Empresa** (todo ilimitado, auditoría y
+ajuste masivo de precios). Los límites los aplica el servidor (402 `PLAN_REQUERIDO`) **solo si Stripe está configurado**
+(`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PROFESIONAL`, `STRIPE_PRICE_EMPRESA`); sin Stripe todo está incluido.
+
+1. En Stripe crea un producto por plan con un precio mensual y copia sus `price_…`.
+2. Crea un webhook a `https://TU-DOMINIO/api/v1/billing/webhook` con `checkout.session.completed` y `customer.subscription.*`, y copia su secreto.
+3. Activa el **portal de clientes** en Stripe (cambiar plan, tarjeta, cancelar).
+4. En Administración → Plan el administrador paga con Stripe Checkout y administra su suscripción en el portal.
+
+Las organizaciones que ya existían pasan al plan Empresa con la migración, así que no pierden funciones.
+
 ### Tiendas de apps
 
 Para publicar en Play Store (Android) y App Store (iPhone) sigue [docs/TIENDAS.md](docs/TIENDAS.md). Android usa

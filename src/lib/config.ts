@@ -15,6 +15,8 @@ export interface AppConfig {
   port: number;
   /** Android app (Play Store, TWA) linked to this domain via /.well-known/assetlinks.json. */
   android: { packageName: string; sha256: string[] } | null;
+  /** Stripe billing; null = self-hosted mode without plan limits. */
+  billing: { secretKey: string; webhookSecret: string; prices: { profesional?: string; empresa?: string } } | null;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
@@ -33,6 +35,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxProjectBytes: 2 * 1024 * 1024,
     uploadsDir: env.UPLOADS_DIR ?? './.data/uploads',
     port: Number(env.PORT ?? 3000),
+    billing:
+      env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+        ? { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET, prices: { profesional: env.STRIPE_PRICE_PROFESIONAL || undefined, empresa: env.STRIPE_PRICE_EMPRESA || undefined } }
+        : null,
     android: env.ANDROID_PACKAGE_NAME
       ? {
           packageName: env.ANDROID_PACKAGE_NAME.trim(),

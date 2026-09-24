@@ -8,6 +8,7 @@ import { afterCursor, page, paginationQuery } from '../lib/pagination';
 import { assertCan } from '../lib/permissions';
 import { requireAuth } from '../services/auth';
 import { getFile } from '../services/files';
+import { requireFeature } from '../lib/plans';
 
 const DEFAULT_TERMS = 'Acepto la distribución, materiales, medidas y el presupuesto estimado.';
 
@@ -67,6 +68,7 @@ export function organizationRoutes() {
       assertCan(a.user, 'org:manage');
       const { db } = c.var.deps;
       const input = c.req.valid('json');
+      if (input.logoFileId || input.brandColor) requireFeature(c.var.deps.config, a, 'branding');
       let logoUrl: string | null | undefined;
       if (input.logoFileId === null) logoUrl = null;
       else if (input.logoFileId) {
@@ -121,6 +123,7 @@ export function organizationRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'audit:read');
+      requireFeature(c.var.deps.config, a, 'audit');
       const { cursor, limit, entity } = c.req.valid('query');
       const rows = await c.var.deps.db
         .select({ l: auditLog, userName: users.name })

@@ -18,7 +18,8 @@ export type AuditAction =
   | 'importar'
   | 'iniciar_sesion'
   | 'compartir'
-  | 'dejar_de_compartir';
+  | 'dejar_de_compartir'
+  | 'cambiar_plan';
 
 export async function audit(
   db: DbOrTx,

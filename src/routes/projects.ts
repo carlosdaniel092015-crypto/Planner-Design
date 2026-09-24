@@ -28,6 +28,7 @@ import {
   rowValuesFrom,
   type VersionRow,
 } from '../services/projects';
+import { requireRoom } from '../lib/plans';
 
 const tags = ['Proyectos'];
 const Status = z.enum(['borrador', 'diseno', 'enviado', 'cambios_solicitados', 'aprobado']).openapi('EstadoProyecto');
@@ -287,6 +288,7 @@ export function projectRoutes() {
           return c.json(await detail(db, a, prev), 200);
         }
       }
+      await requireRoom(db, c.var.deps.config, a, 'activeProjects');
       const data: ProjectData = input.data ? parseProjectData(input.data) : parseProjectData(newProject(input.ptype ?? 'cocina', input.name));
       if (input.name) data.pname = input.name;
       await assertClient(db, a.org.id, input.clientId);
@@ -401,6 +403,7 @@ export function projectRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'project:create');
+      await requireRoom(c.var.deps.db, c.var.deps.config, a, 'activeProjects');
       const { db } = c.var.deps;
       const row = await db.transaction(async (tx) => {
         const src = await getProject(tx, a, c.req.valid('param').id);

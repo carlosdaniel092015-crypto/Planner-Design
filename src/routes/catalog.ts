@@ -24,6 +24,7 @@ import {
 } from '../services/catalog-admin';
 import { loadPricingContext, settingsOf } from '../services/catalog';
 import type { Db } from '../db/client';
+import { requireFeature } from '../lib/plans';
 
 const Any = z.record(z.string(), z.unknown());
 const Items = z.object({ items: z.array(Any) });
@@ -238,6 +239,7 @@ export function catalogRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'pricing:write');
+      requireFeature(c.var.deps.config, a, 'bulkPrices');
       const { db } = c.var.deps;
       const dryRun = c.req.valid('query').dryRun === 'true';
       const { scope, category, percent } = c.req.valid('json');

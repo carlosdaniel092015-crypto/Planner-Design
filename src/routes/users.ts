@@ -8,6 +8,7 @@ import { assertCan } from '../lib/permissions';
 import { issueVerificationToken, requireAuth } from '../services/auth';
 import { templates } from '../services/mailer';
 import { RoleSchema } from './auth';
+import { requireRoom } from '../lib/plans';
 
 const UserSchema = z
   .object({
@@ -98,6 +99,7 @@ export function userRoutes() {
     const a = requireAuth(c);
     assertCan(a.user, 'user:manage');
     const { db, mailer, config } = c.var.deps;
+    await requireRoom(db, config, a, 'users');
     const input = c.req.valid('json');
     const email = input.email.trim().toLowerCase();
     const [dup] = await db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, email)).limit(1);

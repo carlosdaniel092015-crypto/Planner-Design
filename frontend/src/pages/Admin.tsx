@@ -7,7 +7,7 @@ import { uploadFile } from '../library/upload';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, useToast } from '../ui';
 
-type Tab = 'organizacion' | 'usuarios' | 'precios' | 'catalogo' | 'clientes' | 'auditoria';
+type Tab = 'plan' | 'organizacion' | 'usuarios' | 'precios' | 'catalogo' | 'clientes' | 'auditoria';
 const ROLE: Record<Role, string> = { admin: 'Administrador', disenador: 'Diseñador', taller: 'Taller', lectura: 'Solo lectura' };
 const errText = (e: unknown) => (isNetworkError(e) ? 'Sin conexión: la administración necesita internet.' : e instanceof ApiError ? e.message : 'No se pudo completar.');
 
@@ -19,6 +19,7 @@ export function AdminPage() {
   const isAdmin = me?.user.role === 'admin';
   const tabs: { k: Tab; label: string; icon: string; admin?: boolean }[] = [
     { k: 'organizacion', label: 'Organización', icon: 'building-2', admin: true },
+    { k: 'plan', label: 'Plan', icon: 'gem', admin: true },
     { k: 'usuarios', label: 'Usuarios', icon: 'users', admin: true },
     { k: 'precios', label: 'Precios', icon: 'banknote', admin: true },
     { k: 'catalogo', label: 'Catálogo', icon: 'package', admin: true },
@@ -64,6 +65,7 @@ export function AdminPage() {
         <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
           <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 24px 64px' }} className="adm-main">
             {tab === 'organizacion' && <OrgTab flash={flash} onSaved={(o) => me && setMe({ ...me, organization: { ...me.organization, name: o.name, logoUrl: o.logoUrl, brandColor: o.brandColor } })} />}
+            {tab === 'plan' && <PlanTab flash={flash} paid={params.get('pago') === 'ok'} />}
             {tab === 'usuarios' && <UsersTab flash={flash} meId={me?.user.id ?? ''} />}
             {tab === 'precios' && <PricingTab flash={flash} />}
             {tab === 'catalogo' && <CatalogTab flash={flash} />}
@@ -785,6 +787,111 @@ function AuditTab() {
           Ver más
         </button>
       )}
+    </Section>
+  );
+}
+
+// ---------- Plan ----------
+interface Billing {
+  enabled: boolean;
+  plan: 'gratis' | 'profesional' | 'empresa';
+  effectivePlan: 'gratis' | 'profesional' | 'empresa';
+  status: string | null;
+  renewsAt: string | null;
+  canManage: boolean;
+  usage: { users: number; activeProjects: number };
+  plans: { key: 'gratis' | 'profesional' | 'empresa'; name: string; users: number | null; activeProjects: number | null; highlights: string[]; price: string | null; available: boolean }[];
+}
+const STATUS_TXT: Record<string, string> = { active: 'activo', trialing: 'en prueba', past_due: 'pago pendiente', canceled: 'cancelado', unpaid: 'sin pagar', incomplete: 'pago incompleto' };
+// Apple (guideline 3.1.1): the iPhone app must not sell subscriptions outside in-app purchase, so it only shows the plan.
+const inIosApp = () => (window as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'ios';
+
+function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean }) {
+  const { data: raw, error } = useLoad<Billing>('/billing');
+  const data = raw && inIosApp() ? { ...raw, canManage: false } : raw;
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!data) return <Err error={error} />;
+  const go = async (path: string, body?: unknown) => {
+    setBusy(path);
+    try {
+      const { url } = await request<{ url: string }>('POST', path, body);
+      window.location.href = url;
+    } catch (e) {
+      flash(errText(e));
+      setBusy(null);
+    }
+  };
+  const cur = data.plans.find((p) => p.key === data.effectivePlan);
+  const bar = (label: string, used: number, limit: number | null) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200, flex: 1 }}>
+      <span style={{ fontSize: 13 }}>
+        {label}: <strong>{used}</strong> {limit == null ? '(ilimitado)' : `de ${limit}`}
+      </span>
+      {limit != null && (
+        <div style={{ height: 6, background: 'var(--color-neutral-300)' }}>
+          <div style={{ height: 6, width: `${Math.min(100, (used / limit) * 100)}%`, background: used >= limit ? 'var(--color-accent-700)' : 'var(--color-accent)' }} />
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <Section
+      title="Plan"
+      lead={data.enabled ? 'Elige el plan de tu organización. El pago es seguro con Stripe; puedes cambiarlo o cancelarlo cuando quieras.' : 'Los cobros no están configurados en este servidor: tienes todas las funciones sin límite.'}
+      right={
+        data.enabled && data.plan !== 'gratis' && data.canManage ? (
+          <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => go('/billing/portal')}>
+            <Icon name="credit-card" />
+            Pagos y facturas
+          </button>
+        ) : undefined
+      }
+    >
+      {raw && inIosApp() && raw.canManage && <p style={{ fontSize: 14 }}>Para cambiar el plan entra a Planner desde el navegador.</p>}
+      {paid && <p style={{ fontSize: 14, background: 'var(--color-accent-100)', padding: '10px 12px' }}>¡Gracias! En cuanto Stripe confirme el pago verás el plan nuevo aquí (puede tardar unos segundos; recarga la página).</p>}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
+        <span style={{ fontSize: 15 }}>
+          Plan actual: <strong>{cur?.name}</strong>
+          {data.status && ` · ${STATUS_TXT[data.status] ?? data.status}`}
+          {data.renewsAt && data.status !== 'canceled' && ` · se renueva el ${new Date(data.renewsAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+        </span>
+        {data.plan !== data.effectivePlan && <span style={{ fontSize: 13, color: 'var(--color-accent-700)' }}>El pago está pendiente: mientras tanto aplican los límites del plan Gratis.</span>}
+      </div>
+      {data.enabled && (
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 22 }}>
+          {bar('Usuarios', data.usage.users, cur?.users ?? null)}
+          {bar('Proyectos activos', data.usage.activeProjects, cur?.activeProjects ?? null)}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
+        {data.plans.map((p) => {
+          const current = p.key === data.effectivePlan;
+          return (
+            <div key={p.key} style={{ border: `2px solid ${current ? 'var(--color-accent)' : 'var(--color-divider)'}`, background: 'var(--color-surface)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: 20 }}>{p.name}</strong>
+                {current && <span className="tag tag-accent">Actual</span>}
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>{p.price ?? (data.enabled ? 'Precio por configurar' : '—')}</span>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                {p.highlights.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ul>
+              {data.enabled && data.canManage && !current && p.key !== 'gratis' && (
+                <button type="button" className="btn btn-primary" disabled={!p.available || !!busy} onClick={() => go('/billing/checkout', { plan: p.key })}>
+                  {p.available ? `Cambiar a ${p.name}` : 'No disponible'}
+                </button>
+              )}
+              {data.enabled && data.canManage && !current && p.key === 'gratis' && data.plan !== 'gratis' && (
+                <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => go('/billing/portal')}>
+                  Cancelar plan de pago
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </Section>
   );
 }

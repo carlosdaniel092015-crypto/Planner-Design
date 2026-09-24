@@ -19,6 +19,7 @@ import {
 } from '../services/auth';
 import { templates } from '../services/mailer';
 import { sha256 } from '../lib/crypto';
+import { brandingAllowed } from '../lib/plans';
 
 export const RoleSchema = z.enum(['admin', 'disenador', 'taller', 'lectura']).openapi('Rol');
 
@@ -199,7 +200,10 @@ export function meRoutes() {
   const r = router();
   r.openapi(meRoute, (c) => {
     const a = requireAuth(c);
-    return c.json(toMe(a.user, a.org), 200);
+    const me = toMe(a.user, a.org);
+    // PDFs use these; without the branding feature they fall back to Planner's look.
+    if (!brandingAllowed(c.var.deps.config, a.org)) me.organization = { ...me.organization, logoUrl: null, brandColor: null };
+    return c.json(me, 200);
   });
   return r;
 }

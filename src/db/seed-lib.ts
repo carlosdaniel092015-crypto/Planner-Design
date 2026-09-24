@@ -31,6 +31,8 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
           name: o.orgName,
           slug: o.slug,
           brandColor: '#ec3013',
+          // The installation's own organisation has every feature.
+          plan: 'empresa',
           baseCurrency: currency,
           exchangeRateDopPerUsd: rate,
           rateUpdatedAt: new Date(),

@@ -3,6 +3,14 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.4.0 · 2026-09-24
+
+### Planes y pagos
+- Planes por organización: **Gratis** (2 usuarios, 5 proyectos activos), **Profesional** (10 usuarios, proyectos ilimitados, enlace al cliente con firma, tu logo y color, CSV y DXF) y **Empresa** (todo ilimitado, auditoría y ajuste masivo de precios).
+- Pago seguro con **Stripe** desde Administración → Plan, y portal para tarjeta, facturas, cambiar o cancelar.
+- Sin Stripe configurado no hay límites. Las organizaciones existentes quedan en el plan Empresa.
+- Si un proyecto creado sin conexión no cabe en el plan, queda guardado en el dispositivo y se avisa.
+
 ## 1.3.0 · 2026-09-24
 
 ### Tiendas de apps
