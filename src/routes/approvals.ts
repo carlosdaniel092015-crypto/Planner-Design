@@ -10,6 +10,7 @@ import { approveInternal, createApprovalLink, decidePublic, resolveLink, revokeL
 import { requireAuth } from '../services/auth';
 import { cutlistDxf, slug } from '../services/exports';
 import { getProject, parseProjectData, pricingFor, snapshotOf } from '../services/projects';
+import { brandingAllowed, requireFeature } from '../lib/plans';
 
 const Link = z
   .object({
@@ -97,6 +98,7 @@ export function approvalRoutes() {
     }),
     async (c) => {
       const a = requireAuth(c);
+      requireFeature(c.var.deps.config, a, 'clientLinks');
       const { id } = c.req.valid('param');
       const p = await getProject(c.var.deps.db, a, id);
       assertCan(a.user, 'project:send', { access: p.access });
@@ -166,6 +168,7 @@ export function approvalRoutes() {
     const { db } = c.var.deps;
     const row = await getProject(db, a, c.req.valid('param').id);
     assertCan(a.user, 'project:export', { access: row.access, status: row.status });
+    requireFeature(c.var.deps.config, a, 'exports');
     const { ctx } = await pricingFor(db, a, row);
     const csv = cutlistCsv(corte(parseProjectData(row.data), ctx.materials));
     return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="lista-de-corte-${slug(row.name)}.csv"` });
@@ -176,6 +179,7 @@ export function approvalRoutes() {
     const { db } = c.var.deps;
     const row = await getProject(db, a, c.req.valid('param').id);
     assertCan(a.user, 'project:export', { access: row.access, status: row.status });
+    requireFeature(c.var.deps.config, a, 'exports');
     const { ctx } = await pricingFor(db, a, row);
     const dxf = cutlistDxf(corte(parseProjectData(row.data), ctx.materials), row.name);
     return c.body(dxf, 200, { 'Content-Type': 'application/dxf', 'Content-Disposition': `attachment; filename="piezas-${slug(row.name)}.dxf"` });
@@ -234,7 +238,10 @@ export function publicRoutes() {
       const settings = (org!.settings ?? {}) as { aprobacion?: { terminos?: string } };
       return c.json(
         {
-          organization: { name: org!.name, logoUrl: org!.logoUrl, brandColor: org!.brandColor, terms: settings.aprobacion?.terminos ?? 'Acepto la distribución, materiales, medidas y el presupuesto estimado.' },
+          organization: {
+            name: org!.name,
+            // The client page only carries the organisation's branding on plans that include it.
+            ...(brandingAllowed(c.var.deps.config, org!) ? { logoUrl: org!.logoUrl, brandColor: org!.brandColor } : { logoUrl: null, brandColor: null }), terms: settings.aprobacion?.terminos ?? 'Acepto la distribución, materiales, medidas y el presupuesto estimado.' },
           project: { name: row.name, type: data.ptype, client: data.client?.nombre ?? null, version: version.version },
           views: projectFiles.filter((f) => f.kind === 'render').map((f) => ({ name: f.name, url: f.variants.view2k ?? f.blobUrl, thumb: f.variants.thumb ?? null })),
           plan: plan(data) as unknown as Record<string, unknown>,

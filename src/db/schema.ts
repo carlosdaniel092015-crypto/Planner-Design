@@ -61,6 +61,13 @@ export const organizations = pgTable('organizations', {
   marginRate: numeric('margin_rate', { precision: 5, scale: 4, mode: 'number' }).notNull().default(0),
   rounding: text('rounding', { enum: ['ninguno', 'unidad', 'decena', 'centena'] }).notNull().default('ninguno'),
   settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+  /** Subscription plan (src/lib/plans.ts). Limits only apply when billing (Stripe) is configured. */
+  plan: text('plan', { enum: ['gratis', 'profesional', 'empresa'] }).notNull().default('gratis'),
+  /** Stripe subscription status: active, trialing, past_due, canceled… (null = never subscribed). */
+  planStatus: text('plan_status'),
+  planRenewsAt: ts('plan_renews_at'),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
   ...timestamps,
 });
 

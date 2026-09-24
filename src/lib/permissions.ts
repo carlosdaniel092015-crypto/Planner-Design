@@ -26,7 +26,8 @@ export type Action =
   | 'file:write'
   | 'file:delete'
   | 'audit:read'
-  | 'org:manage';
+  | 'org:manage'
+  | 'billing:manage';
 
 export interface Actor {
   id: string;

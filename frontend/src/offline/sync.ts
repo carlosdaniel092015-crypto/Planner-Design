@@ -27,6 +27,8 @@ interface OutboxEntry {
   at: string;
   /** clientRef of the conflict copy, stored before the request so a retry reuses it. */
   copyRef?: string;
+  /** The server refused it for the plan (402): kept on the device, retried once per app start. */
+  blocked?: string;
 }
 
 export interface SyncStatus {
@@ -74,9 +76,17 @@ export function startSync(uid: string) {
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
   interval = setInterval(() => schedule(0), 30_000);
-  void recoverDrafts(uid)
+  void unblock()
+    .then(() => recoverDrafts(uid))
     .then(refreshPending)
     .then(() => schedule(300));
+}
+
+/** Entries refused for the plan get another chance on each app start (the plan may have been upgraded). */
+async function unblock() {
+  await locked(async (d) => {
+    for (const e of await d.all<OutboxEntry>('outbox')) if (e.blocked) await d.put('outbox', e.projectId, { ...e, blocked: undefined });
+  });
 }
 
 // ---------- unload safety net ----------
@@ -481,6 +491,7 @@ export async function syncNow(): Promise<void> {
     const d = await D();
     const entries = (await d.all<OutboxEntry>('outbox')).sort((a, b) => a.at.localeCompare(b.at));
     for (const e of entries) {
+      if (e.blocked) continue;
       try {
         await push(e);
         backoff = 0;
@@ -494,6 +505,15 @@ export async function syncNow(): Promise<void> {
           backoff = Math.min(backoff ? backoff * 2 : 5000, 120_000);
           schedule(backoff);
           break;
+        }
+        if (err instanceof ApiError && err.status === 402) {
+          // Plan limit: keep the work on this device, stop retrying until the app restarts (or the plan changes).
+          await locked(async (dd) => {
+            const cur = await dd.get<OutboxEntry>('outbox', e.projectId);
+            if (cur) await dd.put('outbox', e.projectId, { ...cur, blocked: err.message });
+          });
+          emit({ type: 'dropped', projectId: e.projectId, message: `${err.message} Tu trabajo sigue guardado en este dispositivo.` });
+          continue;
         }
         console.warn('sync', err);
       }
