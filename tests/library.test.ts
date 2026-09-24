@@ -1,4 +1,6 @@
 import { Document, NodeIO } from '@gltf-transform/core';
+import { create } from 'openskp';
+import { strToU8, zipSync } from 'fflate';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { API, setup, type Ctx, type TestUser } from './helpers';
@@ -19,6 +21,61 @@ async function upload(user: TestUser, kind: string, name: string, bytes: Uint8Ar
   expect(put.status).toBe(201);
   const { url } = (await put.json()) as { url: string };
   return t.req('POST', '/files', { user, body: { kind, blobUrl: url, name, projectId } });
+}
+
+/** Minimal .3ds: one 60 × 60 × 76 cm box (Z-up, centimetres) with a textured material. */
+function tds(texture?: string) {
+  const chunk = (id: number, ...parts: Uint8Array[]) => {
+    const len = 6 + parts.reduce((n, p) => n + p.length, 0);
+    const out = new Uint8Array(len);
+    const dv = new DataView(out.buffer);
+    dv.setUint16(0, id, true);
+    dv.setUint32(2, len, true);
+    let o = 6;
+    for (const p of parts) out.set(p, (o += p.length) - p.length);
+    return out;
+  };
+  const cstr = (s: string) => new Uint8Array([...new TextEncoder().encode(s), 0]);
+  const nums = (kind: 'u16' | 'u32' | 'f32', xs: number[]) => {
+    const size = kind === 'u16' ? 2 : 4;
+    const out = new Uint8Array(xs.length * size);
+    const dv = new DataView(out.buffer);
+    xs.forEach((x, i) => (kind === 'u16' ? dv.setUint16(i * 2, x, true) : kind === 'u32' ? dv.setUint32(i * 4, x, true) : dv.setFloat32(i * 4, x, true)));
+    return out;
+  };
+  const [x, y, z] = [60, 60, 76];
+  const v = [0, 0, 0, x, 0, 0, x, y, 0, 0, y, 0, 0, 0, z, x, 0, z, x, y, z, 0, y, z];
+  const tris = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5];
+  const faces: number[] = [];
+  for (let i = 0; i < tris.length; i += 3) faces.push(tris[i]!, tris[i + 1]!, tris[i + 2]!, 0);
+  const mat = chunk(
+    0xafff,
+    chunk(0xa000, cstr('Frente')),
+    chunk(0xa020, chunk(0x0011, new Uint8Array([200, 30, 20]))),
+    ...(texture ? [chunk(0xa200, chunk(0xa300, cstr(texture)))] : []),
+  );
+  const mesh = chunk(
+    0x4100,
+    chunk(0x4110, nums('u16', [8]), nums('f32', v)),
+    chunk(0x4140, nums('u16', [8]), nums('f32', [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1])),
+    chunk(0x4120, nums('u16', [12]), nums('u16', faces), chunk(0x4130, cstr('Frente'), nums('u16', [12, ...Array.from({ length: 12 }, (_, i) => i)]))),
+  );
+  return chunk(0x4d4d, chunk(0x0002, nums('u32', [3])), chunk(0x3d3d, mat, chunk(0x4000, cstr('caja'), mesh)));
+}
+
+/** SketchUp file (inches, Z-up) with a 60 × 60 × 76 cm box painted "Frente". */
+function skp() {
+  const b = create();
+  const red = b.addMaterial('Frente', [200, 30, 20]);
+  const [x, y, z] = [60 / 2.54, 60 / 2.54, 76 / 2.54];
+  const f = (pts: number[][]) => b.addFace(pts as never, { material: red });
+  f([[0, 0, 0], [0, y, 0], [x, y, 0], [x, 0, 0]]);
+  f([[0, 0, z], [x, 0, z], [x, y, z], [0, y, z]]);
+  f([[0, 0, 0], [x, 0, 0], [x, 0, z], [0, 0, z]]);
+  f([[0, y, 0], [0, y, z], [x, y, z], [x, y, 0]]);
+  f([[0, 0, 0], [0, 0, z], [0, y, z], [0, y, 0]]);
+  f([[x, 0, 0], [x, y, 0], [x, y, z], [x, 0, z]]);
+  return b.toBytes();
 }
 
 const png = async (w: number, h: number, rgb: [number, number, number]) =>
@@ -140,6 +197,41 @@ describe('biblioteca', () => {
     expect(mod.data.module.modelFileId).not.toBe(f.data.id); // Draco-compressed copy
     const again = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: mod.data.module.modelFileId } });
     expect(again.data.materials).toEqual(['Frente', 'Cuerpo']);
+  });
+
+  it('un .skp de SketchUp se convierte a GLB con medidas y materiales', async () => {
+    const f = await upload(dis, 'modelo3d', 'mueble.skp', skp(), 'application/octet-stream');
+    expect(f.status, JSON.stringify(f.data)).toBe(201);
+    expect(f.data).toMatchObject({ contentType: 'model/gltf-binary', meta: { format: 'glb', source: 'skp', sourceName: 'mueble.skp' } });
+    expect(f.data.variants.original).not.toBe(f.data.url);
+    const ins = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: f.data.id } });
+    expect(ins.status).toBe(200);
+    expect(ins.data.bbox).toEqual({ w: 60, h: 76, d: 60 });
+    expect(ins.data.materials).toContain('Frente');
+  });
+
+  it('un .3ds (suelto o en ZIP con su textura) se convierte a GLB', async () => {
+    const f = await upload(dis, 'modelo3d', 'mueble.3ds', tds('roble.png'), 'application/octet-stream');
+    expect(f.status, JSON.stringify(f.data)).toBe(201);
+    expect(f.data.meta).toMatchObject({ format: 'glb', source: '3ds' });
+    expect(f.data.meta.warnings.join(' ')).toMatch(/centímetros.*|Falta la textura "roble.png"/);
+    const ins = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: f.data.id } });
+    expect(ins.data).toMatchObject({ bbox: { w: 60, h: 76, d: 60 }, materials: ['Frente'], triangles: 12, textures: [] });
+
+    const zip = zipSync({ 'modelo/mueble.3ds': tds('ROBLE.PNG'), 'modelo/texturas/roble.png': await png(8, 8, [150, 110, 70]), 'modelo/leeme.txt': strToU8('hola') });
+    const z = await upload(dis, 'modelo3d', 'mueble.zip', zip, 'application/zip');
+    expect(z.status, JSON.stringify(z.data)).toBe(201);
+    const insZ = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: z.data.id } });
+    expect(insZ.data.textures).toHaveLength(1);
+    expect(z.data.meta.warnings.join(' ')).not.toMatch(/Falta la textura/);
+  });
+
+  it('un .3ds dañado responde 422 al subirlo', async () => {
+    const bad = tds().slice(0, 40);
+    new DataView(bad.buffer).setUint32(2, 40, true);
+    const f = await upload(dis, 'modelo3d', 'roto.3ds', bad, 'application/octet-stream');
+    expect(f.status).toBe(422);
+    expect(f.data.error.code).toBe('MODELO_INVALIDO');
   });
 
   it('un modelo no válido responde 422 con mensaje claro', async () => {
