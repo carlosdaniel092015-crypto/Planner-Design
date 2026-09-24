@@ -60,7 +60,7 @@ export function BottomBar(props: {
   return (
     <div style={{ borderTop: '2px solid var(--color-divider)', background: 'var(--color-bg)', flex: 'none' }}>
       {valOpen && (
-        <div style={{ maxHeight: 200, overflow: 'auto', padding: '8px 16px', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '0 24px', borderBottom: '1px solid var(--color-divider)' }}>
+        <div className="bb-issues" style={{ maxHeight: 200, overflow: 'auto', padding: '8px 16px', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '0 24px', borderBottom: '1px solid var(--color-divider)' }}>
           {sorted.map((v, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid color-mix(in srgb,var(--color-divider) 50%,transparent)', fontSize: 13 }}>
               <Icon name={ICON[v.st][0]} size={17} style={{ color: ICON[v.st][1], flex: 'none' }} />

@@ -1,4 +1,4 @@
-import { DEFAULT_MATERIALS, iso, newProject, type ProjectKind } from '@core';
+import { DEFAULT_MATERIALS, iso, newProject, type ProjectData, type ProjectKind } from '@core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
@@ -19,7 +19,16 @@ const TYPES: { k: ProjectKind; name: string; kicker: string; desc: string }[] = 
   { k: 'vestidor', name: 'Vestidor', kicker: 'Abierto · en U', desc: 'Módulos abiertos con isla cajonera e iluminación integrada.' },
 ];
 
-const art = (k: ProjectKind, ang = 45, pad = 10) => iso(newProject(k), MATERIALS, { ang, pad, altos: true });
+// Same look as the Claude Design prototype's home: each type drawn in its own finishes, closets without the door.
+const ART_MATS: Record<ProjectKind, ProjectData['mats']> = {
+  cocina: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' },
+  closet: { cuerpo: 'blanco', frentes: 'blanco', encimera: 'cuarzo', jaladeras: 'laton' },
+  vestidor: { cuerpo: 'nogal', frentes: 'nogal', encimera: 'cuarzo', jaladeras: 'laton' },
+};
+const art = (k: ProjectKind, ang = 45, pad = 10) => {
+  const p = newProject(k);
+  return iso({ ...p, mats: ART_MATS[k], ops: k === 'cocina' ? p.ops : [] }, MATERIALS, { ang, pad, altos: true });
+};
 
 export function HomePage() {
   const { me } = useAuth();
@@ -134,13 +143,13 @@ export function HomePage() {
           <div className="home-types" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 24, marginTop: 28 }}>
             {TYPES.map((t) => (
               <button type="button" key={t.k} className="type-card" onClick={() => create(t.k)} disabled={!!creating} style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', background: 'var(--color-surface)', border: '2px solid transparent', padding: 0, cursor: 'pointer', color: 'var(--color-text)', font: 'inherit' }}>
-                <div style={{ aspectRatio: '4/3', background: 'var(--sp-canvas)', width: '100%', overflow: 'hidden' }}>
+                <div className="type-art" style={{ aspectRatio: '4/3', background: 'var(--sp-canvas)', width: '100%', overflow: 'hidden' }}>
                   <Svg drawing={arts[t.k] ?? null} />
                 </div>
-                <div style={{ padding: '18px 20px 20px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: '2px solid var(--color-divider)' }}>
+                <div className="type-body" style={{ padding: '18px 20px 20px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: '2px solid var(--color-divider)' }}>
                   <span style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--color-accent-700)', fontWeight: 600 }}>{t.kicker}</span>
-                  <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.015em' }}>{t.name}</span>
-                  <span style={{ fontSize: 14, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)', minHeight: 44 }}>{t.desc}</span>
+                  <span className="type-name" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.015em' }}>{t.name}</span>
+                  <span className="type-desc" style={{ fontSize: 14, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)', minHeight: 44 }}>{t.desc}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 14, color: 'var(--color-accent-700)', marginTop: 6 }}>
                     {creating === t.k ? 'Creando…' : 'Empezar'}
                     <Icon name="arrow-right" />
@@ -309,9 +318,20 @@ export function HomePage() {
         @media (max-width: 900px){
           .home{padding:28px 16px 56px!important}
           .home-hero{grid-template-columns:minmax(0,1fr)!important}
-          .home-hero h1{font-size:38px!important}
-          .home-types{grid-template-columns:minmax(0,1fr)!important}
+          .home-hero h1{font-size:32px!important}
+          .home-hero p{font-size:14px!important}
+          .home-types{grid-template-columns:minmax(0,1fr)!important;gap:12px!important;margin-top:20px!important}
+          /* Phones: compact rows (drawing on the left, text on the right) instead of a full-screen card each */
+          .type-card{flex-direction:row!important;align-items:stretch}
+          .type-art{width:42%!important;aspect-ratio:auto!important;min-height:120px;flex:none}
+          .type-body{border-top:0!important;border-left:2px solid var(--color-divider);padding:12px 14px!important;gap:4px!important;justify-content:center;min-width:0}
+          .type-name{font-size:20px!important}
+          .type-desc{min-height:0!important;font-size:13px!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
           .home-proto,.sync-label,.install-label{display:none!important}
+        }
+        @media (max-width: 560px){
+          .brand-name{display:none!important}
+          header{gap:8px!important;padding:0 10px!important}
           .proj-row{grid-template-columns:96px minmax(0,1fr) 44px}
           .proj-row>*:nth-child(3),.proj-row>*:nth-child(4){display:none}
           .proj-row>*:nth-child(5) .btn-secondary{display:none}

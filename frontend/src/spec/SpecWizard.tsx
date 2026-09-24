@@ -565,9 +565,11 @@ export function SpecWizard(props: {
             Anterior
           </button>
           <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 13, color: MUTED }}>Paso {st} de 6</span>
-          <button type="button" className="btn btn-primary" onClick={() => (st < 6 ? setStep(st + 1) : props.onGenerate())} disabled={st === 6 && readOnly} style={{ height: 44, padding: '0 18px', minWidth: 160, justifyContent: 'space-between' }}>
-            {st < 6 ? 'Siguiente' : 'Generar distribución'}
+          <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap' }} className="spec-count">
+            {st} / 6
+          </span>
+          <button type="button" className="btn btn-primary spec-next" onClick={() => (st < 6 ? setStep(st + 1) : props.onGenerate())} disabled={st === 6 && readOnly} style={{ height: 44, padding: '0 18px', minWidth: 160, justifyContent: 'space-between', whiteSpace: 'nowrap' }}>
+            {st < 6 ? 'Siguiente' : 'Generar'}
             <Icon name="arrow-right" />
           </button>
         </div>
@@ -599,6 +601,7 @@ export function SpecWizard(props: {
         .ops-row{display:grid;grid-template-columns:minmax(0,1.3fr) 64px repeat(3,minmax(0,1fr)) 36px;gap:8px}
         .pt-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 36px;gap:8px}
         @media (max-width: 1100px){.spec-grid{grid-template-columns:minmax(0,1fr)!important}.spec-aside{display:none!important}}
+        @media (max-width: 560px){.spec-next{min-width:0!important;flex:1;max-width:220px}.spec-pad .btn-secondary{padding:0 12px!important}}
         @media (max-width: 760px){.spec-pad{padding-left:16px!important;padding-right:16px!important}.grid-3,.grid-2{grid-template-columns:minmax(0,1fr)!important}.step-name{display:none}}
       `}</style>
     </div>
