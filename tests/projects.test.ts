@@ -75,6 +75,17 @@ describe('proyectos', () => {
     expect(missing.status).toBe(428);
   });
 
+  it('la portada solo acepta archivos de la organización', async () => {
+    const p = (await t.req('POST', '/projects', { user: d1, body: {} })).data;
+    const bad = await t.req('PUT', `/projects/${p.id}`, { user: d1, body: { version: p.version, data: p.data, coverUrl: 'https://tracker.example.com/pixel.jpg' } });
+    expect(bad.status).toBe(422);
+    expect(bad.data.error.code).toBe('PORTADA_NO_VALIDA');
+    const own = `http://localhost:3000/api/v1/storage/${t.orgA.id}/miniatura/abc-portada.jpg`;
+    const ok = await t.req('PUT', `/projects/${p.id}`, { user: d1, body: { version: p.version, data: p.data, coverUrl: own } });
+    expect(ok.status, JSON.stringify(ok.data)).toBe(200);
+    expect(ok.data.coverUrl).toBe(own);
+  });
+
   it('pasar a fase 3 crea una versión con snapshot de precios', async () => {
     const p = (await t.req('POST', '/projects', { user: d1, body: { data: DEFAULT_KITCHEN } })).data;
     await t.req('PUT', `/projects/${p.id}`, { user: d1, body: { version: 1, phase: 3, data: DEFAULT_KITCHEN } });

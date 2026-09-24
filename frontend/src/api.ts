@@ -100,7 +100,7 @@ export const api = {
   listProjects: () => request<{ items: ProjectSummary[]; nextCursor: string | null }>('GET', '/projects?limit=100'),
   createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData }) => request<ProjectDetail>('POST', '/projects', body),
   getProject: (id: string) => request<ProjectDetail>('GET', `/projects/${id}`),
-  saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; phase?: number; data: ProjectData }) => request<ProjectDetail>('PUT', `/projects/${id}`, body),
+  saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; phase?: number; coverUrl?: string | null; data: ProjectData }) => request<ProjectDetail>('PUT', `/projects/${id}`, body),
   duplicateProject: (id: string) => request<ProjectDetail>('POST', `/projects/${id}/duplicate`),
   deleteProject: (id: string) => request<void>('DELETE', `/projects/${id}`),
 

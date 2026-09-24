@@ -24,7 +24,8 @@ import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api, type Catalog, type CatalogMaterial, type ProjectDetail } from '../api';
 import { canEdit, FullScreenLoader, useAuth } from '../auth';
 import { BottomBar } from '../editor/BottomBar';
-import { installEngine, sceneCfg, type Viewer } from '../editor/engine';
+import { installEngine, sceneCfg, snapshot, type Viewer } from '../editor/engine';
+import { uploadFile } from '../library/upload';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
@@ -84,6 +85,10 @@ export function EditorPage() {
   const version = useRef(0);
   const dirty = useRef(false);
   const saving = useRef(false);
+  // Cover photo for Mis proyectos: regenerated after saves when the design changed.
+  const coverUrl = useRef<string | null>(null);
+  const coverSig = useRef('');
+  const coverBusy = useRef(false);
 
   // ---------- load ----------
   useEffect(() => {
@@ -100,6 +105,7 @@ export function EditorPage() {
         // Everything is shown in the organisation's base currency (RD$).
         setCurrency(c.pricing.baseCurrency);
         version.current = p.version;
+        if (p.coverUrl) coverSig.current = JSON.stringify([p.data.mods, p.data.mats, p.data.room, p.data.ops]);
         setSave({ kind: 'saved', at: p.updatedAt });
       })
       .catch((e) => !dead && setLoadError(e instanceof ApiError ? e.message : 'No se pudo abrir el proyecto.'));
@@ -161,7 +167,8 @@ export function EditorPage() {
       dirty.current = false;
       setSave({ kind: 'saving' });
       try {
-        const res = await api.saveProject(project.id, { version: overrideVersion ?? version.current, name: name.trim() || data.pname, currency, phase, data: { ...data, pname: name.trim() || data.pname } });
+        const res = await api.saveProject(project.id, { version: overrideVersion ?? version.current, name: name.trim() || data.pname, currency, phase, ...(coverUrl.current ? { coverUrl: coverUrl.current } : {}), data: { ...data, pname: name.trim() || data.pname } });
+        coverUrl.current = null;
         version.current = res.version;
         setProject((p) => (p ? { ...p, ...res, data: p.data } : res));
         setSave(dirty.current ? { kind: 'dirty' } : { kind: 'saved', at: res.updatedAt });
@@ -189,6 +196,32 @@ export function EditorPage() {
     const t = setTimeout(() => doSave(), 2000);
     return () => clearTimeout(t);
   }, [save, doSave, readOnly, conflict]);
+
+  // After a save, refresh the cover if the design changed (small offscreen 3D photo, uploaded as a miniatura).
+  useEffect(() => {
+    if (save.kind !== 'saved' || readOnly || !project || !data?.mods.length || coverBusy.current) return;
+    const sig = JSON.stringify([data.mods, data.mats, data.room, data.ops]);
+    if (sig === coverSig.current) return;
+    const t = setTimeout(async () => {
+      coverBusy.current = true;
+      coverSig.current = sig;
+      try {
+        const url = await snapshot(sceneCfg(data, { sel: null, cotas: false, altos: true, dark: false }), { w: 480, h: 300 });
+        if (!url) return;
+        const bin = atob(url.slice(url.indexOf(',') + 1));
+        const blob = new Blob([Uint8Array.from(bin, (ch) => ch.charCodeAt(0))], { type: 'image/jpeg' });
+        const up = await uploadFile('miniatura', blob, 'portada.jpg', project.id);
+        coverUrl.current = up.url;
+        dirty.current = true;
+        setSave({ kind: 'dirty' });
+      } catch {
+        // A missing cover is cosmetic: Mis proyectos falls back to the drawing.
+      } finally {
+        coverBusy.current = false;
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [save, readOnly, project, data]);
 
   // Warn before leaving with unsaved changes.
   useEffect(() => {

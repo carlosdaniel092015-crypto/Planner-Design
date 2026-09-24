@@ -6,7 +6,8 @@ import type { DbOrTx } from '../db/client';
 import { clients, projects, projectVersions } from '../db/schema';
 import { audit } from '../lib/audit';
 import type { AuthContext } from '../lib/context';
-import { AppError, conflict, notFound } from '../lib/errors';
+import { AppError, conflict, notFound, unprocessable } from '../lib/errors';
+import { urlBelongsToOrg } from '../services/files';
 import { money, MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
 import { afterCursor, page, paginationQuery } from '../lib/pagination';
@@ -303,6 +304,8 @@ export function projectRoutes() {
       if (!expected || !Number.isInteger(expected)) throw new AppError(428, 'VERSION_REQUERIDA', 'Envía la versión que editaste en "version" o en el encabezado If-Match.');
       const data = parseProjectData(input.data);
       await assertClient(db, a.org.id, input.clientId);
+      // The cover must be a file this organisation uploaded, not an arbitrary external URL.
+      if (input.coverUrl && !urlBelongsToOrg(input.coverUrl, a.org.id)) throw unprocessable('PORTADA_NO_VALIDA', 'La portada debe ser una imagen subida a tu organización.');
       const row = await db.transaction(async (tx) => {
         const cur = await getProject(tx, a, id);
         assertCan(a.user, 'project:update', { ownerId: cur.ownerId, status: cur.status });
