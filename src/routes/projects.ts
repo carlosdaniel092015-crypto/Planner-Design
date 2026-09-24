@@ -1,19 +1,21 @@
 import { createRoute, z } from '@hono/zod-openapi';
-import { and, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { bodyLimit } from 'hono/body-limit';
 import { DEFAULT_KITCHEN, hasErrors, newProject, type ProjectData } from '../core';
 import type { DbOrTx } from '../db/client';
-import { clients, projects, projectVersions } from '../db/schema';
+import { clients, projectShares, projects, projectVersions, users } from '../db/schema';
 import { audit } from '../lib/audit';
 import type { AuthContext } from '../lib/context';
 import { AppError, conflict, notFound } from '../lib/errors';
 import { money, MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
 import { afterCursor, page, paginationQuery } from '../lib/pagination';
-import { assertCan } from '../lib/permissions';
+import { assertCan, type ProjectAccess } from '../lib/permissions';
 import { requireAuth } from '../services/auth';
 import { loadPricingContext } from '../services/catalog';
 import {
+  type AccessibleProject,
+  accessOf,
   createVersion,
   derive,
   getProject,
@@ -44,6 +46,9 @@ const ProjectSummary = z
     moduleCount: z.number().int(),
     version: z.number().int(),
     coverUrl: z.string().nullable(),
+    access: z.enum(['propietario', 'editar', 'ver']).openapi({ description: 'Tu acceso: eres el dueño, o te lo compartieron para editar o solo ver.' }),
+    ownerName: z.string().nullable(),
+    shareCount: z.number().int().openapi({ description: 'Con cuántas personas está compartido (solo lo ve el dueño; si no, 0).' }),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
@@ -102,7 +107,13 @@ const VersionDetail = VersionSummary.extend({ data: z.record(z.string(), z.unkno
 
 const VidParam = IdParam.extend({ vid: z.uuid().openapi({ param: { name: 'vid', in: 'path' } }) });
 
-function summary(row: ProjectRow, rate: number, currency?: 'USD' | 'DOP') {
+interface Seen {
+  access: ProjectAccess;
+  ownerName: string | null;
+  shareCount: number;
+}
+
+function summary(row: ProjectRow, rate: number, currency: 'USD' | 'DOP' | undefined, seen: Seen) {
   return {
     id: row.id,
     name: row.name,
@@ -116,19 +127,29 @@ function summary(row: ProjectRow, rate: number, currency?: 'USD' | 'DOP') {
     moduleCount: row.moduleCount,
     version: row.version,
     coverUrl: row.coverUrl,
+    access: seen.access,
+    ownerName: seen.ownerName,
+    shareCount: seen.access === 'propietario' ? seen.shareCount : 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-async function detail(db: DbOrTx, a: AuthContext, row: ProjectRow, currency?: 'USD' | 'DOP') {
+async function seenBy(db: DbOrTx, a: AuthContext, row: ProjectRow | AccessibleProject): Promise<Seen> {
+  const access = 'access' in row ? row.access : ((await accessOf(db, a, row)) ?? 'ver');
+  const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, row.ownerId)).limit(1);
+  const [n] = await db.select({ n: sql<number>`count(*)::int` }).from(projectShares).where(eq(projectShares.projectId, row.id));
+  return { access, ownerName: owner?.name ?? null, shareCount: n?.n ?? 0 };
+}
+
+async function detail(db: DbOrTx, a: AuthContext, row: ProjectRow | AccessibleProject, currency?: 'USD' | 'DOP') {
   const { ctx, frozen } = await pricingFor(db, a, row);
   const data = parseProjectData(row.data);
   const cur = currency ?? row.currency;
   const { estimate, issues } = derive(data, ctx, cur);
   const discontinued = [...new Set(issues.filter((i) => i.code === 'DESCONTINUADO').map((i) => i.text))];
   return {
-    ...summary(row, ctx.settings.exchangeRateDopPerUsd, cur),
+    ...summary(row, ctx.settings.exchangeRateDopPerUsd, cur, await seenBy(db, a, row)),
     // Detail uses the exact recomputation in the requested currency (not a converted total).
     estimate: { amount: estimate.total, currency: estimate.currency, rate: estimate.rate },
     data: row.data,
@@ -179,6 +200,7 @@ export function projectRoutes() {
         query: z.object({
           status: Status.optional(),
           type: z.enum(['cocina', 'closet']).optional(),
+          scope: z.enum(['todos', 'mios', 'compartidos']).default('todos').openapi({ description: 'Tus proyectos, los que te compartieron o ambos.' }),
           q: z.string().max(100).optional(),
           ...paginationQuery,
           ...CurrencyQuery.shape,
@@ -190,21 +212,29 @@ export function projectRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'project:read');
       const { db } = c.var.deps;
-      const { status, type, q, cursor, limit: lim, currency } = c.req.valid('query');
+      const { status, type, scope, q, cursor, limit: lim, currency } = c.req.valid('query');
       const like = q ? `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%` : undefined;
-      const onlyApproved = a.user.role === 'taller';
+      // Private by default: only what the caller owns or what was shared with them (admins included).
+      const mine = eq(projects.ownerId, a.user.id);
+      const shared = isNotNull(projectShares.id);
       const rows = await db
         .select({
           p: projects,
           frozenRate: sql<string | null>`(${projectVersions.pricingSnapshot} -> 'settings' ->> 'exchangeRateDopPerUsd')`,
+          shareAccess: projectShares.access,
+          ownerName: users.name,
+          shareCount: sql<number>`(select count(*)::int from ${projectShares} s where s.project_id = ${projects.id})`,
         })
         .from(projects)
         .leftJoin(projectVersions, eq(projectVersions.id, projects.approvedVersionId))
+        .leftJoin(projectShares, and(eq(projectShares.projectId, projects.id), eq(projectShares.userId, a.user.id)))
+        .leftJoin(users, eq(users.id, projects.ownerId))
         .where(
           and(
             eq(projects.organizationId, a.org.id),
             isNull(projects.deletedAt),
-            onlyApproved ? eq(projects.status, 'aprobado') : status ? eq(projects.status, status) : undefined,
+            scope === 'mios' ? mine : scope === 'compartidos' ? and(shared, sql`${projects.ownerId} <> ${a.user.id}`) : or(mine, shared),
+            status ? eq(projects.status, status) : undefined,
             type ? eq(projects.type, type) : undefined,
             like ? ilike(projects.name, like) : undefined,
             afterCursor(projects.updatedAt, projects.id, cursor),
@@ -216,7 +246,13 @@ export function projectRoutes() {
       const orgRate = a.org.exchangeRateDopPerUsd;
       return c.json(
         {
-          items: p.items.map((x) => summary(x.p, x.p.status === 'aprobado' && x.frozenRate ? Number(x.frozenRate) : orgRate, currency)),
+          items: p.items.map((x) =>
+            summary(x.p, x.p.status === 'aprobado' && x.frozenRate ? Number(x.frozenRate) : orgRate, currency, {
+              access: x.p.ownerId === a.user.id ? 'propietario' : (x.shareAccess ?? 'ver'),
+              ownerName: x.ownerName,
+              shareCount: x.shareCount,
+            }),
+          ),
           nextCursor: p.nextCursor,
         },
         200,
@@ -319,7 +355,7 @@ export function projectRoutes() {
       await assertClient(db, a.org.id, input.clientId);
       const row = await db.transaction(async (tx) => {
         const cur = await getProject(tx, a, id);
-        assertCan(a.user, 'project:update', { ownerId: cur.ownerId, status: cur.status });
+        assertCan(a.user, 'project:update', { access: cur.access, status: cur.status });
         if (cur.status === 'aprobado') throw conflict('PROYECTO_APROBADO', 'El proyecto ya está aprobado y no se puede editar. Duplícalo para hacer cambios.');
         const ctx = await loadPricingContext(tx, a.org);
         const [row] = await tx
@@ -404,7 +440,7 @@ export function projectRoutes() {
       const { db } = c.var.deps;
       await db.transaction(async (tx) => {
         const cur = await getProject(tx, a, c.req.valid('param').id);
-        assertCan(a.user, 'project:delete', { ownerId: cur.ownerId });
+        assertCan(a.user, 'project:delete', { access: cur.access });
         await tx.update(projects).set({ deletedAt: new Date() }).where(eq(projects.id, cur.id));
         await audit(tx, a, 'eliminar', 'project', cur.id);
       });
@@ -478,7 +514,7 @@ export function projectRoutes() {
       const { db } = c.var.deps;
       const v = await db.transaction(async (tx) => {
         const row = await getProject(tx, a, c.req.valid('param').id);
-        assertCan(a.user, 'project:update', { ownerId: row.ownerId });
+        assertCan(a.user, 'project:update', { access: row.access });
         const { ctx } = await pricingFor(tx, a, row);
         const v = await createVersion(tx, row, parseProjectData(row.data), ctx, c.req.valid('json').note ?? null, a.user.id);
         await audit(tx, a, 'crear', 'project_version', v.id, { projectId: row.id, version: v.version });
@@ -525,7 +561,7 @@ export function projectRoutes() {
       const { id, vid } = c.req.valid('param');
       const row = await db.transaction(async (tx) => {
         const cur = await getProject(tx, a, id);
-        assertCan(a.user, 'project:update', { ownerId: cur.ownerId });
+        assertCan(a.user, 'project:update', { access: cur.access });
         if (cur.status === 'aprobado') throw conflict('PROYECTO_APROBADO', 'El proyecto ya está aprobado y no se puede editar. Duplícalo para hacer cambios.');
         const v = await getVersion(tx, cur.id, vid);
         const data = parseProjectData(v.data);

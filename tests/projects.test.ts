@@ -114,16 +114,20 @@ describe('proyectos', () => {
     expect(r.data.version).toBe(3);
   });
 
-  it('permisos: otro diseñador lee pero no edita; lectura no crea; taller solo ve aprobados', async () => {
+  it('privados: otro diseñador, el admin y el taller no ven el proyecto (404) ni aparece en su lista; lectura no crea', async () => {
     const p = (await t.req('POST', '/projects', { user: d1, body: { data: DEFAULT_KITCHEN } })).data;
-    expect((await t.req('GET', `/projects/${p.id}`, { user: d2 })).status).toBe(200);
-    expect((await t.req('PUT', `/projects/${p.id}`, { user: d2, body: { version: 1, data: DEFAULT_KITCHEN } })).status).toBe(403);
-    expect((await t.req('DELETE', `/projects/${p.id}`, { user: d2 })).status).toBe(403);
+    expect(p.access).toBe('propietario');
+    for (const u of [d2, taller, t.adminA]) {
+      expect((await t.req('GET', `/projects/${p.id}`, { user: u })).status).toBe(404);
+      // A role that can never write gets 403 before the lookup; the others get 404. Neither reveals the project.
+      expect([403, 404]).toContain((await t.req('PUT', `/projects/${p.id}`, { user: u, body: { version: 1, data: DEFAULT_KITCHEN } })).status);
+      expect([403, 404]).toContain((await t.req('DELETE', `/projects/${p.id}`, { user: u })).status);
+      expect([403, 404]).toContain((await t.req('POST', `/projects/${p.id}/duplicate`, { user: u })).status);
+      const list = await t.req('GET', '/projects?limit=100', { user: u });
+      expect(list.data.items.some((x: any) => x.id === p.id)).toBe(false);
+    }
     const lectura = await t.makeUser(t.orgA.id, 'lectura', 'lec@a.test');
     expect((await t.req('POST', '/projects', { user: lectura, body: {} })).status).toBe(403);
-    expect((await t.req('GET', `/projects/${p.id}`, { user: taller })).status).toBe(404);
-    const list = await t.req('GET', '/projects', { user: taller });
-    expect(list.data.items.every((x: any) => x.status === 'aprobado')).toBe(true);
   });
 
   it('un usuario de otra organización recibe 404', async () => {
@@ -151,6 +155,7 @@ describe('proyectos', () => {
 
   it('duplicar y borrar (lógico)', async () => {
     const p = (await t.req('POST', '/projects', { user: d1, body: { data: DEFAULT_KITCHEN } })).data;
+    await t.req('PUT', `/projects/${p.id}/shares/${d2.id}`, { user: d1, body: { access: 'ver' } });
     const dup = await t.req('POST', `/projects/${p.id}/duplicate`, { user: d2 });
     expect(dup.status).toBe(201);
     expect(dup.data.name).toMatch(/\(copia\)$/);

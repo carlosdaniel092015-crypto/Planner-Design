@@ -35,7 +35,7 @@ const tags = ['Archivos'];
 async function assertCanWrite(db: DbOrTx, a: AuthContext, projectId: string | null | undefined, kind: FileKind) {
   if (projectId) {
     const p = await getProject(db, a, projectId);
-    assertCan(a.user, 'project:update', { ownerId: p.ownerId, status: p.status === 'aprobado' ? 'diseno' : p.status });
+    assertCan(a.user, 'project:update', { access: p.access });
   } else if (kind === 'textura' || kind === 'modelo3d' || kind === 'hdri' || kind === 'miniatura' || kind === 'otro') assertCan(a.user, 'library:write');
   else assertCan(a.user, 'file:write');
 }

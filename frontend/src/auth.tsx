@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { ApiError, api, isTransient, type Me } from './api';
-import { pendingCount, resumeAfterLogin, startSync, syncNow, wipeUser } from './offline/sync';
+import { type Access, ApiError, api, isTransient, type Me } from './api';
+import { pendingCount, resumeAfterLogin, setOwnerName, startSync, syncNow, wipeUser } from './offline/sync';
 
 // The last signed-in user, so the app opens without a connection. Cleared on sign-out.
 const ME_KEY = 'planner:me';
@@ -50,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ls.set(ME_KEY, m ? JSON.stringify(m) : null);
     if (m) {
       ls.set(PENDING_SIGNOUT, null);
+      setOwnerName(m.user.name);
       startSync(m.user.id);
       resumeAfterLogin();
     }
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isTransient(e) && offline) {
           // No connection: work with the last session on this device; sync resumes when it comes back.
           setMeState(offline);
+          setOwnerName(offline.user.name);
           startSync(offline.user.id);
         } else {
           if (!(e instanceof ApiError && e.status === 401)) console.warn('sesión', e);
@@ -114,7 +116,11 @@ export function useAuth() {
   return ctx;
 }
 
-export const canEdit = (me: Me | null, ownerId?: string) => !!me && (me.user.role === 'admin' || (me.user.role === 'disenador' && (!ownerId || ownerId === me.user.id)));
+const writerRole = (me: Me | null) => !!me && (me.user.role === 'admin' || me.user.role === 'disenador');
+/** Edit a project: a writer role and ownership or a share with "editar" (the server enforces the same). */
+export const canEdit = (me: Me | null, access?: Access) => writerRole(me) && (access === 'propietario' || access === 'editar');
+/** Delete or share: only the owner. */
+export const isOwner = (me: Me | null, access?: Access) => writerRole(me) && access === 'propietario';
 export const canCreate = (me: Me | null) => !!me && (me.user.role === 'admin' || me.user.role === 'disenador');
 
 export function RequireAuth({ children }: { children: ReactNode }) {

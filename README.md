@@ -23,6 +23,17 @@ App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (siste
   - deshacer y rehacer;
   - precios en USD y DOP.
 
+### Proyectos privados y compartidos
+
+- **Cada proyecto es privado:** solo lo ve su dueño. Esto vale para todos los roles, incluido el administrador; el taller ve únicamente lo que le compartan.
+- **Compartir** (botón de personas en el editor, o "Compartir" en el menú de cada proyecto): el dueño elige a alguien de su organización y el acceso:
+  - **Solo ver:** abre el proyecto y descarga planos y lista de corte.
+  - **Puede editar:** además lo modifica y lo envía a aprobación. Solo roles admin y diseñador; el taller y lectura solo pueden "ver".
+- Quien lo recibe ve **el mismo proyecto** (no una copia), con los cambios del dueño, en la pestaña **"Compartidos conmigo"**.
+- **Solo el dueño** elimina el proyecto y cambia o quita accesos; quien lo recibió puede salir de él.
+- Un proyecto no compartido responde **404** a los demás, igual que uno de otra organización. Compartir y quitar acceso queda en la auditoría.
+- API: `GET/PUT/DELETE /projects/{id}/shares[/{userId}]`, `GET /users/directory` y `GET /projects?scope=todos|mios|compartidos`.
+
 ### Aplicación instalable y sin conexión (PWA)
 
 - **Instalable** en celular, tablet y computadora ("Agregar a la pantalla de inicio" / "Instalar app"). El editor se adapta: en pantallas chicas los paneles se abren encima del 3D.

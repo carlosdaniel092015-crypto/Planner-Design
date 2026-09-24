@@ -10,6 +10,7 @@ export type Action =
   | 'project:send'
   | 'project:approve'
   | 'project:export'
+  | 'project:share'
   | 'client:read'
   | 'client:create'
   | 'client:update'
@@ -31,15 +32,24 @@ export interface Actor {
   role: Role;
 }
 
+/** How the caller reaches a project: they own it, or it was shared with them to view or to edit. */
+export type ProjectAccess = 'propietario' | 'editar' | 'ver';
+
 /** Optional resource attributes used by ownership / status rules. */
 export interface Resource {
   ownerId?: string | null;
   status?: string;
+  /** Required for project:* checks on a specific project (see services/projects accessOf). */
+  access?: ProjectAccess | null;
 }
 
 const READ_ONLY: Action[] = ['project:read', 'project:export', 'client:read', 'catalog:read', 'library:read', 'pricing:read', 'file:read'];
 
-const OWN_ONLY = new Set<Action>(['project:update', 'project:delete', 'project:send', 'project:approve', 'client:update', 'client:delete', 'file:delete']);
+const OWN_ONLY = new Set<Action>(['client:update', 'client:delete', 'file:delete']);
+/** Project actions a share with access "editar" allows. */
+const PROJECT_EDIT = new Set<Action>(['project:update', 'project:send', 'project:approve']);
+/** Project actions only the owner can do. */
+const PROJECT_OWNER = new Set<Action>(['project:delete', 'project:share']);
 
 const MATRIX: Record<Role, Set<Action>> = {
   admin: new Set<Action>(), // everything, handled below
@@ -50,6 +60,7 @@ const MATRIX: Record<Role, Set<Action>> = {
     'project:delete',
     'project:send',
     'project:approve',
+    'project:share',
     'client:create',
     'client:update',
     'client:delete',
@@ -62,18 +73,30 @@ const MATRIX: Record<Role, Set<Action>> = {
 };
 
 /**
- * - admin: everything inside their organisation.
- * - disenador: creates and edits their own projects and clients, reads everyone's; library uploads; no pricing changes.
- * - taller: reads only approved projects and downloads cut lists / drawings.
+ * Projects are private: every role, admin included, only reaches the projects it owns or that were shared
+ * with it. On those, the role still caps what can be done:
+ * - admin: everything else inside their organisation (users, prices, catalogue).
+ * - disenador: creates projects and clients, edits their own (and those shared with "editar"); library uploads.
+ * - taller: reads the projects shared with it and downloads cut lists / drawings.
  * - lectura: read only.
  */
 export function can(actor: Actor, action: Action, resource?: Resource): boolean {
+  const roleAllows = actor.role === 'admin' || MATRIX[actor.role].has(action);
+  if (!roleAllows) return false;
+  if (action.startsWith('project:') && action !== 'project:create' && resource) {
+    const acc = resource.access;
+    if (!acc) return false;
+    if (PROJECT_OWNER.has(action)) return acc === 'propietario';
+    if (PROJECT_EDIT.has(action)) return acc === 'propietario' || acc === 'editar';
+    return true; // read / export
+  }
   if (actor.role === 'admin') return true;
-  if (!MATRIX[actor.role].has(action)) return false;
   if (actor.role === 'disenador' && OWN_ONLY.has(action) && resource && resource.ownerId !== actor.id) return false;
-  if (actor.role === 'taller' && action.startsWith('project:') && resource?.status !== undefined && resource.status !== 'aprobado') return false;
   return true;
 }
+
+/** Roles that can receive a project shared with "editar". */
+export const canEditProjects = (role: Role) => role === 'admin' || role === 'disenador';
 
 export function assertCan(actor: Actor, action: Action, resource?: Resource) {
   if (!can(actor, action, resource)) throw forbidden();

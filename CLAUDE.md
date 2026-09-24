@@ -31,6 +31,8 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 - **Multi-tenant**: toda consulta filtra por `organization_id` tomado de la sesión (`c.var.auth.org.id`), nunca del cliente.
   Un recurso de otra organización responde 404, no 403.
 - **Permisos**: toda ruta protegida llama `requirePermission(c, action, resource?)` (`src/lib/permissions.ts`).
+  **Proyectos privados:** solo los ve su dueño o a quien se los compartieron (`project_shares`, acceso `ver`/`editar`), admin incluido.
+  Cargar siempre con `getProject` (trae `access`) y pasar `{ access }` a los `assertCan('project:…')`; sin `access` se niega.
   Añadir una acción nueva = añadirla a la matriz y a `tests/permissions.test.ts`.
 - **Auditoría**: crear/actualizar/eliminar/enviar/aprobar/precios/roles → `audit(...)` dentro de la misma transacción.
 - **Dinero**: `numeric` en la BD, `number` redondeado a 2 decimales en la API (`src/lib/money.ts`).

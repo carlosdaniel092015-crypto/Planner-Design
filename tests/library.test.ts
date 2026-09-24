@@ -32,7 +32,10 @@ function tds(texture?: string) {
     dv.setUint16(0, id, true);
     dv.setUint32(2, len, true);
     let o = 6;
-    for (const p of parts) out.set(p, (o += p.length) - p.length);
+    for (const p of parts) {
+      out.set(p, o);
+      o += p.length;
+    }
     return out;
   };
   const cstr = (s: string) => new Uint8Array([...new TextEncoder().encode(s), 0]);
@@ -40,7 +43,11 @@ function tds(texture?: string) {
     const size = kind === 'u16' ? 2 : 4;
     const out = new Uint8Array(xs.length * size);
     const dv = new DataView(out.buffer);
-    xs.forEach((x, i) => (kind === 'u16' ? dv.setUint16(i * 2, x, true) : kind === 'u32' ? dv.setUint32(i * 4, x, true) : dv.setFloat32(i * 4, x, true)));
+    xs.forEach((x, i) => {
+      if (kind === 'u16') dv.setUint16(i * 2, x, true);
+      else if (kind === 'u32') dv.setUint32(i * 4, x, true);
+      else dv.setFloat32(i * 4, x, true);
+    });
     return out;
   };
   const [x, y, z] = [60, 60, 76];

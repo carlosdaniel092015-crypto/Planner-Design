@@ -16,7 +16,9 @@ export type AuditAction =
   | 'cambiar_rol'
   | 'invitar'
   | 'importar'
-  | 'iniciar_sesion';
+  | 'iniciar_sesion'
+  | 'compartir'
+  | 'dejar_de_compartir';
 
 export async function audit(
   db: DbOrTx,

@@ -321,6 +321,12 @@ export async function saveProject(requested: string, s: LocalSave): Promise<stri
   return id;
 }
 
+let ownerName: string | null = null;
+/** Name shown as owner on projects created offline. */
+export function setOwnerName(name: string) {
+  ownerName = name;
+}
+
 async function createLocal(uid: string, data: ProjectData, currency: Currency | null, id = newLocalId()): Promise<ProjectDetail> {
   const d = await D();
   const cat = await d.get<Catalog>('kv', 'catalog');
@@ -340,6 +346,9 @@ async function createLocal(uid: string, data: ProjectData, currency: Currency | 
     moduleCount: data.mods.length,
     version: 0,
     coverUrl: null,
+    access: 'propietario',
+    ownerName: ownerName,
+    shareCount: 0,
     createdAt: now,
     updatedAt: now,
     data,

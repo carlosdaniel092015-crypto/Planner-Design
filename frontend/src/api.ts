@@ -58,6 +58,24 @@ export interface Money {
   rate: number;
 }
 
+export type Access = 'propietario' | 'editar' | 'ver';
+
+export interface Share {
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  access: 'ver' | 'editar';
+  createdAt: string;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+}
+
 export interface ProjectSummary {
   id: string;
   name: string;
@@ -71,6 +89,9 @@ export interface ProjectSummary {
   moduleCount: number;
   version: number;
   coverUrl: string | null;
+  access: Access;
+  ownerName: string | null;
+  shareCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +140,11 @@ export const api = {
   saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; data: ProjectData }) => request<ProjectDetail>('PUT', `/projects/${id}`, body),
   duplicateProject: (id: string) => request<ProjectDetail>('POST', `/projects/${id}/duplicate`),
   deleteProject: (id: string) => request<void>('DELETE', `/projects/${id}`),
+
+  shares: (id: string) => request<{ owner: { userId: string; name: string; email: string; role: Role } | null; myAccess: Access; items: Share[] }>('GET', `/projects/${id}/shares`),
+  share: (id: string, userId: string, access: 'ver' | 'editar') => request<Share>('PUT', `/projects/${id}/shares/${userId}`, { access }),
+  unshare: (id: string, userId: string) => request<void>('DELETE', `/projects/${id}/shares/${userId}`),
+  directory: () => request<{ items: Person[] }>('GET', '/users/directory'),
 
   catalog: (timeoutMs?: number) => request<Catalog>('GET', '/catalog', undefined, {}, timeoutMs),
 };

@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, type Catalog, type CatalogMaterial, type ProjectDetail } from '../api';
 import { canEdit, FullScreenLoader, useAuth } from '../auth';
+import { ShareDialog } from '../ShareDialog';
 import { BottomBar } from '../editor/BottomBar';
 import { installEngine, sceneCfg, type Viewer } from '../editor/engine';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
@@ -69,6 +70,7 @@ export function EditorPage() {
   const [applyTo, setApplyTo] = useState<'todo' | 'modulo'>('todo');
   const [replaceMode, setReplaceMode] = useState(false);
   const [curOpen, setCurOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [tip, setTip] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ kind: 'saved', at: new Date().toISOString() });
   const [conflict, setConflict] = useState<Extract<SyncEvent, { type: 'conflict' }> | null>(null);
@@ -124,7 +126,7 @@ export function EditorPage() {
     };
   }, [id, applyProject, followRemap]);
 
-  const readOnly = !project || project.status === 'aprobado' || !canEdit(me, project.ownerId) || conflict != null;
+  const readOnly = !project || project.status === 'aprobado' || !canEdit(me, project.access) || conflict != null;
   const materialsByCode = useMemo<Record<string, CatalogMaterial>>(() => Object.fromEntries((catalog?.materials ?? []).map((m) => [m.code, m])), [catalog]);
   const rate = project?.pricesFrozen ? project.estimate.rate : (catalog?.pricing.exchangeRateDopPerUsd ?? 60);
   const ctx = catalog?.context;
@@ -448,6 +450,9 @@ export function EditorPage() {
             <Icon name="save" />
             <span className="phase-label">Guardar</span>
           </button>
+          <button type="button" className="btn btn-icon" title={project.access === 'propietario' ? 'Compartir' : 'Personas con acceso'} aria-label="Compartir" onClick={() => setShareOpen(true)}>
+            <Icon name={project.shareCount > 0 || project.access !== 'propietario' ? 'users' : 'share-2'} size={18} />
+          </button>
           <UserMenu />
         </div>
       </header>
@@ -455,7 +460,9 @@ export function EditorPage() {
       {readOnly && !conflict && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: project.status === 'aprobado' ? 'var(--color-accent-100)' : 'var(--color-neutral-200)', color: project.status === 'aprobado' ? 'var(--color-accent-800)' : 'var(--color-text)', fontSize: 13, borderBottom: '1px solid var(--color-divider)' }}>
           <Icon name={project.status === 'aprobado' ? 'lock' : 'eye'} size={15} />
-          {project.status === 'aprobado' ? 'Proyecto aprobado: el diseño está bloqueado para producción. Duplícalo desde Mis proyectos para hacer cambios.' : 'Solo lectura: este proyecto es de otro diseñador o tu rol no permite editar.'}
+          {project.status === 'aprobado' ? 'Proyecto aprobado: el diseño está bloqueado para producción. Duplícalo desde Mis proyectos para hacer cambios.' : project.access === 'ver'
+              ? `Solo lectura: ${project.ownerName ?? 'otra persona'} te compartió este proyecto para verlo. Puedes duplicarlo desde Mis proyectos para trabajar sobre una copia.`
+              : 'Solo lectura: tu rol no permite editar proyectos.'}
         </div>
       )}
 
@@ -683,6 +690,16 @@ export function EditorPage() {
         >
           {conflict.reason} Para que no se pierda nada, tu versión quedó guardada en el proyecto «{conflict.copyName}». Este proyecto conserva la versión del servidor.
         </Dialog>
+      )}
+      {shareOpen && me && (
+        <ShareDialog
+          projectId={pid.current}
+          projectName={name || project.name}
+          myAccess={project.access}
+          meId={me.user.id}
+          onClose={() => setShareOpen(false)}
+          onChange={(n) => setProject((p) => (p ? { ...p, shareCount: n } : p))}
+        />
       )}
       {toast}
       <style>{`

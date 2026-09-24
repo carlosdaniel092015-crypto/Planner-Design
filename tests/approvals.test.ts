@@ -55,7 +55,9 @@ describe('aprobación pública', () => {
     expect(hist.data.approvals[0]).toMatchObject({ decision: 'aprobado', signerName: 'María Ortega', linkId: s.data.link.id });
     expect(hist.data.approvals[0].snapshotSha256).toMatch(/^[0-9a-f]{64}$/);
 
-    // The workshop can now see it and download the cut list.
+    // The workshop sees it once the designer shares it, and downloads the cut list.
+    expect((await t.req('GET', `/projects/${p.id}`, { user: taller })).status).toBe(404);
+    expect((await t.req('PUT', `/projects/${p.id}/shares/${taller.id}`, { user: dis, body: { access: 'ver' } })).status).toBe(200);
     expect((await t.req('GET', `/projects/${p.id}`, { user: taller })).status).toBe(200);
     const csv = await t.req('GET', `/projects/${p.id}/cutlist.csv`, { user: taller });
     expect(csv.status).toBe(200);
@@ -165,9 +167,11 @@ describe('aprobación interna y precios congelados', () => {
     expect(again.status).toBe(409);
   });
 
-  it('otro diseñador no puede enviar ni aprobar un proyecto ajeno; otra organización recibe 404', async () => {
+  it('otro diseñador no puede enviar ni aprobar un proyecto ajeno (ni compartido para ver); otra organización recibe 404', async () => {
     const p = await create();
     const d2 = await t.makeUser(t.orgA.id, 'disenador', 'dis2-apr@a.test');
+    expect((await t.req('POST', `/projects/${p.id}/approval-links`, { user: d2, body: { recipientEmail: 'x@y.com' } })).status).toBe(404);
+    await t.req('PUT', `/projects/${p.id}/shares/${d2.id}`, { user: dis, body: { access: 'ver' } });
     expect((await t.req('POST', `/projects/${p.id}/approval-links`, { user: d2, body: { recipientEmail: 'x@y.com' } })).status).toBe(403);
     expect((await t.req('POST', `/projects/${p.id}/approve-internal`, { user: d2, body: { signerName: 'x' } })).status).toBe(403);
     expect((await t.req('POST', `/projects/${p.id}/approve-internal`, { user: t.adminB, body: { signerName: 'x' } })).status).toBe(404);

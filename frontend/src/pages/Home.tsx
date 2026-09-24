@@ -2,7 +2,8 @@ import { DEFAULT_MATERIALS, iso, newProject, type ProjectKind } from '@core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
-import { canCreate, canEdit, useAuth } from '../auth';
+import { canCreate, isOwner, useAuth } from '../auth';
+import { ShareDialog } from '../ShareDialog';
 import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
 import { createProject, deleteProject, duplicateProject, isLocalId, listProjects, onSyncEvent } from '../offline/sync';
 import { UserMenu } from '../UserMenu';
@@ -28,6 +29,8 @@ export function HomePage() {
   const [toDelete, setToDelete] = useState<ProjectSummary | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [fromDevice, setFromDevice] = useState(false);
+  const [tab, setTab] = useState<'todos' | 'mios' | 'compartidos'>('todos');
+  const [sharing, setSharing] = useState<ProjectSummary | null>(null);
   const sync = useSyncStatus();
   const pending = new Set(sync?.pending ?? []);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
@@ -51,6 +54,7 @@ export function HomePage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const shown = items?.filter((p) => (tab === 'todos' ? true : tab === 'mios' ? p.access === 'propietario' : p.access !== 'propietario')) ?? null;
   const wasOnline = useRef(sync?.online);
   useEffect(() => {
     if (sync?.online && wasOnline.current === false) load();
@@ -139,7 +143,21 @@ export function HomePage() {
 
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', marginTop: 56, paddingBottom: 12, borderBottom: '2px solid var(--color-divider)' }}>
             <h2 style={{ margin: 0, fontSize: 28 }}>Mis proyectos</h2>
-            <span style={{ fontSize: 13, color: MUTED }}>{items ? `${items.length} ${items.length === 1 ? 'proyecto' : 'proyectos'}` : ''}</span>
+            <span style={{ fontSize: 13, color: MUTED }}>{shown ? `${shown.length} ${shown.length === 1 ? 'proyecto' : 'proyectos'}` : ''}</span>
+          </div>
+          <div role="tablist" aria-label="Filtrar proyectos" style={{ display: 'flex', gap: 4, marginTop: 12, flexWrap: 'wrap' }}>
+            {(
+              [
+                ['todos', 'Todos'],
+                ['mios', 'Míos'],
+                ['compartidos', 'Compartidos conmigo'],
+              ] as const
+            ).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'btn btn-primary' : 'btn btn-ghost'} onClick={() => setTab(k)} style={{ height: 34 }}>
+                {l}
+                {k === 'compartidos' && items ? ` (${items.filter((p) => p.access !== 'propietario').length})` : ''}
+              </button>
+            ))}
           </div>
           <div className="proj-row proj-head" style={{ padding: '10px 0', fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: MUTED, borderBottom: '1px solid var(--color-divider)' }}>
             <span>Vista</span>
@@ -156,12 +174,15 @@ export function HomePage() {
           )}
           {error && <p style={{ color: 'var(--color-accent-700)' }}>{error}</p>}
           {!items && !error && <p style={{ color: MUTED }}>Cargando proyectos…</p>}
-          {items?.length === 0 && (
+          {tab === 'compartidos' && shown?.length === 0 && (
+            <div style={{ padding: 24, border: '2px dashed var(--color-divider)', marginTop: 16, fontSize: 14, color: MUTED }}>Nadie te ha compartido proyectos todavía.</div>
+          )}
+          {tab !== 'compartidos' && shown?.length === 0 && (
             <div style={{ padding: 24, border: '2px dashed var(--color-divider)', marginTop: 16, fontSize: 14, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)' }}>
               Todavía no tienes proyectos. Elige Cocina, Closet o Vestidor arriba para empezar.
             </div>
           )}
-          {items?.map((p) => {
+          {shown?.map((p) => {
             const st = STATUS[p.status] ?? STATUS.borrador!;
             return (
               <div key={p.id} className="proj-row proj-item" onClick={() => nav(`/proyectos/${p.id}`)} style={{ alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-divider)', cursor: 'pointer', position: 'relative' }}>
@@ -178,6 +199,17 @@ export function HomePage() {
                   <div style={{ fontSize: 13, color: MUTED }}>
                     {p.type === 'cocina' ? 'Cocina' : 'Closet'} · {p.moduleCount} módulos · {fmtMoney(p.estimate.amount, p.estimate.currency)}
                   </div>
+                  {p.access !== 'propietario' ? (
+                    <div style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="users" size={13} />
+                      De {p.ownerName ?? 'otra persona'} · {p.access === 'editar' ? 'puedes editar' : 'solo ver'}
+                    </div>
+                  ) : p.shareCount > 0 ? (
+                    <div style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: MUTED }}>
+                      <Icon name="users" size={13} />
+                      Compartido con {p.shareCount} {p.shareCount === 1 ? 'persona' : 'personas'}
+                    </div>
+                  ) : null}
                 </div>
                 <span style={{ fontSize: 14 }}>{relativeTime(p.updatedAt)}</span>
                 <span>
@@ -203,19 +235,25 @@ export function HomePage() {
                   <>
                     <div style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={(e) => (e.stopPropagation(), setMenu(null))} />
                     <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 0, top: 'calc(100% - 8px)', zIndex: 21, width: 200, background: 'var(--color-surface)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column' }}>
+                      {!isLocalId(p.id) && (
+                        <button type="button" className="btn btn-ghost" onClick={() => (setMenu(null), setSharing(p))} style={{ justifyContent: 'flex-start' }}>
+                          <Icon name="share-2" />
+                          {isOwner(me, p.access) ? 'Compartir' : 'Personas con acceso'}
+                        </button>
+                      )}
                       {canCreate(me) && (
                         <button type="button" className="btn btn-ghost" onClick={() => duplicate(p)} style={{ justifyContent: 'flex-start' }}>
                           <Icon name="copy" />
                           Duplicar
                         </button>
                       )}
-                      {canEdit(me, p.ownerId) && (
+                      {isOwner(me, p.access) && (
                         <button type="button" className="btn btn-ghost" onClick={() => (setMenu(null), setToDelete(p))} style={{ justifyContent: 'flex-start', color: 'var(--color-accent-700)' }}>
                           <Icon name="trash-2" />
                           Eliminar
                         </button>
                       )}
-                      {!canCreate(me) && !canEdit(me, p.ownerId) && <span style={{ padding: 12, fontSize: 13, color: MUTED }}>Solo lectura</span>}
+
                     </div>
                   </>
                 )}
@@ -241,6 +279,18 @@ export function HomePage() {
         >
           "{toDelete.name}" dejará de aparecer en tu lista. Un administrador puede recuperarlo desde la base de datos si fue un error.
         </Dialog>
+      )}
+      {sharing && me && (
+        <ShareDialog
+          projectId={sharing.id}
+          projectName={sharing.name}
+          myAccess={sharing.access}
+          meId={me.user.id}
+          onClose={() => {
+            setSharing(null);
+            load();
+          }}
+        />
       )}
       {toast}
       <style>{`
