@@ -74,6 +74,7 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.cook ? { cook: 1 } : {}),
     ...(def.appl ? { appl: 1 } : {}),
     ...(def.oven ? { oven: 1 } : {}),
+    ...(def.glb ? { glb: def.glb } : {}),
     moduleVersion: def.version,
   };
 }

@@ -27,6 +27,16 @@ const Inspection = z
   })
   .openapi('InspeccionModelo', { example: { format: 'glb', bbox: { w: 70, h: 185, d: 65 }, unitsGuess: 'm', materials: ['Acero', 'Vidrio'], triangles: 48210, textures: [], warnings: [] } });
 
+/**
+ * Zod fills `.default()` values for keys the client left out, which in a PATCH would silently reset them
+ * (e.g. renaming a texture would also reset its uses and tile size). Keep only the keys actually sent.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: works with any route context
+async function sentOnly<T extends Record<string, unknown>>(c: any, parsed: T): Promise<Partial<T>> {
+  const raw = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(parsed).filter(([k]) => k in raw)) as Partial<T>;
+}
+
 export function libraryRoutes() {
   const r = router();
 
@@ -63,7 +73,8 @@ export function libraryRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const row = await db.transaction((tx) => updateTexture(tx, storage, a, c.req.valid('param').id, c.req.valid('json')));
+      const patch = await sentOnly(c, c.req.valid('json'));
+      const row = await db.transaction((tx) => updateTexture(tx, storage, a, c.req.valid('param').id, patch));
       return c.json(serialize(row), 200);
     },
   );
@@ -109,12 +120,13 @@ export function libraryRoutes() {
     },
   );
   r.openapi(
-    createRoute({ method: 'patch', path: '/modules/{id}', tags, summary: 'Editar módulo (incrementa version)', security, request: { params: IdParam, ...body(LibraryModuleInput) }, responses: { 200: json(z.object({ module: Any, model: Inspection.nullable() })), ...authErrors, ...pick(409, 422) } }),
+    createRoute({ method: 'patch', path: '/modules/{id}', tags, summary: 'Editar módulo (incrementa version)', security, request: { params: IdParam, ...body(LibraryModuleInput.partial()) }, responses: { 200: json(z.object({ module: Any, model: Inspection.nullable() })), ...authErrors, ...pick(409, 422) } }),
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const out = await db.transaction((tx) => updateLibraryModule(tx, storage, a, c.req.valid('param').id, c.req.valid('json')));
+      const patch = await sentOnly(c, c.req.valid('json'));
+      const out = await db.transaction((tx) => updateLibraryModule(tx, storage, a, c.req.valid('param').id, patch));
       return c.json({ module: serialize(out.module), model: out.model }, 200);
     },
   );

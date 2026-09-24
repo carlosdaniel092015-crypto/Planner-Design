@@ -29,6 +29,7 @@ import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
 import { ApprovalView } from '../approval/ApprovalView';
+import { LibraryDialog } from '../library/LibraryDialog';
 import { SpecWizard } from '../spec/SpecWizard';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, useToast } from '../ui';
@@ -63,6 +64,7 @@ export function EditorPage() {
   const [specStep, setSpecStep] = useState(1);
   const [genStep, setGenStep] = useState<number | null>(null);
   const [suggest, setSuggest] = useState(false);
+  const [libTab, setLibTab] = useState<'tex' | 'mod' | null>(null);
   const [cotas, setCotas] = useState(true);
   const [altos, setAltos] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -388,6 +390,9 @@ export function EditorPage() {
           <button type="button" className="btn btn-icon" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
             <Icon name="redo-2" size={18} />
           </button>
+          <button type="button" className="btn btn-icon" title="Bibliotecas de texturas y módulos" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
+            <Icon name="library" size={17} />
+          </button>
           <button type="button" className="btn btn-icon" title="Modo oscuro del editor" aria-label="Modo oscuro" onClick={() => setDark(!dark)}>
             <Icon name={dark ? 'sun' : 'moon'} size={17} />
           </button>
@@ -449,6 +454,7 @@ export function EditorPage() {
               onMaterial={onMaterial}
               readOnly={readOnly}
               onPick={(i) => (setSel(i), setRightOpen(true))}
+              onLibrary={canEdit(me) ? setLibTab : undefined}
             />
           ) : (
             <div style={{ width: 48, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 8 }}>
@@ -737,6 +743,23 @@ export function EditorPage() {
             ))}
           </div>
         </Dialog>
+      )}
+      {libTab && (
+        <LibraryDialog
+          initialTab={libTab}
+          canWrite={canEdit(me)}
+          onClose={() => setLibTab(null)}
+          onChanged={() =>
+            api
+              .catalog()
+              .then((c) => {
+                installEngine(c.materials);
+                setCatalog(c);
+                flash('Biblioteca actualizada');
+              })
+              .catch(() => flash('Recarga la página para ver los cambios de la biblioteca.'))
+          }
+        />
       )}
       {toast}
       <style>{`

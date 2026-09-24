@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, api, type ProjectSummary } from '../api';
 import { canCreate, canEdit, useAuth } from '../auth';
+import { LibraryDialog } from '../library/LibraryDialog';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, STATUS, Svg, useToast } from '../ui';
 
@@ -25,6 +26,7 @@ export function HomePage() {
   const [creating, setCreating] = useState<ProjectKind | null>(null);
   const [toDelete, setToDelete] = useState<ProjectSummary | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
+  const [libOpen, setLibOpen] = useState(false);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
   const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30) }), []);
 
@@ -78,6 +80,10 @@ export function HomePage() {
       <header style={{ display: 'flex', alignItems: 'center', gap: 14, height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', background: 'var(--color-bg)', flex: 'none' }}>
         <Brand />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={() => setLibOpen(true)} title="Bibliotecas de texturas y módulos" style={{ height: 38 }}>
+            <Icon name="library" size={16} />
+            Bibliotecas
+          </button>
           <a className="btn btn-ghost" href="/prototipo/" title="Prototipo original de Claude Design">
             <Icon name="circle-help" />
             Prototipo
@@ -85,6 +91,7 @@ export function HomePage() {
           <UserMenu />
         </div>
       </header>
+      {libOpen && <LibraryDialog canWrite={canEdit(me)} onClose={() => setLibOpen(false)} onChanged={() => flash('Biblioteca actualizada')} />}
       <main style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '44px 32px 72px' }} className="home">
           <div className="home-hero" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)', alignItems: 'end', gap: 32, paddingBottom: 24, borderBottom: '2px solid var(--color-divider)' }}>

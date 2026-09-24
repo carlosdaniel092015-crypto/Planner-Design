@@ -26,6 +26,8 @@ export function LeftPanel(props: {
   onMaterial: (group: 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras', code: string) => void;
   readOnly: boolean;
   onPick: (id: number) => void;
+  /** Opens Bibliotecas on the given tab (omitted when the role can't upload). */
+  onLibrary?: (tab: 'tex' | 'mod') => void;
 }) {
   const { data, catalog, materialsByCode } = props;
   const defs = useMemo(() => {
@@ -82,6 +84,12 @@ export function LeftPanel(props: {
               <Icon name="search" size={15} style={{ position: 'absolute', left: 10, top: 10, opacity: 0.55 }} />
               <input className="input" placeholder="Buscar módulo o código" value={props.q} onChange={(e) => props.setQ(e.target.value)} style={{ paddingLeft: 32, width: '100%' }} />
             </div>
+            {props.onLibrary && (
+              <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('mod')} style={{ justifyContent: 'flex-start', height: 36 }}>
+                <Icon name="upload" size={15} />
+                Subir módulos (JSON / GLB / 3DS)
+              </button>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {cats.map((c) => {
                 const on = props.cat === c;
@@ -125,6 +133,12 @@ export function LeftPanel(props: {
 
       {props.tab === 'materiales' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {props.onLibrary && (
+              <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('tex')} style={{ justifyContent: 'flex-start', height: 36 }}>
+                <Icon name="upload" size={15} />
+                Subir texturas (JPG / PNG)
+              </button>
+            )}
           <div>
             <div style={{ fontSize: 12, marginBottom: 6, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)' }}>Aplicar a</div>
             <div className="seg" style={{ display: 'flex' }}>

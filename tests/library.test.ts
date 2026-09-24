@@ -142,6 +142,20 @@ describe('biblioteca', () => {
     expect(again.data.materials).toEqual(['Frente', 'Cuerpo']);
   });
 
+  it('editar solo un campo no resetea los demás; el catálogo trae la URL del GLB', async () => {
+    const tex = (await t.req('GET', '/library/textures', { user: dis })).data.items.find((m: any) => m.code === textureCode);
+    const r1 = await t.req('PATCH', `/library/textures/${tex.id}`, { user: dis, body: { name: 'Roble ahumado claro' } });
+    expect(r1.status, JSON.stringify(r1.data)).toBe(200);
+    const tex2 = (await t.req('GET', '/library/textures', { user: dis })).data.items.find((m: any) => m.code === textureCode);
+    expect(tex2).toMatchObject({ name: 'Roble ahumado claro', uses: ['frentes'], type: 'Chapa natural' });
+    const mod = (await t.req('GET', '/library/modules', { user: dis })).data.items.find((m: any) => m.code === glbModuleCode);
+    const r2 = await t.req('PATCH', `/library/modules/${mod.id}`, { user: dis, body: { category: 'Electro' } });
+    expect(r2.status, JSON.stringify(r2.data)).toBe(200);
+    expect(r2.data.module).toMatchObject({ category: 'Electro', source: 'modelo3d', name: 'Mueble GLB', modelFileId: mod.modelFileId });
+    const cat = await t.req('GET', '/catalog', { user: dis });
+    expect(cat.data.context.modules[glbModuleCode].glb).toMatch(/.glb$/);
+  });
+
   it('un modelo no válido responde 422 con mensaje claro', async () => {
     const broken = new Uint8Array(64);
     broken.set(new TextEncoder().encode('glTF'), 0);
