@@ -1,7 +1,7 @@
 // Assembly drawings per module (millimetres) — ported from the prototype's exploded()/ortho().
 import { cols, type Drawing, type DrawItem, front2D } from './drawing';
 import { shade } from './geometry';
-import { parts } from './parts';
+import { type Part, parts } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -70,6 +70,56 @@ export function exploded(m: ModuleInstance, mats: ProjectData['mats'], materials
   }
   const pad = Math.max(W, H) * 0.06;
   return { items: it, vb: [bx[0]! - pad, bx[1]! - pad, bx[2]! - bx[0]! + 2 * pad, bx[3]! - bx[1]! + 2 * pad] };
+}
+
+/**
+ * Despiece table of one module as a drawing (so it prints exactly like the plans): number, piece, material,
+ * quantity, cut size in mm, grain and edge banding. Numbers match exploded().
+ */
+export function partsTable(list: Part[]): Drawing {
+  const W = 600;
+  const rowH = 34;
+  const it: DrawItem[] = [];
+  const text = (x: number, y: number, s: string, o: Partial<DrawItem> = {}) => it.push({ t: 'text', x, y, s, fs: 12, fw: 500, fill: INK, anchor: 'start', ...o });
+  const line = (y: number, sw: number, stroke: string) => it.push({ d: `M0 ${y}H${W}`, stroke, sw });
+  const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  const veta = (v: string) => (v.startsWith('V') ? 'Vert.' : v.startsWith('H') ? 'Horiz.' : '—');
+  // x of each column; numeric columns are right-aligned on that x
+  const X = { n: 11, pieza: 30, cant: 338, L: 400, A: 462, esp: 500, veta: 512, canto: W - 2 };
+  text(0, 12, 'DESPIECE · MEDIDAS DE CORTE (mm)', { fs: 14, fw: 800 });
+  const hy = 44;
+  const head: [number, string, string][] = [
+    [0, '#', 'start'],
+    [X.pieza, 'Pieza · material', 'start'],
+    [X.cant, 'Cant', 'end'],
+    [X.L, 'Largo', 'end'],
+    [X.A, 'Ancho', 'end'],
+    [X.esp, 'Esp', 'end'],
+    [X.veta, 'Veta', 'start'],
+    [X.canto, 'Canto', 'end'],
+  ];
+  for (const [x, s, anchor] of head) text(x, hy, s, { fw: 800, fs: 11.5, anchor });
+  line(hy + 12, 1.6, INK);
+  let y = hy + 12;
+  for (const p of list) {
+    const cy = y + rowH / 2;
+    it.push({ t: 'c', cx: X.n, cy, r: 9, fill: ACC });
+    text(X.n, cy, String(p.ref), { fs: 10, fw: 800, fill: '#fff', anchor: 'middle' });
+    text(X.pieza, cy - 7, cut(p.pieza, 30), { fw: 700, fs: 12.5 });
+    text(X.pieza, cy + 8, cut(p.mat, 42), { fs: 10.5, fill: '#6b6767' });
+    text(X.cant, cy, String(p.cant), { anchor: 'end' });
+    text(X.L, cy, String(p.L), { anchor: 'end', fw: 800 });
+    text(X.A, cy, String(p.A), { anchor: 'end', fw: 800 });
+    text(X.esp, cy, String(p.esp), { anchor: 'end' });
+    text(X.veta, cy, veta(p.veta));
+    text(X.canto, cy, p.cantos, { anchor: 'end' });
+    y += rowH;
+    line(y, 0.8, '#bab6b6');
+  }
+  const total = list.reduce((a, p) => a + p.cant, 0);
+  text(0, y + 16, `${total} piezas · largo × ancho × espesor en mm`, { fs: 10.5, fill: '#6b6767' });
+  text(0, y + 31, 'Canto: 1L = un lado con canto · 4L = los cuatro lados', { fs: 10.5, fill: '#6b6767' });
+  return { items: it, vb: [-2, -4, W + 4, y + 44] };
 }
 
 export type OrthoView = 'front' | 'side' | 'top';

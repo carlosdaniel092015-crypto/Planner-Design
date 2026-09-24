@@ -9,7 +9,9 @@ import {
   iso,
   type ModuleInstance,
   ortho,
+  type Part,
   parts,
+  partsTable,
   plan,
   type ProjectData,
   type ValidationIssue,
@@ -332,7 +334,7 @@ export function ApprovalView(props: {
           onExport={() => doExport('pdf')}
           busy={!!pdf}
           render={(k) => {
-            const pages: { label: string; title?: string; art?: React.ReactNode; rows?: [string, string][]; cover?: boolean }[] = [];
+            const pages: PdfPage[] = [];
             if (k.portada) pages.push({ label: 'Portada', cover: true });
             if (k.vistas) {
               pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760, null) });
@@ -340,7 +342,9 @@ export function ApprovalView(props: {
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });
             if (k.alzados) for (const w of walls) pages.push({ label: `Alzado muro ${w}`, title: `Alzado muro ${w}`, art: <Svg drawing={elevD(w)} /> });
-            if (k.planos) for (const m of buildable) pages.push({ label: `Plano módulo ${m.id}`, title: `Módulo ${m.id} · ${m.name} · ${m.w * 10}×${m.h * 10}×${m.d * 10} mm`, art: <Svg drawing={exploded(m, data.mats, mats)} /> });
+            if (k.planos)
+              for (const m of buildable)
+                pages.push({ label: `Plano módulo ${m.id}`, title: `Módulo ${m.id} · ${m.name} · ${m.w * 10}×${m.h * 10}×${m.d * 10} mm`, art: <Svg drawing={exploded(m, data.mats, mats)} />, parts: parts(m, data.mats, mats) });
             if (k.corte) pages.push({ label: 'Lista de corte', title: 'Lista de corte', rows: cut.map((g) => [`${g.mat} ${g.esp} mm`, `${g.pieces} pzas · ${g.area.toFixed(2)} m² · ${g.boards} tableros`]) });
             if (k.presupuesto) pages.push({ label: 'Presupuesto', title: 'Presupuesto', rows: budgetRows(estimate, currency) });
             return pages;
@@ -540,7 +544,7 @@ function Planos(props: { buildable: ModuleInstance[]; sel: number | null; setSel
   );
 }
 
-type PdfPage = { label: string; title?: string; art?: React.ReactNode; rows?: [string, string][]; cover?: boolean };
+type PdfPage = { label: string; title?: string; art?: React.ReactNode; rows?: [string, string][]; cover?: boolean; parts?: Part[] };
 function PdfTab(props: {
   data: ProjectData;
   readOnly: boolean;
@@ -623,7 +627,16 @@ function PdfTab(props: {
                   {pg.art && (
                     <>
                       <div style={{ fontSize: 8, fontWeight: 800 }}>{pg.title}</div>
-                      <div style={{ flex: 1, minHeight: 0 }}>{pg.art}</div>
+                      {pg.parts?.length ? (
+                        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,0.8fr) minmax(0,1.2fr)', gap: 6 }}>
+                          <div style={{ minHeight: 0 }}>{pg.art}</div>
+                          <div style={{ minHeight: 0 }}>
+                            <Svg drawing={partsTable(pg.parts)} title="Despiece del módulo" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ flex: 1, minHeight: 0 }}>{pg.art}</div>
+                      )}
                     </>
                   )}
                   {pg.rows && (
