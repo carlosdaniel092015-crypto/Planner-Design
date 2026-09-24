@@ -1,6 +1,6 @@
 # Planner-Design · Planeador 3D de cocinas y closets
 
-Backend del planeador de muebles (Stephanny Planner). Guarda proyectos, clientes y versiones. Administra el catálogo de módulos, materiales y precios, y las bibliotecas de texturas y modelos 3D de cada empresa. También almacena renders y PDF, y gestiona el enlace de aprobación que se envía al cliente final.
+Backend del planeador de muebles (Planner). Guarda proyectos, clientes y versiones. Administra el catálogo de módulos, materiales y precios, y las bibliotecas de texturas y modelos 3D de cada empresa. También almacena renders y PDF, y gestiona el enlace de aprobación que se envía al cliente final.
 
 - **Stack:** Node 20+ · TypeScript strict · Hono · Drizzle ORM · PostgreSQL 16 · zod + OpenAPI · sharp · gltf-transform
 - **Despliegue:** Docker en **Easypanel**, con Postgres como servicio y archivos en un volumen.

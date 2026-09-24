@@ -89,9 +89,9 @@ export function relativeTime(iso: string) {
 export function Brand() {
   return (
     <Link to="/" title="Inicio" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'var(--color-text)', flex: 'none' }}>
-      <span style={{ width: 30, height: 30, background: 'var(--color-accent)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 16 }}>S</span>
+      <span style={{ width: 30, height: 30, background: 'var(--color-accent)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 16 }}>P</span>
       <span className="brand-name" style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-        Stephanny Planner
+        Planner
       </span>
     </Link>
   );
