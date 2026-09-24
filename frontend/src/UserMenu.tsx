@@ -35,6 +35,12 @@ export function UserMenu() {
                 {me.organization.name} · <span className="tag tag-neutral">{ROLE[me.user.role] ?? me.user.role}</span>
               </span>
             </div>
+            {(me.user.role === 'admin' || me.user.role === 'disenador') && (
+              <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), nav(me.user.role === 'admin' ? '/admin' : '/admin?t=clientes'))}>
+                <Icon name={me.user.role === 'admin' ? 'settings' : 'contact'} />
+                {me.user.role === 'admin' ? 'Administración' : 'Clientes'}
+              </button>
+            )}
             <InstallButton variant="menu" />
             <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), setNews(true))}>
               <Icon name="sparkles" />

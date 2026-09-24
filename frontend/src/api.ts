@@ -17,7 +17,7 @@ export const isNetworkError = (e: unknown) => e instanceof ApiError && e.status 
 /** Worth retrying later: no answer, rate limit or server trouble. */
 export const isTransient = (e: unknown) => e instanceof ApiError && (e.status === 0 || e.status === 429 || e.status >= 500);
 
-async function request<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, timeoutMs = 20_000): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, timeoutMs = 20_000): Promise<T> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let res: Response;

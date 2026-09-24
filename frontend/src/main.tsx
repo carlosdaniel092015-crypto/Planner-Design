@@ -5,6 +5,7 @@ import { AuthProvider, RequireAuth } from './auth';
 import './offline/install';
 import { PwaUpdater } from './offline/pwa';
 import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
+import { AdminPage } from './pages/Admin';
 import { EditorPage } from './pages/Editor';
 import { HomePage } from './pages/Home';
 import { PublicApprovalPage } from './pages/PublicApproval';
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: '/invitacion', element: <SetPasswordPage mode="invite" /> },
       { path: '/', element: <RequireAuth><HomePage /></RequireAuth> },
       { path: '/proyectos/:id', element: <RequireAuth><EditorPage /></RequireAuth> },
+      { path: '/admin', element: <RequireAuth><AdminPage /></RequireAuth> },
       { path: '*', element: <RequireAuth><HomePage /></RequireAuth> },
     ],
   },
