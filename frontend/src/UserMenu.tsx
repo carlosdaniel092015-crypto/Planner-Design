@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
+import { ChangelogDialog } from './Changelog';
 import { InstallButton } from './offline/install';
 import { Icon, initials, MUTED } from './ui';
 
@@ -10,6 +11,7 @@ export function UserMenu() {
   const { me, signOut } = useAuth();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
+  const [news, setNews] = useState(false);
   if (!me) return null;
   return (
     <div style={{ position: 'relative' }}>
@@ -34,6 +36,11 @@ export function UserMenu() {
               </span>
             </div>
             <InstallButton variant="menu" />
+            <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), setNews(true))}>
+              <Icon name="sparkles" />
+              Novedades
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: MUTED, fontWeight: 600 }}>v{__APP_VERSION__}</span>
+            </button>
             <a className="btn btn-ghost" href="/api/v1/docs" target="_blank" rel="noreferrer" style={{ justifyContent: 'flex-start' }}>
               <Icon name="book-open" />
               Documentación de la API
@@ -60,6 +67,7 @@ export function UserMenu() {
           </div>
         </>
       )}
+      {news && <ChangelogDialog onClose={() => setNews(false)} />}
     </div>
   );
 }

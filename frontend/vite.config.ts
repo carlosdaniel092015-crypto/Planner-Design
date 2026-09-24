@@ -51,8 +51,12 @@ function serviceWorker(): Plugin {
   };
 }
 
+const pkg = JSON.parse(readFileSync(here('../package.json'), 'utf8')) as { version: string };
+
 export default defineConfig({
   root: here('.'),
+  // Shown in the account menu ("Planner v1.0.0") and compared with /api/v1/version.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILT_AT__: JSON.stringify(new Date().toISOString()) },
   plugins: [react(), serviceWorker()],
   resolve: { alias: { '@core': here('../src/core') } },
   build: { outDir: here('../dist/web'), emptyOutDir: true, sourcemap: true },
