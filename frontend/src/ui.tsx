@@ -125,8 +125,16 @@ export function useToast() {
 export function Dialog({ title, children, onClose, actions, width = 440 }: { title: string; children: ReactNode; onClose: () => void; actions?: ReactNode; width?: number }) {
   return (
     <div className="dialog-backdrop" style={{ zIndex: 70, position: 'fixed' }} onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: `min(${width}px, 100%)` }} role="dialog" aria-modal="true" aria-label={title}>
-        <div style={{ display: 'flex', alignItems: 'start', gap: 12 }}>
+      {/* Never taller than the screen: title and actions stay put, the body scrolls (phones included). */}
+      <div
+        className="dialog"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: `min(${width}px, 100%)`, maxHeight: 'calc(100dvh - 32px)', minHeight: 0 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div style={{ display: 'flex', alignItems: 'start', gap: 12, flex: 'none' }}>
           <div className="dialog-title" style={{ flex: 1 }}>
             {title}
           </div>
@@ -134,8 +142,14 @@ export function Dialog({ title, children, onClose, actions, width = 440 }: { tit
             <Icon name="x" size={18} />
           </button>
         </div>
-        <div className="dialog-body">{children}</div>
-        {actions && <div className="dialog-actions">{actions}</div>}
+        <div className="dialog-body" style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+          {children}
+        </div>
+        {actions && (
+          <div className="dialog-actions" style={{ flex: 'none', flexWrap: 'wrap' }}>
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );
