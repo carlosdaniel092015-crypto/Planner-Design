@@ -187,7 +187,8 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     absorbSmallGaps();
 
     // Uppers over the base runs, skipping windows, tall units and the hood.
-    const uh = p.prefs.alacena === '90 cm' ? 90 : 70;
+    // Any height the user typed ("80 cm"); 70 cm when missing.
+    const uh = parseFloat(p.prefs.alacena ?? '') || 70;
     const upperH = Math.min(uh, Math.max(35, p.room.H - 150 - 5));
     for (const w of walls) {
       const floor = out.filter((o) => o.wall === w && o.tpl.type === 'base').sort((a, b) => a.pos - b.pos);

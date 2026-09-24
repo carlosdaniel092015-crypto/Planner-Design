@@ -96,6 +96,8 @@ export function SpecWizard(props: {
   const closet = closetOf(s.closet);
   const [tool, setTool] = useState<PointType>('agua');
   const [ptSel, setPtSel] = useState<number | null>(null);
+  /** Point being relocated: the next click on a wall moves it instead of adding a new one. */
+  const [moving, setMoving] = useState<number | null>(null);
   const layouts = layoutsFor(s.ptype);
   const lay = layouts.find((l) => l.k === s.layout);
   const set = (patch: Partial<ProjectData>) => !readOnly && commit({ ...s, ...patch });
@@ -103,7 +105,7 @@ export function SpecWizard(props: {
   const Q: Record<number, [string, string]> = {
     1: ['¿Qué distribución tiene tu espacio?', kit ? 'Elige la forma general. Podrás ajustar cada módulo en el editor.' : 'Elige cómo se reparten los módulos en la habitación.'],
     2: ['Medidas del espacio', 'Captura el largo de cada muro y la altura del techo en centímetros. Agrega puertas y ventanas para evitar interferencias.'],
-    3: ['¿Dónde están las instalaciones?', 'Elige un tipo y haz clic sobre un muro en la planta para ubicarlo. Indica la altura desde el piso.'],
+    3: ['¿Dónde están las instalaciones?', 'Elige un tipo y haz clic sobre un muro en la planta para ubicarlo. Luego puedes cambiar el muro, la distancia y la altura, o moverlo con el botón de mover.'],
     4: [kit ? '¿Qué electrodomésticos llevará?' : '¿Qué accesorios quieres incluir?', kit ? 'Define el tipo de instalación y las medidas de cada equipo para reservar su hueco.' : 'Selecciona los accesorios y su forma de integración.'],
     5: ['Preferencias de diseño', kit ? 'Estas elecciones definen materiales, alturas y herrajes de la propuesta.' : 'Indica cuánto espacio necesitas para cada tipo de prenda.'],
     6: ['Revisa tus respuestas', 'Confirma que todo esté correcto antes de generar la distribución propuesta.'],
@@ -128,6 +130,14 @@ export function SpecWizard(props: {
   const nid = (xs: { id: number }[]) => xs.reduce((a, x) => Math.max(a, x.id), 0) + 1;
   const clampRoom = (v: number) => Math.max(100, Math.min(1200, Math.round(v)));
 
+  const wallLen = (w: 'A' | 'B' | 'C' | 'D') => (w === 'A' || w === 'D' ? s.room.A : s.room.B);
+  /** Edits a point's wall/distance/height, keeping it on the wall (0 … wall length). */
+  const updPt = (p: (typeof s.pts)[number], patch: Partial<(typeof s.pts)[number]>) => {
+    const next = { ...p, ...patch };
+    next.pos = Math.max(0, Math.min(wallLen(next.wall), Math.round(next.pos)));
+    set({ pts: s.pts.map((x) => (x.id === p.id ? next : x)) });
+  };
+  const movingPt = moving != null ? s.pts.find((p) => p.id === moving) : undefined;
   const planDrawing = (withPts: boolean) => plan({ ...s, mods: [], pts: withPts ? s.pts : [] }, { cotas: true });
   const onWallClick = (x: number, y: number) => {
     if (readOnly) return;
@@ -144,6 +154,14 @@ export function SpecWizard(props: {
       .sort((a, b) => Math.abs(a[1]) - Math.abs(b[1]))[0]!;
     const len = d[0] === 'A' || d[0] === 'D' ? A : B;
     const pos = Math.max(0, Math.min(len, Math.round(d[2])));
+    const mv = moving != null ? s.pts.find((p) => p.id === moving) : undefined;
+    if (mv) {
+      set({ pts: s.pts.map((p) => (p.id === mv.id ? { ...p, wall: d[0], pos } : p)) });
+      setMoving(null);
+      setPtSel(mv.id);
+      props.flash(`${PT_T[mv.t][1]} movida al muro ${d[0]} a ${pos} cm`);
+      return;
+    }
     const id = nid(s.pts);
     set({ pts: [...s.pts, { id, t: tool, wall: d[0], pos, z: PT_Z[tool] }] });
     setPtSel(id);
@@ -164,6 +182,42 @@ export function SpecWizard(props: {
       <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>{note}</p>
     </div>
   );
+  /** Preset buttons plus a field to type any other measure in cm (stored as "80 cm", like the presets). */
+  const segCm = (title: string, value: string | undefined, opts: string[], note: string, pick: (v: string) => void, name: string, min: number, max: number, fallback: number) => {
+    const cur = parseFloat(value ?? '') || fallback;
+    const custom = !opts.includes(value ?? '');
+    return (
+      <div key={name}>
+        <h6 style={{ margin: '0 0 10px' }}>{title}</h6>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div className="seg">
+            {opts.map((l) => (
+              <label key={l} className="seg-opt">
+                <input type="radio" name={name} checked={value === l} onChange={() => pick(l)} disabled={readOnly} />
+                {l}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span style={{ color: MUTED }}>u otra:</span>
+            <div style={{ position: 'relative' }}>
+              <Num
+                label={`${title} en cm`}
+                value={cur}
+                onCommit={(v) => pick(`${Math.max(min, Math.min(max, Math.round(v)))} cm`)}
+                disabled={readOnly}
+                style={{ width: 84, paddingRight: 30, borderColor: custom ? 'var(--color-accent)' : undefined }}
+              />
+              <span style={{ position: 'absolute', right: 8, top: 9, fontSize: 12, opacity: 0.6 }}>cm</span>
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>
+          {note} Entre {min} y {max} cm.
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div className="spec-grid" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
@@ -257,12 +311,13 @@ export function SpecWizard(props: {
                         </div>
                       )}
                     </div>
-                    <div className="ops-row" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: MUTED, paddingBottom: 6, borderBottom: '2px solid var(--color-divider)' }}>
+                    <div className="ops-row ops-head" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: MUTED, paddingBottom: 6, borderBottom: '2px solid var(--color-divider)' }}>
                       <span>Tipo</span>
                       <span>Muro</span>
                       <span>Posición</span>
                       <span>Ancho</span>
                       <span>Alto</span>
+                      <span title="Altura desde el piso hasta la parte de abajo de la ventana">Del piso</span>
                       <span />
                     </div>
                     {s.ops.map((o) => {
@@ -273,14 +328,39 @@ export function SpecWizard(props: {
                             <Icon name={o.t === 'ventana' ? 'app-window' : 'door-open'} />
                             {o.t === 'ventana' ? 'Ventana' : 'Puerta'}
                           </span>
-                          <select className="input" value={o.wall} onChange={(e) => upd({ wall: e.target.value as typeof o.wall })} disabled={readOnly} style={{ padding: 6 }}>
-                            {['A', 'B', 'C', 'D'].map((w) => (
-                              <option key={w}>{w}</option>
-                            ))}
-                          </select>
-                          <Num label="Posición en cm" value={o.pos} onCommit={(v) => upd({ pos: Math.max(0, v) })} disabled={readOnly} />
-                          <Num label="Ancho en cm" value={o.w} onCommit={(v) => upd({ w: Math.max(20, v) })} disabled={readOnly} />
-                          <Num label="Alto en cm" value={o.h} onCommit={(v) => upd({ h: Math.max(20, v) })} disabled={readOnly} />
+                          <label className="ops-cell">
+                            <span className="ops-lbl">Muro</span>
+                            <select className="input" value={o.wall} onChange={(e) => upd({ wall: e.target.value as typeof o.wall })} disabled={readOnly} style={{ padding: 6 }}>
+                              {['A', 'B', 'C', 'D'].map((w) => (
+                                <option key={w}>{w}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="ops-cell">
+                            <span className="ops-lbl">Posición</span>
+                            <Num label="Posición en cm" value={o.pos} onCommit={(v) => upd({ pos: Math.max(0, Math.round(v)) })} disabled={readOnly} />
+                          </label>
+                          <label className="ops-cell">
+                            <span className="ops-lbl">Ancho</span>
+                            <Num label="Ancho en cm" value={o.w} onCommit={(v) => upd({ w: Math.max(20, Math.round(v)) })} disabled={readOnly} />
+                          </label>
+                          <label className="ops-cell">
+                            <span className="ops-lbl">Alto</span>
+                            <Num label="Alto en cm" value={o.h} onCommit={(v) => upd({ h: Math.max(20, Math.round(v)) })} disabled={readOnly} />
+                          </label>
+                          <label className="ops-cell">
+                            <span className="ops-lbl">Del piso</span>
+                            {o.t === 'ventana' ? (
+                              <Num
+                                label="Altura de la ventana desde el piso en cm"
+                                value={o.z ?? 110}
+                                onCommit={(v) => upd({ z: Math.max(0, Math.min(s.room.H - o.h, Math.round(v))) })}
+                                disabled={readOnly}
+                              />
+                            ) : (
+                              <input className="input" value="0" disabled aria-label="Las puertas llegan al piso" title="Las puertas llegan al piso" readOnly />
+                            )}
+                          </label>
                           <button type="button" className="btn btn-icon" onClick={() => set({ ops: s.ops.filter((x) => x.id !== o.id) })} aria-label="Eliminar" title="Eliminar" disabled={readOnly}>
                             <Icon name="trash-2" />
                           </button>
@@ -309,8 +389,13 @@ export function SpecWizard(props: {
                   <div style={{ background: 'var(--sp-canvas)', height: 440, padding: 12, position: 'relative', cursor: readOnly ? 'default' : 'crosshair' }}>
                     <ClickablePlan drawing={planDrawing(true)} onWallClick={onWallClick} />
                     <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }}>
-                      <Icon name="mouse-pointer-click" size={14} />
-                      Clic sobre un muro para ubicar: {PT_T[tool][1].toLowerCase()}
+                      <Icon name={moving != null ? 'move' : 'mouse-pointer-click'} size={14} />
+                      {movingPt ? `Toca un muro para mover: ${PT_T[movingPt.t][1].toLowerCase()}` : `Clic sobre un muro para ubicar: ${PT_T[tool][1].toLowerCase()}`}
+                      {movingPt && (
+                        <button type="button" className="btn btn-ghost" onClick={() => setMoving(null)} style={{ padding: '2px 8px', fontSize: 12, minHeight: 0 }}>
+                          Cancelar
+                        </button>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -328,13 +413,11 @@ export function SpecWizard(props: {
                         <span style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', background: 'var(--color-accent)', color: '#fff', fontSize: 10, fontWeight: 800, flex: 'none' }}>{PT_T[p.t][0]}</span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 600 }}>{PT_T[p.t][1]}</div>
-                          <div style={{ fontSize: 12, color: MUTED }}>
-                            Muro {p.wall} · a {p.pos} cm de la esquina
-                          </div>
+
                         </div>
                       </div>
                       <div style={{ position: 'relative' }}>
-                        <Num label="Altura desde el piso" value={p.z ?? PT_Z[p.t]} onCommit={(v) => set({ pts: s.pts.map((x) => (x.id === p.id ? { ...x, z: Math.max(0, v) } : x)) })} disabled={readOnly} style={{ paddingRight: 34, width: '100%' }} />
+                        <Num label="Altura desde el piso" value={p.z ?? PT_Z[p.t]} onCommit={(v) => updPt(p, { z: Math.max(0, Math.min(s.room.H, Math.round(v))) })} disabled={readOnly} style={{ paddingRight: 34, width: '100%' }} />
                         <span style={{ position: 'absolute', right: 8, top: 9, fontSize: 12, opacity: 0.6 }}>cm</span>
                       </div>
                       <button
@@ -342,6 +425,7 @@ export function SpecWizard(props: {
                         className="btn btn-icon"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (moving === p.id) setMoving(null);
                           set({ pts: s.pts.filter((x) => x.id !== p.id) });
                         }}
                         aria-label="Eliminar punto"
@@ -350,6 +434,32 @@ export function SpecWizard(props: {
                       >
                         <Icon name="trash-2" />
                       </button>
+                      <div className="pt-loc" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: MUTED }} onClick={(e) => e.stopPropagation()}>
+                        Muro
+                        <select className="input" aria-label="Muro" value={p.wall} onChange={(e) => updPt(p, { wall: e.target.value as typeof p.wall })} disabled={readOnly} style={{ padding: '3px 4px', width: 48, fontSize: 13 }}>
+                          {(['A', 'B', 'C', 'D'] as const).map((w) => (
+                            <option key={w}>{w}</option>
+                          ))}
+                        </select>
+                        a
+                        <Num label="Distancia desde la esquina en cm" value={p.pos} onCommit={(v) => updPt(p, { pos: v })} disabled={readOnly} style={{ padding: '3px 4px', width: 60, fontSize: 13 }} />
+                        cm
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            onClick={() => {
+                              setMoving(moving === p.id ? null : p.id);
+                              setPtSel(p.id);
+                            }}
+                            aria-label="Mover en la planta"
+                            title="Mover en la planta"
+                            style={{ width: 28, height: 28, minHeight: 0, background: moving === p.id ? 'var(--color-accent)' : undefined, color: moving === p.id ? '#fff' : undefined }}
+                          >
+                            <Icon name="move" size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -426,9 +536,9 @@ export function SpecWizard(props: {
                   </div>
                 </div>
                 <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 24, paddingTop: 24, borderTop: '2px solid var(--color-divider)' }}>
-                  {seg('Altura de alacenas', s.prefs.alacena, ['70 cm', '90 cm'], 'Alacenas de 90 cm llegan casi al techo.', (v) => setPrefs({ alacena: v }), 'alacena')}
+                  {segCm('Altura de alacenas', s.prefs.alacena, ['70 cm', '90 cm'], 'Alacenas de 90 cm llegan casi al techo.', (v) => setPrefs({ alacena: v }), 'alacena', 30, 120, 70)}
                   {seg('Tipo de apertura', s.prefs.apertura, ['Jaladera', 'Gola', 'Push'], 'Se refleja en todos los frentes del 3D.', (v) => setPrefs({ apertura: v as 'Jaladera' }), 'apertura')}
-                  {seg('Zócalo', s.prefs.zocalo, ['10 cm', '15 cm'], 'Altura del rodapié bajo los módulos.', (v) => setPrefs({ zocalo: v }), 'zocalo')}
+                  {segCm('Zócalo', s.prefs.zocalo, ['10 cm', '15 cm'], 'Altura del rodapié bajo los módulos.', (v) => setPrefs({ zocalo: v }), 'zocalo', 5, 30, 10)}
                 </div>
                 <Budget value={s.prefs.presupuesto ?? 400000} currency={props.currency} onChange={(v) => setPrefs({ presupuesto: v })} disabled={readOnly} />
               </div>
@@ -452,7 +562,10 @@ export function SpecWizard(props: {
                           {unit}
                         </span>
                       </div>
-                      <input type="range" min={min} max={max} step={step} value={closet[key]} onChange={(e) => setCloset({ [key]: +e.target.value })} disabled={readOnly} aria-label={title} style={{ width: '100%', accentColor: 'var(--color-accent)', marginTop: 10 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                        <input type="range" min={min} max={max} step={step} value={closet[key]} onChange={(e) => setCloset({ [key]: +e.target.value })} disabled={readOnly} aria-label={title} style={{ flex: 1, minWidth: 0, accentColor: 'var(--color-accent)' }} />
+                        <Num label={`${title}${unit}`} value={closet[key]} onCommit={(v) => setCloset({ [key]: Math.max(min, Math.min(max, key === 'zapatos' ? Math.round(v) : Math.round(v * 10) / 10)) })} disabled={readOnly} style={{ width: 76 }} />
+                      </div>
                       <p style={{ fontSize: 12, margin: '4px 0 0', color: MUTED }}>{note}</p>
                     </div>
                   ))}
@@ -598,8 +711,10 @@ export function SpecWizard(props: {
       <style>{`
         .spec-card:hover{border-color:var(--color-accent-400)!important}
         .gen-btn:hover{background:var(--color-accent-100)!important}
-        .ops-row{display:grid;grid-template-columns:minmax(0,1.3fr) 64px repeat(3,minmax(0,1fr)) 36px;gap:8px}
-        .pt-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 36px;gap:8px}
+        .ops-row{display:grid;grid-template-columns:minmax(0,1.3fr) 64px repeat(4,minmax(0,1fr)) 36px;gap:8px}
+        .ops-cell{display:block;min-width:0}.ops-cell .input{width:100%}.ops-lbl{display:none}
+        @media (max-width: 640px){.ops-row{grid-template-columns:repeat(5,minmax(0,1fr));row-gap:6px}.ops-row>:first-child{grid-column:1/5}.ops-row>:last-child{grid-column:5;grid-row:1;justify-self:end}.ops-head{display:none!important}.ops-lbl{display:block;font-size:11px;color:var(--color-text);opacity:.6;margin-bottom:3px}.ops-cell .input{padding:6px 4px!important;font-size:14px}}
+        .pt-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 36px;gap:8px}.pt-loc{grid-column:1/-1;padding-left:40px}
         @media (max-width: 1100px){.spec-grid{grid-template-columns:minmax(0,1fr)!important}.spec-aside{display:none!important}}
         @media (max-width: 560px){.spec-next{min-width:0!important;flex:1;max-width:220px}.spec-pad .btn-secondary{padding:0 12px!important}}
         @media (max-width: 760px){.spec-pad{padding-left:16px!important;padding-right:16px!important}.grid-3,.grid-2{grid-template-columns:minmax(0,1fr)!important}.step-name{display:none}}
@@ -614,6 +729,10 @@ function Budget({ value, currency, onChange, disabled }: { value: number; curren
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h6 style={{ margin: 0 }}>Presupuesto aproximado</h6>
         <span style={{ fontSize: 22, fontWeight: 800 }}>{fmtMoney(value, currency)}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13 }}>
+        <span style={{ color: MUTED }}>Escribe el monto:</span>
+        <Num label="Presupuesto aproximado" value={value} onCommit={(v) => onChange(Math.max(0, Math.round(v)))} disabled={disabled} style={{ width: 150 }} />
       </div>
       <input type="range" min={BUDGET_RANGE.min} max={BUDGET_RANGE.max} step={BUDGET_RANGE.step} value={value} onChange={(e) => onChange(+e.target.value)} disabled={disabled} aria-label="Presupuesto" style={{ width: '100%', accentColor: 'var(--color-accent)', marginTop: 10 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: MUTED }}>
