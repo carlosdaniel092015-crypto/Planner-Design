@@ -3,6 +3,14 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.5.0 · 2026-09-24
+
+### Respaldos y monitoreo
+- **Respaldo automático diario** de toda la base de datos en el volumen (`/data/backups`), conservando los 14 más recientes.
+- Respaldo y restauración manuales: `node dist/backup.js` y `node dist/restore.js <archivo>`.
+- Los errores de la app en los dispositivos de los usuarios se reportan al servidor y aparecen en los logs.
+- Guía de respaldos, restauración y monitor de disponibilidad en el README.
+
 ## 1.4.0 · 2026-09-24
 
 ### Planes y pagos

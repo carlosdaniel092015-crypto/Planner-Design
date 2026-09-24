@@ -1,6 +1,6 @@
 {
   "name": "planner-design-api",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,6 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts",
+    "db:backup": "tsx --env-file-if-exists=.env src/db/backup.ts",
+    "db:restore": "tsx --env-file-if-exists=.env src/db/restore.ts",
     "sync-core": "node scripts/sync-core.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "dev:web": "vite --config frontend/vite.config.ts"
