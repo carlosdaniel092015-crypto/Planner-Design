@@ -8,7 +8,7 @@ import { defineConfig, type Plugin } from 'vite';
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 /** Public files the planner needs offline (the original prototype and docs stay online-only). */
-const OFFLINE_PUBLIC = /^(planner-3d\.js|manifest\.webmanifest|icons\/.*|vendor\/.*\.js|vendor\/lucide\/.*\.(css|woff2)|_ds\/[^/]+\/styles\.css)$/;
+const OFFLINE_PUBLIC = /^(planner-3d\.js|manifest\.webmanifest|icons\/.*|screenshots\/.*|vendor\/.*\.js|vendor\/lucide\/.*\.(css|woff2)|_ds\/[^/]+\/styles\.css)$/;
 /** Cross-origin stylesheets the pages link to (the fonts they pull in are cached at runtime). */
 const EXTERNAL = ['https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap'];
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
 import { canCreate, isOwner, useAuth } from '../auth';
 import { ShareDialog } from '../ShareDialog';
+import { InstallButton } from '../offline/install';
 import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
 import { createProject, deleteProject, duplicateProject, isLocalId, listProjects, onSyncEvent } from '../offline/sync';
 import { UserMenu } from '../UserMenu';
@@ -104,6 +105,7 @@ export function HomePage() {
         <Brand />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <SyncBadge />
+          <InstallButton />
           <a className="btn btn-ghost home-proto" href="/prototipo/" title="Prototipo original de Claude Design">
             <Icon name="circle-help" />
             Prototipo
@@ -302,7 +304,7 @@ export function HomePage() {
           .home-hero{grid-template-columns:minmax(0,1fr)!important}
           .home-hero h1{font-size:38px!important}
           .home-types{grid-template-columns:minmax(0,1fr)!important}
-          .home-proto,.sync-label{display:none!important}
+          .home-proto,.sync-label,.install-label{display:none!important}
           .proj-row{grid-template-columns:96px minmax(0,1fr) 44px}
           .proj-row>*:nth-child(3),.proj-row>*:nth-child(4){display:none}
           .proj-row>*:nth-child(5) .btn-secondary{display:none}

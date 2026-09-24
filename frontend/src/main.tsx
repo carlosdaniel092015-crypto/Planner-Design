@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth';
+import './offline/install';
 import { PwaUpdater } from './offline/pwa';
 import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
 import { EditorPage } from './pages/Editor';

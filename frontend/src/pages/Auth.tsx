@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../api';
 import { useAuth } from '../auth';
+import { InstallButton } from '../offline/install';
 import { Brand, Icon, MUTED } from '../ui';
 
 function Shell({ kicker, title, lead, children }: { kicker: string; title: string; lead: string; children: ReactNode }) {
@@ -9,6 +10,9 @@ function Shell({ kicker, title, lead, children }: { kicker: string; title: strin
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)' }}>
       <header style={{ display: 'flex', alignItems: 'center', height: 60, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', flex: 'none' }}>
         <Brand />
+        <span style={{ marginLeft: 'auto' }}>
+          <InstallButton />
+        </span>
       </header>
       <main style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,440px)', maxWidth: 1240, width: '100%', margin: '0 auto', padding: '56px 32px', gap: 48, alignItems: 'start' }} className="auth-grid">
         <div style={{ borderBottom: '2px solid var(--color-divider)', paddingBottom: 24 }}>
