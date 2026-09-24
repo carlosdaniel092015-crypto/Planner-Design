@@ -13,6 +13,7 @@ import { AppError, errorBody } from './lib/errors';
 import { json, pick, router } from './lib/openapi';
 import { memoryRateLimiter, type RateLimiter } from './lib/rate-limit';
 import { authRoutes, meRoutes } from './routes/auth';
+import { accountRoutes } from './routes/account';
 import { organizationRoutes } from './routes/organization';
 import { versionRoutes } from './routes/version';
 import { clientRoutes } from './routes/clients';
@@ -121,6 +122,7 @@ export function createApp(opts: CreateAppOptions) {
 
   v1.route('/auth', authRoutes());
   v1.route('/', meRoutes());
+  v1.route('/', accountRoutes());
   v1.route('/', versionRoutes());
   v1.route('/', organizationRoutes());
   v1.route('/users', userRoutes());

@@ -41,6 +41,10 @@ export function UserMenu() {
                 {me.user.role === 'admin' ? 'Administración' : 'Clientes'}
               </button>
             )}
+            <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), nav('/cuenta'))}>
+              <Icon name="user-cog" />
+              Mi cuenta
+            </button>
             <InstallButton variant="menu" />
             <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), setNews(true))}>
               <Icon name="sparkles" />
