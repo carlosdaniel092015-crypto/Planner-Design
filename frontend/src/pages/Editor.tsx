@@ -445,9 +445,9 @@ export function EditorPage() {
   const usedWalls: Wall[] = ['A', 'B', ...(['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w))];
   const is3d = view === '3d';
   const phases = [
-    { n: 1, label: 'Especificaciones' },
-    { n: 2, label: 'Diseño' },
-    { n: 3, label: 'Aprobación' },
+    { n: 1, label: 'Especificaciones', short: 'Datos' },
+    { n: 2, label: 'Diseño', short: 'Diseño' },
+    { n: 3, label: 'Aprobación', short: 'Aprobar' },
   ];
   const controls: { k: string; icon: string; tip: string; key: string; on?: boolean; act: () => void }[] = [
     { k: 'zin', icon: 'zoom-in', tip: 'Acercar', key: '+', act: () => (is3d && viewer.current ? viewer.current.zoomBy(1.25) : setZoom((z) => Math.min(2.6, +(z * 1.25).toFixed(2)))) },
@@ -541,6 +541,30 @@ export function EditorPage() {
         </div>
       </header>
 
+      {/* Phones and tablets: the phase stepper and edit tools that do not fit in the header. */}
+      <div className="ed-mbar" role="navigation" aria-label="Fases del proyecto">
+        {phases.map((p) => {
+          const cur = p.n === phase;
+          const done = p.n < phase || (p.n === 3 && project.status === 'aprobado');
+          return (
+            <button key={p.n} type="button" onClick={() => goPhase(p.n)} aria-current={cur ? 'step' : undefined} className={cur ? 'ed-mstep on' : 'ed-mstep'}>
+              <span className="ed-mnum">{done && !cur ? <Icon name="check" size={12} /> : p.n}</span>
+              <span className="ed-mlabel">{p.short}</span>
+            </button>
+          );
+        })}
+        <span style={{ flex: 1 }} />
+        <button type="button" className="btn btn-icon ed-mtool" title="Deshacer" aria-label="Deshacer" onClick={undo} disabled={readOnly || !hist.current.length}>
+          <Icon name="undo-2" size={18} />
+        </button>
+        <button type="button" className="btn btn-icon ed-mtool" title="Rehacer" aria-label="Rehacer" onClick={redo} disabled={readOnly || !fut.current.length}>
+          <Icon name="redo-2" size={18} />
+        </button>
+        <button type="button" className="btn btn-icon ed-mtool" title="Bibliotecas" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
+          <Icon name="library" size={17} />
+        </button>
+      </div>
+
       {readOnly && !conflict && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: project.status === 'aprobado' ? 'var(--color-accent-100)' : 'var(--color-neutral-200)', color: project.status === 'aprobado' ? 'var(--color-accent-800)' : 'var(--color-text)', fontSize: 13, borderBottom: '1px solid var(--color-divider)' }}>
           <Icon name={project.status === 'aprobado' ? 'lock' : 'eye'} size={15} />
@@ -626,12 +650,12 @@ export function EditorPage() {
               <div style={{ display: 'flex', background: 'var(--color-bg)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-sm)' }}>
                 {(
                   [
-                    ['3d', '3D Perspectiva', 'box'],
+                    ['3d', '3D', 'box'],
                     ['planta', 'Planta', 'square-dashed'],
                     ['alzado', 'Alzado', 'panels-top-left'],
                   ] as const
                 ).map(([k, l, ic]) => (
-                  <button type="button" key={k} onClick={() => setView(k)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 600, border: 0, cursor: 'pointer', background: view === k ? 'var(--color-text)' : 'transparent', color: view === k ? 'var(--color-bg)' : 'var(--color-text)' }}>
+                  <button type="button" key={k} onClick={() => setView(k)} title={k === '3d' ? '3D Perspectiva' : l} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', border: 0, cursor: 'pointer', background: view === k ? 'var(--color-text)' : 'transparent', color: view === k ? 'var(--color-bg)' : 'var(--color-text)' }}>
                     <Icon name={ic} size={15} />
                     {l}
                   </button>
@@ -911,7 +935,15 @@ export function EditorPage() {
           .ed-body .ed-right{right:0}
           .ed-scrim{position:absolute;inset:0;z-index:29;background:rgba(0,0,0,.25)}
         }
-        @media (min-width: 901px){.ed-scrim{display:none}}
+        @media (min-width: 901px){.ed-scrim{display:none}.ed-mbar{display:none!important}}
+        .ed-mbar{display:flex;align-items:center;gap:2px;padding:4px 8px;border-bottom:1px solid var(--color-divider);background:var(--color-bg);flex:none;min-height:44px}
+        .ed-mstep{display:flex;align-items:center;gap:6px;background:none;border:0;padding:6px 8px;font:inherit;font-size:13px;font-weight:600;color:${MUTED};cursor:pointer;white-space:nowrap;min-height:40px}
+        .ed-mstep.on{color:var(--color-text);font-weight:800}
+        .ed-mnum{width:22px;height:22px;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid var(--color-divider)}
+        .ed-mstep.on .ed-mnum{background:var(--color-accent);border-color:var(--color-accent);color:#fff}
+        @media (min-width: 561px){.ed-mtool{display:none!important}}
+        @media (max-width: 360px){.ed-mstep:not(.on) .ed-mlabel{display:none}}
+        @media (max-width: 700px){.bb-issues{grid-template-columns:minmax(0,1fr)!important;max-height:45dvh!important}}
         @media (max-width: 560px){
           .ed-hide-xs,.bb-hide-xs,.bb-first{display:none!important}
           .bb-row{gap:8px!important;padding:6px 10px!important;justify-content:space-between}
