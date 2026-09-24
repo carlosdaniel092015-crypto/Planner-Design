@@ -28,6 +28,7 @@ import { installEngine, sceneCfg, type Viewer } from '../editor/engine';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
+import { ApprovalView } from '../approval/ApprovalView';
 import { SpecWizard } from '../spec/SpecWizard';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg, useToast } from '../ui';
@@ -92,7 +93,7 @@ export function EditorPage() {
         setProject(p);
         setData(p.data);
         setName(p.name);
-        setPhase(p.phase <= 1 && p.status !== 'aprobado' ? 1 : 2);
+        setPhase(p.status === 'aprobado' || p.phase >= 3 ? 3 : p.phase <= 1 ? 1 : 2);
         // Everything is shown in the organisation's base currency (RD$).
         setCurrency(c.pricing.baseCurrency);
         version.current = p.version;
@@ -147,8 +148,12 @@ export function EditorPage() {
 
   // ---------- save ----------
   const doSave = useCallback(
-    async (overrideVersion?: number) => {
-      if (!project || !data || readOnly || saving.current) return;
+    async (overrideVersion?: number): Promise<boolean> => {
+      if (!project || !data || readOnly) return !dirty.current;
+      if (saving.current) {
+        while (saving.current) await new Promise((r) => setTimeout(r, 100));
+        if (!dirty.current) return true;
+      }
       saving.current = true;
       dirty.current = false;
       setSave({ kind: 'saving' });
@@ -157,6 +162,7 @@ export function EditorPage() {
         version.current = res.version;
         setProject((p) => (p ? { ...p, ...res, data: p.data } : res));
         setSave(dirty.current ? { kind: 'dirty' } : { kind: 'saved', at: res.updatedAt });
+        return true;
       } catch (e) {
         dirty.current = true;
         if (e instanceof ApiError && e.code === 'VERSION_DESACTUALIZADA') {
@@ -166,6 +172,7 @@ export function EditorPage() {
           setProject((p) => (p ? { ...p, status: 'aprobado' } : p));
           setSave({ kind: 'error', message: 'El proyecto ya está aprobado' });
         } else setSave({ kind: 'error', message: e instanceof ApiError ? e.message : 'Sin conexión; se reintentará.' });
+        return false;
       } finally {
         saving.current = false;
       }
@@ -261,10 +268,21 @@ export function EditorPage() {
     setSave({ kind: 'dirty' });
   };
   const goPhase = (n: number) => {
-    if (n === 3) return flash('La pantalla de aprobación y el envío al cliente llegan en la etapa 3.');
     if (n === phase) return;
+    if (project.status === 'aprobado' && n < 3) return flash('El proyecto está aprobado; duplícalo desde Mis proyectos para cambiar el diseño.');
     setPhase(n);
+    setSel(null);
     markDirty();
+  };
+  const onStatus = (status: ProjectDetail['status']) => {
+    setProject((p) => (p ? { ...p, status } : p));
+    api
+      .getProject(project.id)
+      .then((p) => {
+        version.current = p.version;
+        setProject(p);
+      })
+      .catch(() => {});
   };
   const generate = () => {
     if (readOnly || genStep != null) return;
@@ -389,7 +407,23 @@ export function EditorPage() {
         </div>
       )}
 
-      {phase === 1 ? (
+      {phase === 3 ? (
+        <ApprovalView
+          project={project}
+          data={data}
+          catalog={catalog}
+          materialsByCode={materialsByCode}
+          estimate={estimate}
+          currency={currency}
+          issues={issues}
+          canManage={!readOnly}
+          orgName={me?.organization.name ?? 'Planner'}
+          commit={commit}
+          ensureSaved={() => doSave()}
+          onStatus={onStatus}
+          flash={flash}
+        />
+      ) : phase === 1 ? (
         <SpecWizard data={data} step={specStep} setStep={setSpecStep} commit={commit} onGenerate={generate} currency={currency} readOnly={readOnly} flash={flash} />
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -587,7 +621,7 @@ export function EditorPage() {
           onPick={(i) => (setSel(i), setRightOpen(true))}
           onPriceAdj={(patch) => commit({ ...data, priceAdj: { ...data.priceAdj, ...patch } })}
           onResetPrices={() => commit({ ...data, priceAdj: { ...data.priceAdj, inst: 8, desc: 0, final: null, counter: null }, mods: data.mods.map(({ pOv: _p, ...m }) => m as ModuleInstance) })}
-          onApproval={() => flash('La pantalla de aprobación y el envío al cliente llegan en la etapa 3.')}
+          onApproval={() => goPhase(3)}
         />
       </div>
       )}

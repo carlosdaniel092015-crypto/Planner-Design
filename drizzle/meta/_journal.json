@@ -15,6 +15,13 @@
       "when": 1790186815980,
       "tag": "0001_approvals_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790207905664,
+      "tag": "0002_approval_signature",
+      "breakpoints": true
     }
   ]
 }

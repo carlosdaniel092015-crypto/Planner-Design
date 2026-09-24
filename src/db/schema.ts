@@ -339,6 +339,8 @@ export const approvals = pgTable(
     ip: inet('ip'),
     userAgent: text('user_agent'),
     snapshotSha256: text('snapshot_sha256').notNull(),
+    /** Handwritten signature as a PNG data URL (evidence, optional). */
+    signaturePng: text('signature_png'),
     pdfFileId: uuid('pdf_file_id').references(() => files.id),
     createdAt: ts('created_at').notNull().defaultNow(),
   },

@@ -62,6 +62,31 @@ export interface Viewer {
 interface Renderer {
   init(): Promise<void>;
   createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null) => void; onReady?: () => void }): Promise<Viewer>;
+  snapshot(cfg: unknown, o: SnapOptions): Promise<string | null>;
+}
+
+export interface SnapOptions {
+  w: number;
+  h: number;
+  /** Camera azimuth in degrees (45 = corner view). */
+  ang?: number;
+  /** Frame one module (detail view). */
+  focusId?: number;
+}
+
+const snapCache = new Map<string, Promise<string | null>>();
+/** Offscreen photo-real render (JPEG data URL), cached by scene + options; null when WebGL is unavailable. */
+export function snapshot(cfg: unknown, o: SnapOptions): Promise<string | null> {
+  const key = JSON.stringify([cfg, o]);
+  let p = snapCache.get(key);
+  if (!p) {
+    p = loadRenderer()
+      .then((r) => r.snapshot(cfg, o))
+      .catch(() => null);
+    snapCache.set(key, p);
+    if (snapCache.size > 40) snapCache.delete(snapCache.keys().next().value!);
+  }
+  return p;
 }
 
 let rendererP: Promise<Renderer> | null = null;

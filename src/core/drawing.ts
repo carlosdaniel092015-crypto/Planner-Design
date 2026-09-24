@@ -35,9 +35,9 @@ const ACC = '#ec3013';
 const INK = '#201e1d';
 const P = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
-type Colors = { f: string; b: string; c: string; hd: string };
+export type Colors = { f: string; b: string; c: string; hd: string };
 const colorOf = (materials: Record<string, MaterialDefinition>, code: string, fallback: string) => materials[code]?.color ?? fallback;
-function cols(m: ModuleInstance, mats: ProjectData['mats'], materials: Record<string, MaterialDefinition>): Colors {
+export function cols(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectData['mats'], materials: Record<string, MaterialDefinition>): Colors {
   return {
     f: colorOf(materials, m.fre || mats.frentes, '#c49a6c'),
     b: colorOf(materials, m.cue || mats.cuerpo, '#eeebe6'),

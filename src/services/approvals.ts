@@ -76,7 +76,7 @@ async function notifyOwner(deps: Deps, row: ProjectRow, p: { decision: 'aprobado
   });
 }
 
-export async function approveInternal(deps: Deps, a: AuthContext, projectId: string, signerName: string, meta: { ip: string | null; userAgent: string | null }) {
+export async function approveInternal(deps: Deps, a: AuthContext, projectId: string, signerName: string, meta: { ip: string | null; userAgent: string | null }, signaturePng?: string) {
   const out = await deps.db.transaction(async (tx) => {
     const row = await getProject(tx, a, projectId);
     if (row.status === 'aprobado') throw conflict('PROYECTO_APROBADO', 'El proyecto ya está aprobado.');
@@ -93,6 +93,7 @@ export async function approveInternal(deps: Deps, a: AuthContext, projectId: str
         decision: 'aprobado',
         signerName,
         signerEmail: a.user.email,
+        signaturePng: signaturePng ?? null,
         ip: meta.ip,
         userAgent: meta.userAgent?.slice(0, 300),
         snapshotSha256: snapshotHash(version.data),
@@ -122,7 +123,7 @@ export async function resolveLink(db: DbOrTx, token: string) {
 export async function decidePublic(
   deps: Deps,
   token: string,
-  input: { decision: 'aprobado' | 'cambios'; signerName: string; signerEmail?: string; comment?: string },
+  input: { decision: 'aprobado' | 'cambios'; signerName: string; signerEmail?: string; comment?: string; signature?: string },
   meta: { ip: string | null; userAgent: string | null },
 ) {
   const out = await deps.db.transaction(async (tx) => {
@@ -146,6 +147,7 @@ export async function decidePublic(
         signerName: input.signerName,
         signerEmail: input.signerEmail ?? link.recipientEmail,
         comment: input.comment ?? null,
+        signaturePng: input.signature ?? null,
         ip: meta.ip,
         userAgent: meta.userAgent?.slice(0, 300),
         snapshotSha256: snapshotHash(version.data),
