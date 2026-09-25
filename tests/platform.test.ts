@@ -108,7 +108,6 @@ describe('correo que no sale', () => {
       const p = (await t.req('POST', '/projects', { user: t.adminA, body: { data } })).data;
       const link = await t.req('POST', `/projects/${p.id}/approval-links`, { user: t.adminA, body: { recipientEmail: 'cliente@x.test' } });
       expect(link.status).toBe(201);
-      expect(link.data.emailSent).toBe(false);
       expect(link.data.url).toContain('/p/');
       const ok = await t.req('POST', `/projects/${p.id}/approve-internal`, { user: t.adminA, body: { signerName: 'En tienda' } });
       expect(ok.status).toBe(200);

@@ -3,6 +3,13 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.12.0 · 2026-09-25
+
+### Enviar al cliente por WhatsApp
+- **Enviar al cliente** ya no pide correo ni envía correos: pones (si quieres) el nombre y el WhatsApp del cliente, pulsas **Crear enlace** y luego **Enviar por WhatsApp**, que abre el chat con el mensaje y el enlace listos. También puedes copiar el enlace.
+- Con el número se abre directo el chat del cliente (10 dígitos se toman como República Dominicana/EE. UU., +1); sin número eliges el contacto en WhatsApp.
+- En «Envíos anteriores» se ve a quién lo compartiste.
+
 ## 1.11.0 · 2026-09-25
 
 ### Crear cuenta con código por correo

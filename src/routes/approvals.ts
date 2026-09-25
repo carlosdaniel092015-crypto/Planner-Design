@@ -17,6 +17,9 @@ const Link = z
     id: z.uuid(),
     projectId: z.uuid(),
     versionId: z.uuid(),
+    /** Who it was shared with, as typed (name, phone or email). */
+    recipient: z.string(),
+    /** @deprecated same as `recipient`. */
     recipientEmail: z.string(),
     expiresAt: z.iso.datetime(),
     revokedAt: z.iso.datetime().nullable(),
@@ -34,6 +37,7 @@ const linkJson = (l: typeof approvalLinks.$inferSelect) => ({
   id: l.id,
   projectId: l.projectId,
   versionId: l.versionId,
+  recipient: l.recipientEmail,
   recipientEmail: l.recipientEmail,
   expiresAt: l.expiresAt.toISOString(),
   revokedAt: iso(l.revokedAt),
@@ -88,14 +92,26 @@ export function approvalRoutes() {
       method: 'post',
       path: '/projects/{id}/approval-links',
       tags,
-      summary: 'Enviar al cliente: congela una versión y crea el enlace público',
+      summary: 'Enviar al cliente: congela una versión y crea el enlace público para compartir',
       description:
         'Rechaza (422) un proyecto con errores de validación. Crea una versión con snapshot de precios, revoca enlaces anteriores, deja el proyecto en `enviado`, ' +
-        'envía el correo y devuelve la URL pública `/p/:token`. **El token en claro solo se devuelve aquí**; en la base se guarda su SHA-256.',
+        'y devuelve la URL pública `/p/:token` para compartirla (WhatsApp o copiar); **no se envía correo**. `recipient` es solo una etiqueta para el historial. **El token en claro solo se devuelve aquí**; en la base se guarda su SHA-256.',
       security,
-      request: { params: IdParam, ...body(z.object({ recipientEmail: z.email(), expiresInDays: z.number().int().min(1).max(90).default(14) }).openapi({ example: { recipientEmail: 'cliente@ejemplo.com', expiresInDays: 14 } })) },
+      request: {
+        params: IdParam,
+        ...body(
+          z
+            .object({
+              recipient: z.string().trim().max(160).optional(),
+              /** @deprecated kept for older app versions; stored as the label, no email is sent. */
+              recipientEmail: z.string().trim().max(254).optional(),
+              expiresInDays: z.number().int().min(1).max(90).default(14),
+            })
+            .openapi({ example: { recipient: 'Familia Ortega · 809 555 0101', expiresInDays: 14 } }),
+        ),
+      },
       responses: {
-        201: json(z.object({ link: Link, url: z.string(), token: z.string(), versionId: z.uuid(), emailSent: z.boolean().openapi({ description: 'false: el enlace se creó pero el correo no salió; compártelo tú.' }) }), 'Creado'),
+        201: json(z.object({ link: Link, url: z.string(), token: z.string(), versionId: z.uuid() }), 'Creado'),
         ...authErrors,
         ...pick(409, 422),
       },
@@ -106,9 +122,9 @@ export function approvalRoutes() {
       const { id } = c.req.valid('param');
       const p = await getProject(c.var.deps.db, a, id);
       assertCan(a.user, 'project:send', { access: p.access });
-      const { recipientEmail, expiresInDays } = c.req.valid('json');
-      const out = await createApprovalLink(c.var.deps, a, id, recipientEmail, expiresInDays);
-      return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id, emailSent: out.emailSent }, 201);
+      const input = c.req.valid('json');
+      const out = await createApprovalLink(c.var.deps, a, id, input.recipient || input.recipientEmail || 'Cliente', input.expiresInDays);
+      return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id }, 201);
     },
   );
 
