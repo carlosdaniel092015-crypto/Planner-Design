@@ -2,10 +2,16 @@ import {
   type Appliance,
   applOf,
   appliancesFor,
+  blankProject,
   BUDGET_RANGE,
   closetOf,
+  cmOf,
+  CUSTOM_INSTS,
+  distOf,
   type Drawing,
   ESTILOS,
+  type FurnitureWall,
+  isCustomAppl,
   layoutsFor,
   plan,
   PT_T,
@@ -16,7 +22,8 @@ import {
   STEP_K,
 } from '@core';
 import { type CSSProperties, useEffect, useState } from 'react';
-import { fmtMoney, Icon, MUTED, Svg } from '../ui';
+import type { CatalogMaterial } from '../api';
+import { Dialog, fmtMoney, Icon, MUTED, Svg } from '../ui';
 
 type Currency = 'USD' | 'DOP';
 const SOFT = 'color-mix(in srgb,var(--color-text) 68%,transparent)';
@@ -88,6 +95,8 @@ export function SpecWizard(props: {
   currency: Currency;
   readOnly: boolean;
   flash: (m: string) => void;
+  /** Catalogue materials (standard + uploaded textures) for the custom style. */
+  materials: CatalogMaterial[];
 }) {
   const { data: s, step: st, setStep, commit, readOnly } = props;
   const kit = s.ptype === 'cocina';
@@ -96,6 +105,8 @@ export function SpecWizard(props: {
   const closet = closetOf(s.closet);
   const [tool, setTool] = useState<PointType>('agua');
   const [ptSel, setPtSel] = useState<number | null>(null);
+  const [askBlank, setAskBlank] = useState(false);
+  const dist = distOf(s);
   /** Point being relocated: the next click on a wall moves it instead of adding a new one. */
   const [moving, setMoving] = useState<number | null>(null);
   const layouts = layoutsFor(s.ptype);
@@ -112,11 +123,11 @@ export function SpecWizard(props: {
   };
 
   const cnt = (t: PointType) => s.pts.filter((p) => p.t === t).length;
-  const applOn = appliancesFor(s.ptype).filter((a) => appl[a.k]?.on);
+  const applOn = [...appliancesFor(s.ptype).map((a) => ({ k: a.k, name: a.name })), ...Object.keys(appl).filter(isCustomAppl).map((k) => ({ k, name: appl[k]!.name ?? 'Accesorio' }))].filter((a) => appl[a.k]?.on);
   const prefTxt = kit ? `${s.prefs.estilo ?? 'Contemporáneo'} · ${s.prefs.apertura}` : `Colgado ${String(closet.largo).replace('.', ',')} m + ${String(closet.corto).replace('.', ',')} m`;
   const summary: [string, string, string, number][] = [
     ['shapes', 'Tipo de proyecto', s.ptype === 'cocina' ? 'Cocina' : s.ptype === 'closet' ? 'Closet' : 'Vestidor', 0],
-    ['layout-grid', 'Distribución', lay?.name ?? '—', 1],
+    ['layout-grid', 'Distribución', `${lay?.name ?? '—'} · muros ${dist.walls.join(', ')}${dist.island.on ? ' + isla' : ''}`, 1],
     ['ruler', 'Medidas', `${s.room.A} × ${s.room.B} cm · techo ${s.room.H} cm`, 2],
     ['door-open', 'Puertas y ventanas', `${s.ops.filter((o) => o.t === 'puerta').length} puerta(s) · ${s.ops.filter((o) => o.t === 'ventana').length} ventana(s)`, 2],
     ['plug', 'Instalaciones', `${cnt('agua')} agua · ${cnt('desague')} desagüe · ${cnt('elec')} eléctrico · ${cnt('gas')} gas`, 3],
@@ -168,6 +179,145 @@ export function SpecWizard(props: {
     props.flash(`${PT_T[tool][1]} ubicada en muro ${d[0]} a ${pos} cm`);
   };
 
+  // ---------- distribution measurements ----------
+  const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
+  const setDist = (patch: NonNullable<ProjectData['dist']>) => set({ dist: { ...s.dist, ...patch } });
+  /** Any structural change turns the layout into "Personalizada", keeping what the preset had. */
+  const toCustom = (patch: NonNullable<ProjectData['dist']>) =>
+    set({ layout: 'personalizada', dist: { ...s.dist, walls: dist.walls, island: { on: dist.island.on, ...(dist.island.w ? { w: dist.island.w } : {}), d: dist.island.d }, ...patch } });
+  const wallLenOf = (w: FurnitureWall) => (w === 'A' || w === 'D' ? s.room.A : s.room.B);
+  const toggleWall = (w: FurnitureWall) => {
+    const next = dist.walls.includes(w) ? dist.walls.filter((x) => x !== w) : [...dist.walls, w];
+    if (!next.length) return props.flash('Deja al menos un muro con muebles.');
+    toCustom({ walls: next });
+  };
+  const WALL_R: Record<FurnitureWall, [number, number, number, number]> = { A: [10, 10, 80, 14], B: [10, 24, 14, 32], C: [76, 24, 14, 32], D: [10, 56, 80, 14] };
+  const rectsFor = (walls: FurnitureWall[], island: boolean): [number, number, number, number][] => [...walls.map((w) => WALL_R[w]), ...(island ? [[40, 38, 24, 10] as [number, number, number, number]] : [])];
+  const islandLabel = kit ? 'Isla o península' : 'Isla cajonera';
+  const distPanel = (
+    <div style={{ marginTop: 28, paddingTop: 24, borderTop: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <h6 style={{ margin: '0 0 4px' }}>Medidas de la distribución</h6>
+        <p style={{ margin: 0, fontSize: 13, color: MUTED }}>Ajusta cualquier forma. Si cambias los muros o la isla, la distribución pasa a «Personalizada».</p>
+      </div>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 6, color: SOFT }}>Muros con {kit ? 'muebles' : 'módulos'}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(['A', 'B', 'C', 'D'] as const).map((w) => {
+            const on = dist.walls.includes(w);
+            return (
+              <button type="button" key={w} onClick={() => toggleWall(w)} disabled={readOnly} aria-pressed={on} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: on ? 'var(--color-text)' : 'transparent', color: on ? 'var(--color-bg)' : 'var(--color-text)', border: `1px solid ${on ? 'var(--color-text)' : 'var(--color-divider)'}` }}>
+                <Icon name={on ? 'check' : 'plus'} size={14} />
+                Muro {w} · {wallLenOf(w)} cm
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
+        <CmField label={kit ? 'Fondo de bajos' : 'Fondo de módulos'} value={dist.baseD} onCommit={(v) => setDist({ baseD: clampN(v, 30, 80) })} disabled={readOnly} />
+        {kit && <CmField label="Altura de bajos (sin zócalo)" value={dist.baseH} onCommit={(v) => setDist({ baseH: clampN(v, 50, 100) })} disabled={readOnly} />}
+        {kit && <CmField label="Fondo de alacenas" value={dist.upperD} onCommit={(v) => setDist({ upperD: clampN(v, 20, 50) })} disabled={readOnly} />}
+        {kit && <CmField label="Pasillo mínimo" value={dist.aisle} onCommit={(v) => setDist({ aisle: clampN(v, 60, 200) })} disabled={readOnly} />}
+      </div>
+      {kit && <p style={{ margin: '-8px 0 0', fontSize: 12, color: MUTED }}>Altura de encimera ≈ {cmOf(s.prefs.zocalo, 10) + dist.baseH + 3} cm (zócalo + bajo + encimera).</p>}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', paddingBottom: 10 }}>
+          <input type="checkbox" checked={dist.island.on} disabled={readOnly} onChange={() => toCustom({ island: { ...s.dist?.island, on: !dist.island.on, d: dist.island.d } })} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: 0 }} />
+          {islandLabel}
+        </label>
+        {dist.island.on && (
+          <>
+            <div style={{ width: 170 }}>
+              <CmField label="Ancho (0 = automático)" value={dist.island.w ?? 0} onCommit={(v) => setDist({ island: { ...s.dist?.island, on: dist.island.on, d: dist.island.d, ...(v > 0 ? { w: clampN(v, 60, 400) } : { w: undefined }) } })} disabled={readOnly} />
+            </div>
+            <div style={{ width: 170 }}>
+              <CmField label="Fondo" value={dist.island.d} onCommit={(v) => setDist({ island: { ...s.dist?.island, on: dist.island.on, d: clampN(v, 40, 150) } })} disabled={readOnly} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // ---------- custom appliances / accessories ----------
+  const customKeys = Object.keys(appl).filter(isCustomAppl);
+  const addCustom = () => {
+    const n = customKeys.reduce((a, k) => Math.max(a, Number(k.slice(1))), 0) + 1;
+    set({ appl: { ...appl, [`x${n}`]: { on: true, name: kit ? 'Nuevo electrodoméstico' : 'Nuevo accesorio', inst: kit ? 'Bajo encimera' : 'Integrado', w: 60, h: kit ? 85 : 40, d: kit ? 60 : 45 } } });
+  };
+  const removeCustom = (k: string) => {
+    const { [k]: _gone, ...rest } = appl;
+    set({ appl: rest });
+  };
+  const applCards = [
+    ...appliancesFor(s.ptype).map((a) => ({ k: a.k, name: a.name, icon: a.icon, insts: a.insts as readonly string[], custom: false })),
+    ...customKeys.map((k) => ({ k, name: appl[k]!.name ?? 'Accesorio', icon: 'package', insts: (kit ? CUSTOM_INSTS : ['Integrado', 'Libre']) as readonly string[], custom: true })),
+  ];
+
+  // ---------- design preferences ----------
+  const CUSTOM_STYLE = 'Personalizado';
+  const ownMats = (s.prefs as { mats?: Partial<ProjectData['mats']> }).mats ?? {};
+  const matGroups = [
+    ['cuerpo', 'Cuerpo'],
+    ['frentes', 'Frentes'],
+    ['encimera', kit ? 'Encimera' : 'Cubierta de isla'],
+    ['jaladeras', 'Jaladeras'],
+  ] as const;
+  const pickMat = (g: (typeof matGroups)[number][0], code: string) => set({ prefs: { ...s.prefs, estilo: CUSTOM_STYLE, mats: { ...s.mats, ...ownMats, [g]: code } }, mats: { ...s.mats, [g]: code } });
+  const colorOf = (code: string) => props.materials.find((m) => m.code === code)?.color ?? '#ccc';
+  const styleBlock = (
+    <div>
+      <h6 style={{ margin: '0 0 10px' }}>Estilo</h6>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
+        {ESTILOS.map((e) => (
+          <button type="button" key={e.name} onClick={() => setPrefs({ estilo: e.name })} disabled={readOnly} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', padding: 12, background: 'var(--color-surface)', border: `2px solid ${s.prefs.estilo === e.name ? 'var(--color-accent)' : 'transparent'}`, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', height: 56 }}>
+              {e.c.map((col) => (
+                <span key={col} style={{ background: col }} />
+              ))}
+            </div>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>{e.name}</span>
+            <span style={{ fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)' }}>{e.desc}</span>
+          </button>
+        ))}
+        <button type="button" onClick={() => set({ prefs: { ...s.prefs, estilo: CUSTOM_STYLE, mats: { ...s.mats, ...ownMats } } })} disabled={readOnly} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', padding: 12, background: 'var(--color-surface)', border: `2px solid ${s.prefs.estilo === CUSTOM_STYLE ? 'var(--color-accent)' : 'transparent'}`, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', height: 56 }}>
+            {(['frentes', 'cuerpo', 'encimera'] as const).map((g) => (
+              <span key={g} style={{ background: colorOf(ownMats[g] ?? s.mats[g]) }} />
+            ))}
+          </div>
+          <span style={{ fontWeight: 800, fontSize: 15 }}>{CUSTOM_STYLE}</span>
+          <span style={{ fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)' }}>Elige tú cada material (incluye tus texturas).</span>
+        </button>
+      </div>
+      {s.prefs.estilo === CUSTOM_STYLE && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12, marginTop: 14 }}>
+          {matGroups.map(([g, label]) => {
+            const opts = props.materials.filter((m) => m.uses.includes(g));
+            const cur = ownMats[g] ?? s.mats[g];
+            return (
+              <div key={g} className="field">
+                <label htmlFor={`mat-${g}`}>{label}</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ width: 32, height: 32, flex: 'none', background: colorOf(cur), boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)' }} />
+                  <select id={`mat-${g}`} className="input" value={cur} disabled={readOnly} onChange={(e) => pickMat(g, e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+                    {!opts.some((m) => m.code === cur) && <option value={cur}>{cur}</option>}
+                    {opts.map((m) => (
+                      <option key={m.code} value={m.code}>
+                        {m.name}
+                        {m.source === 'subido' ? ' (tu textura)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
   const seg = (title: string, value: string | undefined, opts: string[], note: string, pick: (v: string) => void, name: string) => (
     <div key={name}>
       <h6 style={{ margin: '0 0 10px' }}>{title}</h6>
@@ -225,7 +375,15 @@ export function SpecWizard(props: {
         <div style={{ padding: '18px 40px 16px', borderBottom: '2px solid var(--color-divider)', flex: 'none' }} className="spec-pad">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
             <span style={{ fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--color-accent-700)' }}>Fase 1 · Especificaciones</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Paso {st} de 6</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {!readOnly && (
+                <button type="button" className="btn btn-ghost" onClick={() => setAskBlank(true)} style={{ fontSize: 13 }} title="Quita puertas, ventanas, instalaciones, electrodomésticos y muebles">
+                  <Icon name="eraser" size={14} />
+                  Empezar en blanco
+                </button>
+              )}
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Paso {st} de 6</span>
+            </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 4 }}>
             {names.map((label, i) => (
@@ -245,15 +403,16 @@ export function SpecWizard(props: {
             <p style={{ margin: '0 0 28px', fontSize: 15, color: SOFT, maxWidth: 640, textWrap: 'pretty' }}>{Q[st]![1]}</p>
 
             {st === 1 && (
+              <>
               <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 16 }}>
                 {layouts.map((l) => {
                   const sel = s.layout === l.k;
                   const art: Drawing = {
                     vb: [0, 0, 100, 80],
-                    items: [{ d: 'M4 4H96V76H4Z', fill: 'none', stroke: '#201e1d', sw: 2 }, { d: 'M62 76H84', stroke: '#f3f2f2', sw: 3 }, ...l.r.map((r) => ({ d: `M${r[0]} ${r[1]}h${r[2]}v${r[3]}h${-r[2]}Z`, fill: sel ? '#ec3013' : '#7d7979' }))],
+                    items: [{ d: 'M4 4H96V76H4Z', fill: 'none', stroke: '#201e1d', sw: 2 }, { d: 'M62 76H84', stroke: '#f3f2f2', sw: 3 }, ...(l.r.length ? l.r : rectsFor(sel ? dist.walls : ['A', 'B', 'C'], sel && dist.island.on)).map((r) => ({ d: `M${r[0]} ${r[1]}h${r[2]}v${r[3]}h${-r[2]}Z`, fill: sel ? '#ec3013' : '#7d7979' }))],
                   };
                   return (
-                    <button type="button" key={l.k} className="spec-card" onClick={() => set({ layout: l.k })} disabled={readOnly} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left', padding: 16, background: 'var(--color-surface)', border: `2px solid ${sel ? 'var(--color-accent)' : 'transparent'}`, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
+                    <button type="button" key={l.k} className="spec-card" onClick={() => (l.k === 'personalizada' ? toCustom({}) : set({ layout: l.k, dist: { ...s.dist, walls: undefined, island: undefined } }))} disabled={readOnly} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left', padding: 16, background: 'var(--color-surface)', border: `2px solid ${sel ? 'var(--color-accent)' : 'transparent'}`, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
                       <div style={{ height: 120, background: 'var(--color-bg)', padding: 10 }}>
                         <Svg drawing={art} title={l.name} />
                       </div>
@@ -270,6 +429,8 @@ export function SpecWizard(props: {
                   );
                 })}
               </div>
+              {distPanel}
+              </>
             )}
 
             {st === 2 && (
@@ -284,8 +445,8 @@ export function SpecWizard(props: {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <CmField label="Muro A" value={s.room.A} onCommit={(v) => set({ room: { ...s.room, A: clampRoom(v) } })} disabled={readOnly} />
                       <CmField label="Muro B" value={s.room.B} onCommit={(v) => set({ room: { ...s.room, B: clampRoom(v) } })} disabled={readOnly} />
-                      <CmField label="Muro C" value={s.room.B} onCommit={() => {}} disabled />
-                      <CmField label="Muro D" value={s.room.A} onCommit={() => {}} disabled />
+                      <CmField label="Muro C (= B)" value={s.room.B} onCommit={() => {}} disabled />
+                      <CmField label="Muro D (= A)" value={s.room.A} onCommit={() => {}} disabled />
                       <div style={{ gridColumn: 'span 2' }}>
                         <CmField label="Altura de techo" value={s.room.H} onCommit={(v) => set({ room: { ...s.room, H: Math.max(150, Math.min(600, Math.round(v))) } })} disabled={readOnly} />
                       </div>
@@ -308,6 +469,11 @@ export function SpecWizard(props: {
                             <Icon name="plus" size={14} />
                             Ventana
                           </button>
+                          {s.ops.length > 0 && (
+                            <button type="button" className="btn btn-ghost" onClick={() => set({ ops: [] })} style={{ padding: '6px 10px', fontSize: 13 }}>
+                              Quitar todas
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -320,14 +486,15 @@ export function SpecWizard(props: {
                       <span title="Altura desde el piso hasta la parte de abajo de la ventana">Del piso</span>
                       <span />
                     </div>
+                    {s.ops.length === 0 && <p style={{ fontSize: 13, color: MUTED }}>Sin puertas ni ventanas. Agrégalas con los botones de arriba.</p>}
                     {s.ops.map((o) => {
                       const upd = (patch: Partial<typeof o>) => set({ ops: s.ops.map((x) => (x.id === o.id ? { ...x, ...patch } : x)) });
                       return (
                         <div key={o.id} className="ops-row" style={{ alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--color-divider)' }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}>
-                            <Icon name={o.t === 'ventana' ? 'app-window' : 'door-open'} />
-                            {o.t === 'ventana' ? 'Ventana' : 'Puerta'}
-                          </span>
+                          <select className="input" aria-label="Tipo de abertura" value={o.t} onChange={(e) => upd(e.target.value === 'ventana' ? { t: 'ventana', z: o.z ?? 110, h: Math.min(o.h, 120) } : { t: 'puerta', z: undefined, h: Math.max(o.h, 200) })} disabled={readOnly} style={{ padding: 6 }}>
+                            <option value="puerta">Puerta</option>
+                            <option value="ventana">Ventana</option>
+                          </select>
                           <label className="ops-cell">
                             <span className="ops-lbl">Muro</span>
                             <select className="input" value={o.wall} onChange={(e) => upd({ wall: e.target.value as typeof o.wall })} disabled={readOnly} style={{ padding: 6 }}>
@@ -386,6 +553,19 @@ export function SpecWizard(props: {
                       );
                     })}
                   </div>
+                  {!readOnly && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <button type="button" className="btn btn-secondary" onClick={() => { const id = nid(s.pts); set({ pts: [...s.pts, { id, t: tool, wall: 'A', pos: Math.round(s.room.A / 2), z: PT_Z[tool] }] }); setPtSel(id); }} style={{ fontSize: 13 }}>
+                        <Icon name="plus" size={14} />
+                        Agregar {PT_T[tool][1].toLowerCase()} sin clic
+                      </button>
+                      {s.pts.length > 0 && (
+                        <button type="button" className="btn btn-ghost" onClick={() => set({ pts: [] })} style={{ fontSize: 13 }}>
+                          Quitar todas
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div style={{ background: 'var(--sp-canvas)', height: 440, padding: 12, position: 'relative', cursor: readOnly ? 'default' : 'crosshair' }}>
                     <ClickablePlan drawing={planDrawing(true)} onWallClick={onWallClick} />
                     <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }}>
@@ -468,19 +648,28 @@ export function SpecWizard(props: {
 
             {st === 4 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: 16 }}>
-                {appliancesFor(s.ptype).map((a) => {
+                {applCards.map((a) => {
                   const c = appl[a.k]!;
                   return (
                     <div key={a.k} style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--color-surface)', border: `2px solid ${c.on ? 'var(--color-text)' : 'transparent'}` }}>
                       <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 8 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           <Icon name={a.icon} size={26} style={{ opacity: c.on ? 1 : 0.45 }} />
-                          <span style={{ fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{a.name}</span>
+                          {a.custom ? (
+                            <input className="input" aria-label="Nombre" defaultValue={a.name} maxLength={60} disabled={readOnly} onBlur={(e) => e.target.value.trim() && setAppl(a.k, { name: e.target.value.trim() })} style={{ fontWeight: 800, fontSize: 15, padding: '4px 6px' }} />
+                          ) : (
+                            <span style={{ fontWeight: 800, fontSize: 16, lineHeight: 1.2 }}>{a.name}</span>
+                          )}
                         </div>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
                           <input type="checkbox" checked={c.on} onChange={() => setAppl(a.k, { on: !c.on })} disabled={readOnly} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: 0 }} />
                           Incluir
                         </label>
+                        {a.custom && !readOnly && (
+                          <button type="button" className="btn btn-icon" onClick={() => removeCustom(a.k)} aria-label={`Quitar ${a.name}`} title="Quitar">
+                            <Icon name="trash-2" size={15} />
+                          </button>
+                        )}
                       </div>
                       <div style={{ opacity: c.on ? 1 : 0.45, display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div>
@@ -514,27 +703,19 @@ export function SpecWizard(props: {
                     </div>
                   );
                 })}
+                {!readOnly && (
+                  <button type="button" onClick={addCustom} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 200, padding: 16, background: 'transparent', border: '2px dashed var(--color-divider)', cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
+                    <Icon name="plus" size={26} />
+                    <span style={{ fontWeight: 800 }}>{kit ? 'Agregar electrodoméstico' : 'Agregar accesorio'}</span>
+                    <span style={{ fontSize: 12, color: MUTED, textAlign: 'center' }}>Con tu nombre, instalación y medidas.</span>
+                  </button>
+                )}
               </div>
             )}
 
             {st === 5 && kit && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-                <div>
-                  <h6 style={{ margin: '0 0 10px' }}>Estilo</h6>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
-                    {ESTILOS.map((e) => (
-                      <button type="button" key={e.name} onClick={() => setPrefs({ estilo: e.name })} disabled={readOnly} style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', padding: 12, background: 'var(--color-surface)', border: `2px solid ${s.prefs.estilo === e.name ? 'var(--color-accent)' : 'transparent'}`, cursor: 'pointer', font: 'inherit', color: 'var(--color-text)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', height: 56 }}>
-                          {e.c.map((col) => (
-                            <span key={col} style={{ background: col }} />
-                          ))}
-                        </div>
-                        <span style={{ fontWeight: 800, fontSize: 15 }}>{e.name}</span>
-                        <span style={{ fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)' }}>{e.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {styleBlock}
                 <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 24, paddingTop: 24, borderTop: '2px solid var(--color-divider)' }}>
                   {segCm('Altura de alacenas', s.prefs.alacena, ['70 cm', '90 cm'], 'Alacenas de 90 cm llegan casi al techo.', (v) => setPrefs({ alacena: v }), 'alacena', 30, 120, 70)}
                   {seg('Tipo de apertura', s.prefs.apertura, ['Jaladera', 'Gola', 'Push'], 'Se refleja en todos los frentes del 3D.', (v) => setPrefs({ apertura: v as 'Jaladera' }), 'apertura')}
@@ -546,6 +727,7 @@ export function SpecWizard(props: {
 
             {st === 5 && !kit && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                {styleBlock}
                 <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '24px 40px', maxWidth: 900 }}>
                   {(
                     [
@@ -576,7 +758,7 @@ export function SpecWizard(props: {
                         <Icon name="minus" />
                       </button>
                       <span style={{ width: 48, textAlign: 'center', fontWeight: 800, fontSize: 18 }}>{closet.cajoneras}</span>
-                      <button type="button" className="btn btn-icon" onClick={() => setCloset({ cajoneras: Math.min(6, closet.cajoneras + 1) })} aria-label="Más" disabled={readOnly}>
+                      <button type="button" className="btn btn-icon" onClick={() => setCloset({ cajoneras: Math.min(20, closet.cajoneras + 1) })} aria-label="Más" disabled={readOnly}>
                         <Icon name="plus" />
                       </button>
                     </div>
@@ -601,7 +783,18 @@ export function SpecWizard(props: {
               <>
                 <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 16 }}>
                   {[
-                    { n: 1, title: 'Distribución', rows: [['Tipo', summary[0]![2]], ['Forma', lay?.name ?? '—']], edit: 1 },
+                    {
+                      n: 1,
+                      title: 'Distribución',
+                      rows: [
+                        ['Tipo', summary[0]![2]],
+                        ['Forma', lay?.name ?? '—'],
+                        ['Muros', dist.walls.join(', ')],
+                        [kit ? 'Fondo / alto bajos' : 'Fondo', kit ? `${dist.baseD} / ${dist.baseH} cm` : `${dist.baseD} cm`],
+                        ...(dist.island.on ? [['Isla', `${dist.island.w ?? 'auto'} × ${dist.island.d} cm`]] : []),
+                      ],
+                      edit: 1,
+                    },
                     { n: 2, title: 'Medidas', rows: [['Muro A', `${s.room.A} cm`], ['Muro B', `${s.room.B} cm`], ['Techo', `${s.room.H} cm`], ['Aberturas', String(s.ops.length)]], edit: 2 },
                     {
                       n: 3,
@@ -708,6 +901,33 @@ export function SpecWizard(props: {
           })}
         </div>
       </aside>
+      {askBlank && (
+        <Dialog
+          title="¿Empezar en blanco?"
+          onClose={() => setAskBlank(false)}
+          actions={
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => setAskBlank(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  commit(blankProject(s));
+                  setAskBlank(false);
+                  setStep(1);
+                  props.flash('Proyecto en blanco · Ctrl+Z para deshacer');
+                }}
+              >
+                Empezar en blanco
+              </button>
+            </>
+          }
+        >
+          Se quitan las puertas, ventanas, instalaciones, electrodomésticos y muebles. Se conservan el nombre, las medidas de la habitación y el estilo. Puedes deshacerlo con Ctrl+Z.
+        </Dialog>
+      )}
       <style>{`
         .spec-card:hover{border-color:var(--color-accent-400)!important}
         .gen-btn:hover{background:var(--color-accent-100)!important}

@@ -105,6 +105,17 @@ export const projectDataSchema = z
       .loose()
       .default({ apertura: 'Jaladera' }),
     closet: z.record(z.string(), z.unknown()).optional(),
+    /** Distribution measurements chosen in Especificaciones (walls with furniture, depths, heights, island). */
+    dist: z
+      .object({
+        walls: z.array(z.enum(['A', 'B', 'C', 'D'])).min(1).max(4).optional(),
+        baseD: z.number().min(30).max(80).optional(),
+        baseH: z.number().min(50).max(100).optional(),
+        upperD: z.number().min(20).max(50).optional(),
+        aisle: z.number().min(60).max(200).optional(),
+        island: z.object({ on: z.boolean().optional(), w: z.number().min(60).max(400).optional(), d: z.number().min(40).max(150).optional() }).optional(),
+      })
+      .optional(),
     mods: z.array(moduleSchema).max(400),
     mats: z.object({
       cuerpo: z.string().min(1),

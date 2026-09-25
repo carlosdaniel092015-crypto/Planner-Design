@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  blankProject,
   DEFAULT_HARDWARE,
   DEFAULT_MATERIALS,
   DEFAULT_MODULES,
@@ -133,5 +134,82 @@ describe('distribución automática', () => {
 
   it('es determinista', () => {
     expect(design('cocina', 'U').p.mods).toEqual(design('cocina', 'U').p.mods);
+  });
+
+  describe('fase 1 totalmente editable', () => {
+    const errs = <T extends { st: string }>(i: T[]) => i.filter((x) => x.st === 'err');
+
+    it('distribución personalizada: solo los muros elegidos, con las esquinas B-D bien resueltas', () => {
+      const { p, issues } = design('cocina', 'personalizada', (q) => {
+        q.dist = { walls: ['B', 'D'] };
+        q.pts = q.pts.map((x) => (x.t === 'agua' || x.t === 'desague' ? { ...x, wall: 'B', pos: 150 } : x));
+      });
+      expect([...new Set(p.mods.map((m) => m.wall))].sort()).toEqual(['B', 'D']);
+      expect(errs(issues)).toEqual([]);
+      for (const m of p.mods.filter((x) => x.wall === 'D' && x.type !== 'upper' && x.type !== 'hood')) expect(m.pos!).toBeGreaterThanOrEqual(60);
+      expect(issues.find((i) => i.code === 'TRASLAPE')?.st ?? 'ok').toBe('ok');
+    });
+
+    it('respeta fondo y altura de bajos, fondo y altura de alacenas', () => {
+      const { p, issues } = design('cocina', 'L', (q) => {
+        q.dist = { baseD: 50, baseH: 80, upperD: 30 };
+        q.prefs.alacena = '80 cm';
+      });
+      expect(errs(issues)).toEqual([]);
+      const bases = p.mods.filter((m) => m.type === 'base' && m.wall !== 'F');
+      expect(bases.length).toBeGreaterThan(3);
+      for (const m of bases) expect([m.d, m.h], m.code).toEqual([50, 80]);
+      for (const m of p.mods.filter((x) => x.type === 'upper')) expect([m.d, m.h], m.code).toEqual([30, 80]);
+    });
+
+    it('isla con medidas propias en una distribución personalizada', () => {
+      const { p, issues } = design('cocina', 'personalizada', (q) => {
+        q.room = { A: 480, B: 420, H: 260 };
+        q.dist = { walls: ['A'], island: { on: true, w: 150, d: 90 } };
+      });
+      const isl = p.mods.find((m) => m.wall === 'F')!;
+      expect([isl.w, isl.d]).toEqual([150, 90]);
+      expect(errs(issues)).toEqual([]);
+    });
+
+    it('electrodomésticos propios según su instalación', () => {
+      const { p, g } = design('cocina', 'L', (q) => {
+        q.appl = {
+          ...(q.appl as object),
+          x1: { on: true, name: 'Horno de vapor', inst: 'En columna', w: 60, h: 45, d: 55 },
+          x2: { on: true, name: 'Microondas de pared', inst: 'Colgado', w: 60, h: 40, d: 35 },
+          x3: { on: true, name: 'Congelador', inst: 'Libre', w: 60, h: 170, d: 65 },
+          x4: { on: false, name: 'Apagado', inst: 'Libre', w: 60, h: 85, d: 60 },
+        };
+      });
+      const named = (n: string) => p.mods.find((m) => m.name === n);
+      expect(named('Horno de vapor')?.type).toBe('tall');
+      expect(named('Microondas de pared')).toMatchObject({ type: 'upper', w: 60, h: 40 });
+      expect(named('Congelador')).toMatchObject({ type: 'fridge', w: 60, h: 170, d: 65 });
+      expect(named('Apagado')).toBeUndefined();
+      expect(g.notes.join(' ')).not.toContain('Microondas de pared');
+    });
+
+    it('estilo personalizado usa los materiales elegidos', () => {
+      const { p } = design('cocina', 'L', (q) => {
+        q.prefs.estilo = 'Personalizado';
+        (q.prefs as Record<string, unknown>).mats = { cuerpo: 'grafito', frentes: 'nogal', encimera: 'granito', jaladeras: 'laton' };
+      });
+      expect(p.mats).toEqual({ cuerpo: 'grafito', frentes: 'nogal', encimera: 'granito', jaladeras: 'laton' });
+    });
+
+    it('empezar en blanco deja todo vacío y aun así genera sin errores', () => {
+      const b = projectDataSchema.parse(blankProject(projectDataSchema.parse(newProject('cocina'))));
+      expect([b.ops.length, b.pts.length, b.mods.length]).toEqual([0, 0, 0]);
+      expect(Object.values(b.appl as Record<string, { on: boolean }>).every((a) => !a.on)).toBe(true);
+      const g = generateDesign(b, ctx.modules);
+      expect(g.mods.every((m) => m.wall === 'A')).toBe(true);
+      expect(errs(validateProject(projectDataSchema.parse({ ...b, mods: g.mods }), ctx)).filter((i) => !/AGUA|TOMA/.test(i.code))).toEqual([]);
+    });
+
+    it('rechaza medidas fuera de rango', () => {
+      expect(projectDataSchema.safeParse({ ...newProject('cocina'), dist: { baseD: 10 } }).success).toBe(false);
+      expect(projectDataSchema.safeParse({ ...newProject('cocina'), dist: { walls: ['E'] } }).success).toBe(false);
+    });
   });
 });
