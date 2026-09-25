@@ -71,6 +71,15 @@ const pointSchema = z
   })
   .loose();
 
+/** Orbit camera: azimuth and polar angle (radians), distance (m) and target point (m). */
+export const camSchema = z.object({
+  az: z.number().min(-20).max(20),
+  polar: z.number().min(0.05).max(3.1),
+  dist: z.number().min(0.2).max(60),
+  target: z.tuple([z.number().min(-50).max(50), z.number().min(-50).max(50), z.number().min(-50).max(50)]),
+});
+export type CameraState = z.infer<typeof camSchema>;
+
 export const priceAdjSchema = z.object({
   /** Installation % over the subtotal. */
   inst: z.number().min(0).max(100).default(8),
@@ -105,6 +114,14 @@ export const projectDataSchema = z
       .loose()
       .default({ apertura: 'Jaladera' }),
     closet: z.record(z.string(), z.unknown()).optional(),
+    /** Cameras chosen by hand in the approval gallery (also used by the PDF and the client page). */
+    cams: z
+      .object({
+        persp: camSchema.optional(),
+        /** Detail view: which module (id) and, optionally, a hand-made camera. */
+        det: z.object({ mod: z.number().int().optional(), cam: camSchema.optional() }).optional(),
+      })
+      .optional(),
     /** Distribution measurements chosen in Especificaciones (walls with furniture, depths, heights, island). */
     dist: z
       .object({

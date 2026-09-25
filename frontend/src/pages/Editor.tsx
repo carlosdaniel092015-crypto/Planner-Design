@@ -28,7 +28,9 @@ import { VersionsDialog } from '../editor/VersionsDialog';
 import { BottomBar } from '../editor/BottomBar';
 import { installEngine, sceneCfg, snapshot, type Viewer } from '../editor/engine';
 import { uploadFile } from '../library/upload';
+import { clipboardModules, copyModules, pasteModules, removeModules } from '../editor/clipboard';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
+import { PrintSheet } from '../editor/PrintSheet';
 import { RightPanel } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
 import { ApprovalView } from '../approval/ApprovalView';
@@ -61,7 +63,14 @@ export function EditorPage() {
   const fut = useRef<ProjectData[]>([]);
   const [, force] = useState(0);
 
-  const [sel, setSel] = useState<number | null>(null);
+  const [sel, setSelOne] = useState<number | null>(null);
+  /** Other selected modules (Ctrl/⌘ + clic); `sel` stays the primary one, shown in Propiedades. */
+  const [extra, setExtra] = useState<number[]>([]);
+  const setSel = useCallback((id: number | null) => {
+    setSelOne(id);
+    setExtra([]);
+  }, []);
+  const [printing, setPrinting] = useState(false);
   const [view, setView] = useState<View>('3d');
   const [wall, setWall] = useState<Wall>('A');
   // 1 = Especificaciones, 2 = Diseño (stored in projects.phase).
@@ -162,6 +171,27 @@ export function EditorPage() {
   const estimate = useMemo(() => (data && ctx ? computeEstimate(data, ctx, currency) : null), [data, ctx, currency]);
   const issues = useMemo(() => (data && ctx ? validateProject(data, ctx) : []), [data, ctx]);
   const selMod = data?.mods.find((m) => m.id === sel) ?? null;
+  /** Every selected module that still exists, primary last. */
+  const selIds = useMemo(() => {
+    const ids = [...extra, ...(sel != null ? [sel] : [])];
+    return ids.filter((id, i) => ids.indexOf(id) === i && !!data?.mods.some((m) => m.id === id));
+  }, [extra, sel, data]);
+  /** Plain click selects one module; Ctrl/⌘ + click adds it or takes it out of the selection. */
+  const pickModule = useCallback(
+    (id: number | null, add?: boolean) => {
+      if (!add || id == null) return setSel(id);
+      if (id === sel) {
+        const rest = [...extra];
+        setSelOne(rest.pop() ?? null);
+        setExtra(rest);
+      } else if (extra.includes(id)) setExtra(extra.filter((x) => x !== id));
+      else {
+        setExtra(sel != null ? [...extra, sel] : extra);
+        setSelOne(id);
+      }
+    },
+    [sel, extra, setSel],
+  );
 
   // ---------- edits (undo/redo like the prototype's commit) ----------
   const commit = useCallback(
@@ -345,7 +375,8 @@ export function EditorPage() {
     const onKey = (e: KeyboardEvent) => {
       if (/INPUT|SELECT|TEXTAREA/.test((e.target as HTMLElement)?.tagName ?? '')) return;
       const k = e.key.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && k === 'z') {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && k === 'z') {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       } else if ((e.ctrlKey || e.metaKey) && k === 'y') {
@@ -354,9 +385,44 @@ export function EditorPage() {
       } else if ((e.ctrlKey || e.metaKey) && k === 's') {
         e.preventDefault();
         doSave();
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && data && !readOnly) {
-        commit(removeModule(data, sel));
-        flash(`Módulo ${sel} eliminado · Ctrl+Z para deshacer`);
+      } else if (mod && k === 'p') {
+        e.preventDefault();
+        if (data) setPrinting(true);
+      } else if (phase === 2 && data && mod && k === 'a') {
+        e.preventDefault();
+        const ids = data.mods.map((m) => m.id);
+        if (!ids.length) return;
+        setSelOne(ids[ids.length - 1]!);
+        setExtra(ids.slice(0, -1));
+        flash(`${ids.length} módulos seleccionados · Ctrl+C copiar · Ctrl+D eliminar`);
+      } else if (phase === 2 && data && mod && (k === 'c' || k === 'x') && selIds.length && !window.getSelection()?.toString()) {
+        e.preventDefault();
+        copyModules(data.mods.filter((m) => selIds.includes(m.id)));
+        const n = selIds.length;
+        if (k === 'c') return flash(`${n === 1 ? 'Módulo copiado' : `${n} módulos copiados`} · Ctrl+V para pegar`);
+        if (readOnly) return flash('Solo lectura: se copiaron, pero no se pueden quitar.');
+        commit(removeModules(data, selIds));
+        setSel(null);
+        flash(`${n === 1 ? 'Módulo cortado' : `${n} módulos cortados`} · Ctrl+V para pegar`);
+      } else if (phase === 2 && data && mod && k === 'v') {
+        e.preventDefault();
+        if (readOnly) return flash('Solo lectura: no se puede pegar.');
+        const clip = clipboardModules();
+        if (!clip.length) return flash('No hay módulos copiados. Selecciónalos y presiona Ctrl+C.');
+        const r = pasteModules(data, clip);
+        if (!r.ids.length) return flash('No hay espacio libre en los muros para pegar.');
+        commit(r.project);
+        setSelOne(r.ids[r.ids.length - 1]!);
+        setExtra(r.ids.slice(0, -1));
+        setRightOpen(true);
+        flash(`${r.ids.length === 1 ? 'Módulo pegado' : `${r.ids.length} módulos pegados`}${r.failed ? ` · ${r.failed} no cupieron` : ''} · Ctrl+Z para deshacer`);
+      } else if (phase === 2 && data && ((mod && k === 'd') || e.key === 'Delete' || e.key === 'Backspace')) {
+        if (mod) e.preventDefault(); // Ctrl+D would bookmark the page
+        if (!selIds.length) return mod ? flash('Selecciona módulos para eliminar (Ctrl+clic para varios).') : undefined;
+        if (readOnly) return;
+        e.preventDefault();
+        commit(removeModules(data, selIds));
+        flash(`${selIds.length === 1 ? `Módulo ${selIds[0]} eliminado` : `${selIds.length} módulos eliminados`} · Ctrl+Z para deshacer`);
         setSel(null);
       } else if (e.key === 'Escape') {
         setSel(null);
@@ -365,13 +431,13 @@ export function EditorPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, doSave, sel, data, readOnly, commit, flash]);
+  }, [undo, redo, doSave, data, readOnly, commit, flash, phase, selIds, setSel]);
 
   // ---------- derived drawings ----------
-  const cfg = useMemo(() => (data ? sceneCfg(data, { sel, cotas, altos, dark }) : null), [data, sel, cotas, altos, dark]);
+  const cfg = useMemo(() => (data ? sceneCfg(data, { sel, sels: selIds, cotas, altos, dark }) : null), [data, sel, selIds, cotas, altos, dark]);
   const isoDrawing = useMemo(() => (data ? iso(data, materialsByCode as never, { sel, cotas, altos, zoom }) : null), [data, materialsByCode, sel, cotas, altos, zoom]);
-  const planDrawing = useMemo(() => (data && view === 'planta' ? plan(data, { sel, altos, cotas }) : null), [data, view, sel, altos, cotas]);
-  const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, altos, cotas }) : null), [data, view, wall, materialsByCode, sel, altos, cotas]);
+  const planDrawing = useMemo(() => (data && view === 'planta' ? plan(data, { sel, sels: selIds, altos, cotas }) : null), [data, view, sel, selIds, altos, cotas]);
+  const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, sels: selIds, altos, cotas }) : null), [data, view, wall, materialsByCode, sel, selIds, altos, cotas]);
 
   if (loadError)
     return (
@@ -665,10 +731,10 @@ export function EditorPage() {
           )}
 
           <div style={{ flex: 1, minWidth: 0, position: 'relative', background: 'var(--sp-canvas)', overflow: 'hidden' }}>
-            {cfg && <div style={{ position: 'absolute', inset: 0, visibility: is3d ? 'visible' : 'hidden' }}><Viewer3D cfg={cfg} onSelect={(i) => { setSel(i); if (i) setRightOpen(true); setReplaceMode(false); }} onViewer={(v) => { viewer.current = v; v?.setOpen(open); }} fallback={<Svg drawing={isoDrawing} onPick={setSel} />} /></div>}
+            {cfg && <div style={{ position: 'absolute', inset: 0, visibility: is3d ? 'visible' : 'hidden' }}><Viewer3D cfg={cfg} onSelect={(i, add) => { pickModule(i, add); if (i) setRightOpen(true); setReplaceMode(false); }} onViewer={(v) => { viewer.current = v; v?.setOpen(open); }} fallback={<Svg drawing={isoDrawing} onPick={pickModule} />} /></div>}
             {flatView && (
               <div style={{ position: 'absolute', inset: '64px 72px 24px 32px', transform: `scale(${zoom})`, transformOrigin: 'center' }}>
-                <Svg drawing={flatView} onPick={(i) => (setSel(i), i && setRightOpen(true))} />
+                <Svg drawing={flatView} onPick={(i, add) => (pickModule(i, add), i && setRightOpen(true))} />
               </div>
             )}
 
@@ -732,11 +798,17 @@ export function EditorPage() {
               <div className="minimap" style={{ position: 'absolute', left: 12, bottom: 12, width: 190, height: 160, background: 'var(--color-bg)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-sm)', padding: 6, display: 'flex', flexDirection: 'column', zIndex: 3 }}>
                 <span style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: MUTED }}>Planta</span>
                 <div style={{ flex: 1, minHeight: 0 }}>
-                  <Svg drawing={plan(data, { sel, cotas: false, nums: false })} onPick={setSel} />
+                  <Svg drawing={plan(data, { sel, sels: selIds, cotas: false, nums: false })} onPick={pickModule} />
                 </div>
               </div>
             )}
-            {selMod && (
+            {selIds.length > 1 && (
+              <div role="status" style={{ position: 'absolute', left: '50%', bottom: 14, transform: 'translateX(-50%)', background: 'var(--color-text)', color: 'var(--color-bg)', boxShadow: 'var(--shadow-sm)', padding: '7px 12px', fontSize: 13, display: 'flex', gap: 12, alignItems: 'center', whiteSpace: 'nowrap', zIndex: 3 }}>
+                <strong>{selIds.length} módulos seleccionados</strong>
+                <span className="multi-keys" style={{ opacity: 0.75 }}>Ctrl+C copiar · Ctrl+X cortar · Ctrl+V pegar · Ctrl+D eliminar · Esc soltar</span>
+              </div>
+            )}
+            {selMod && selIds.length <= 1 && (
               <div style={{ position: 'absolute', left: '50%', bottom: 14, transform: 'translateX(-50%)', background: 'var(--color-bg)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-sm)', padding: '7px 12px', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center', whiteSpace: 'nowrap', zIndex: 3 }}>
                 <span style={{ width: 20, height: 20, background: 'var(--color-accent)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>{selMod.id}</span>
                 <strong>{selMod.name}</strong>
@@ -961,6 +1033,9 @@ export function EditorPage() {
               .catch(() => flash('Recarga la página para ver los cambios de la biblioteca.'))
           }
         />
+      )}
+      {printing && data && catalog && estimate && (
+        <PrintSheet data={data} name={name || data.pname} orgName={me?.organization.name ?? 'Planner'} materials={catalog.context.materials} estimate={estimate} currency={currency} onDone={() => setPrinting(false)} />
       )}
       {toast}
       <style>{`

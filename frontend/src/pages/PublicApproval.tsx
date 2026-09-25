@@ -104,7 +104,7 @@ export function PublicApprovalPage() {
 
         <section className="pub-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16 }}>
           <Card title="Vista en perspectiva" h={440}>
-            {cfg && <Photo cfg={cfg} opts={{ w: 1100, h: 800, ang: 45 }} fallback={iso(v.data, matsRec, { cotas: false, altos: true })} title="Vista en perspectiva" />}
+            {cfg && <Photo cfg={cfg} opts={v.data.cams?.persp ? { w: 1100, h: 800, cam: v.data.cams.persp } : { w: 1100, h: 800 }} fallback={iso(v.data, matsRec, { cotas: false, altos: true })} title="Vista en perspectiva" />}
           </Card>
           <Card title="Planta acotada" h={440} pad>
             <Svg drawing={v.plan} title="Planta acotada" />

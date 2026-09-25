@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadRenderer, type Viewer } from './engine';
 
 /** Hosts the prototype's three.js viewer. Falls back to `fallback` if WebGL/three cannot load. */
-export function Viewer3D({ cfg, onSelect, onViewer, fallback }: { cfg: unknown; onSelect: (id: number | null) => void; onViewer: (v: Viewer | null) => void; fallback: React.ReactNode }) {
+export function Viewer3D({ cfg, onSelect, onViewer, onLoaded, fallback }: { cfg: unknown; onSelect: (id: number | null, add: boolean) => void; onViewer: (v: Viewer | null) => void; /** After the first scene is built (e.g. to apply a saved camera). */ onLoaded?: (v: Viewer) => void; fallback: React.ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer | null>(null);
   const cfgRef = useRef(cfg);
@@ -16,12 +16,12 @@ export function Viewer3D({ cfg, onSelect, onViewer, fallback }: { cfg: unknown; 
     let dead = false;
     const iv = setInterval(() => setPct((p) => Math.min(92, p + 9)), 180);
     loadRenderer()
-      .then((R) => R.createViewer(host.current!, { onSelect: (id) => selectRef.current(id), onReady: () => !dead && setState('ready') }))
+      .then((R) => R.createViewer(host.current!, { onSelect: (id, add) => selectRef.current(id, add), onReady: () => !dead && setState('ready') }))
       .then((v) => {
         if (dead) return v.dispose();
         viewer.current = v;
         onViewer(v);
-        return v.update(cfgRef.current);
+        return v.update(cfgRef.current).then(() => !dead && onLoaded?.(v));
       })
       .catch((e) => {
         console.warn('Visor 3D no disponible', e);

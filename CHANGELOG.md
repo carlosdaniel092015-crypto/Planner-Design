@@ -3,6 +3,22 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.9.0 · 2026-09-25
+
+### Diseño: selección múltiple y atajos de teclado
+- **Ctrl + clic** (⌘ en Mac) agrega o quita módulos de la selección en el 3D, la planta y el alzado; todos se resaltan.
+- **Ctrl+A** selecciona todos los módulos · **Ctrl+C** copiar · **Ctrl+X** cortar · **Ctrl+V** pegar (se acomodan en el espacio libre; también entre proyectos) · **Ctrl+D** o Supr eliminar los seleccionados · **Esc** soltar la selección · Ctrl+Z deshace cualquiera de ellos.
+- **Ctrl+P** imprime el diseño: vista 3D, planta acotada, alzados de cada muro y la lista de módulos con sus medidas e importes.
+
+### Aprobación: cámara a tu gusto
+- **Render en perspectiva:** «Ajustar cámara» abre el 3D en vivo para girar, acercar y mover la vista; «Usar esta vista» la guarda para la galería, el PDF, la impresión y la página del cliente. «Vista automática» vuelve a la de siempre.
+- **Vista de detalle:** elige qué módulo mostrar (en closets empieza por el colgado largo) y ajusta también su cámara.
+
+## 1.8.1 · 2026-09-25
+
+### Despliegue más resistente
+- Si la conexión con el registro de npm se corta durante el despliegue, la instalación se reintenta sola en lugar de fallar, y los paquetes descargados se reutilizan en los siguientes despliegues (más rápidos y con menos descargas).
+
 ## 1.8.0 · 2026-09-25
 
 ### Especificaciones totalmente editables: crea el proyecto desde cero

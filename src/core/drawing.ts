@@ -47,7 +47,7 @@ export function cols(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectData['
 }
 const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 'none' : 'bar');
 
-export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; nums?: boolean; sel?: number | null } = {}): Drawing {
+export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; nums?: boolean; sel?: number | null; /** Extra selected modules (multi-selection). */ sels?: number[] } = {}): Drawing {
   const it: DrawItem[] = [];
   const T = 12;
   const { A, B } = p.room;
@@ -98,7 +98,7 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
     const w = g.x1 - g.x0;
     const h = g.y1 - g.y0;
     const up = m.type === 'upper' || m.type === 'hood';
-    const sel = opts.sel === m.id;
+    const sel = opts.sel === m.id || !!opts.sels?.includes(m.id);
     if (up) rect(g.x0, g.y0, w, h, 'none', sel ? ACC : '#6d6a68', sel ? 1.8 : 0.8, { dash: '4 3', mid: m.id });
     else rect(g.x0, g.y0, w, h, sel ? '#fff2ef' : '#ffffff', sel ? ACC : INK, sel ? 1.8 : 1, { mid: m.id });
     if (!up) {
@@ -219,7 +219,8 @@ export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: n
   }
 }
 
-export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null } = {}): Drawing {
+export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null; sels?: number[] } = {}): Drawing {
+  const isSel = (id: number) => opts.sel === id || !!opts.sels?.includes(id);
   const it: DrawItem[] = [];
   const len = wall === 'A' || wall === 'D' ? p.room.A : p.room.B;
   const H = p.room.H;
@@ -250,9 +251,9 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
     if (m.type === 'base') rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
     const top = m.type === 'base' ? z1 + 4 : z1;
     const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
-    if (opts.sel === m.id) rect(m.pos!, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
+    if (isSel(m.id)) rect(m.pos!, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {
-      it.push({ t: 'c', cx: m.pos! + m.w / 2, cy: Y(top) - 11, r: 7, fill: opts.sel === m.id ? ACC : INK, mid: m.id });
+      it.push({ t: 'c', cx: m.pos! + m.w / 2, cy: Y(top) - 11, r: 7, fill: isSel(m.id) ? ACC : INK, mid: m.id });
       tx(m.pos! + m.w / 2, Y(top) - 10.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
     }
   }
