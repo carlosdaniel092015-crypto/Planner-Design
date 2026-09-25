@@ -14,6 +14,9 @@ import { json, pick, router } from './lib/openapi';
 import { memoryRateLimiter, type RateLimiter } from './lib/rate-limit';
 import { authRoutes, meRoutes } from './routes/auth';
 import { oauthRoutes } from './routes/oauth';
+import { platformRoutes } from './routes/platform';
+import { signupRoutes } from './routes/signup';
+import { joinRoutes } from './routes/join';
 import type { OAuthRuntime } from './services/oauth';
 import { accountRoutes } from './routes/account';
 import { billingRoutes } from './routes/billing';
@@ -128,6 +131,7 @@ export function createApp(opts: CreateAppOptions) {
 
   v1.route('/auth', authRoutes());
   v1.route('/auth', oauthRoutes());
+  v1.route('/auth', signupRoutes());
   v1.route('/', meRoutes());
   v1.route('/', accountRoutes());
   v1.route('/', versionRoutes());
@@ -135,6 +139,8 @@ export function createApp(opts: CreateAppOptions) {
   v1.route('/', billingRoutes());
   v1.route('/', clientErrorRoutes());
   v1.route('/users', userRoutes());
+  v1.route('/platform', platformRoutes());
+  v1.route('/', joinRoutes());
   v1.route('/clients', clientRoutes());
   registerProjectRoutes(v1);
   if (isDevStorage(deps.storage)) v1.route('/storage', storageFileRoutes());

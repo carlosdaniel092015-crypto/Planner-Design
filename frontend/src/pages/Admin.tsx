@@ -247,16 +247,24 @@ function UsersTab({ flash, meId }: { flash: (m: string) => void; meId: string })
   };
   return (
     <>
-      <Section title="Invitar a alguien" lead="Recibirá un correo para crear su contraseña (el enlace vence en 7 días).">
+      <Section title="Invitar a alguien" lead="Recibirá un correo para crear su contraseña (vence en 7 días). Si ya usa Planner, le llega una solicitud para unirse a tu organización.">
         <form
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
             try {
-              const u = await request<User>('POST', '/users', inv);
-              setData((d) => (d ? { items: [...d.items, u] } : d));
+              const u = await request<(User & { emailSent?: boolean }) | { joinRequest: true; name: string; email: string; emailSent: boolean }>('POST', '/users', inv);
               setInv({ name: '', email: '', role: 'disenador' });
-              flash(`Invitación enviada a ${u.email}`);
+              if ('joinRequest' in u) {
+                flash(
+                  u.emailSent
+                    ? `${u.name} ya tenía cuenta: le enviamos una solicitud para unirse. Cuando la acepte aparecerá aquí.`
+                    : `${u.name} ya tenía cuenta: la solicitud quedó creada, pero el correo no salió. Pídele que entre a Planner y la verá al iniciar sesión.`,
+                );
+              } else {
+                setData((d) => (d ? { items: [...d.items, u] } : d));
+                flash(u.emailSent === false ? `Usuario creado, pero el correo a ${u.email} no salió. Revisa la configuración de correo.` : `Invitación enviada a ${u.email}`);
+              }
             } catch (err) {
               flash(errText(err));
             } finally {
@@ -799,10 +807,11 @@ interface Billing {
   status: string | null;
   renewsAt: string | null;
   canManage: boolean;
+  contactEmail: string | null;
   usage: { users: number; activeProjects: number };
   plans: { key: 'gratis' | 'profesional' | 'empresa'; name: string; users: number | null; activeProjects: number | null; highlights: string[]; price: string | null; available: boolean }[];
 }
-const STATUS_TXT: Record<string, string> = { active: 'activo', trialing: 'en prueba', past_due: 'pago pendiente', canceled: 'cancelado', unpaid: 'sin pagar', incomplete: 'pago incompleto' };
+const STATUS_TXT: Record<string, string> = { manual: 'asignado por la plataforma', active: 'activo', trialing: 'en prueba', past_due: 'pago pendiente', canceled: 'cancelado', unpaid: 'sin pagar', incomplete: 'pago incompleto' };
 // Apple (guideline 3.1.1): the iPhone app must not sell subscriptions outside in-app purchase, so it only shows the plan.
 const inIosApp = () => (window as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'ios';
 
@@ -810,6 +819,7 @@ function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean })
   const { data: raw, error } = useLoad<Billing>('/billing');
   const data = raw && inIosApp() ? { ...raw, canManage: false } : raw;
   const [busy, setBusy] = useState<string | null>(null);
+  const { me } = useAuth();
   if (!data) return <Err error={error} />;
   const go = async (path: string, body?: unknown) => {
     setBusy(path);
@@ -837,7 +847,11 @@ function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean })
   return (
     <Section
       title="Plan"
-      lead={data.enabled ? 'Elige el plan de tu organización. El pago es seguro con Stripe; puedes cambiarlo o cancelarlo cuando quieras.' : 'Los cobros no están configurados en este servidor: tienes todas las funciones sin límite.'}
+      lead={
+        data.enabled
+          ? 'Elige el plan de tu organización. El pago es seguro con Stripe; puedes cambiarlo o cancelarlo cuando quieras.'
+          : 'Los pagos en línea todavía no están activos. Para cambiar de plan, escríbenos y lo activamos en tu organización.'
+      }
       right={
         data.enabled && data.plan !== 'gratis' && data.canManage ? (
           <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => go('/billing/portal')}>
@@ -857,12 +871,10 @@ function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean })
         </span>
         {data.plan !== data.effectivePlan && <span style={{ fontSize: 13, color: 'var(--color-accent-700)' }}>El pago está pendiente: mientras tanto aplican los límites del plan Gratis.</span>}
       </div>
-      {data.enabled && (
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 22 }}>
-          {bar('Usuarios', data.usage.users, cur?.users ?? null)}
-          {bar('Proyectos activos', data.usage.activeProjects, cur?.activeProjects ?? null)}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 22 }}>
+        {bar('Usuarios', data.usage.users, cur?.users ?? null)}
+        {bar('Proyectos activos (los aprobados no cuentan)', data.usage.activeProjects, cur?.activeProjects ?? null)}
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
         {data.plans.map((p) => {
           const current = p.key === data.effectivePlan;
@@ -872,7 +884,7 @@ function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean })
                 <strong style={{ fontSize: 20 }}>{p.name}</strong>
                 {current && <span className="tag tag-accent">Actual</span>}
               </div>
-              <span style={{ fontSize: 15, fontWeight: 800 }}>{p.price ?? (data.enabled ? 'Precio por configurar' : '—')}</span>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>{p.price ?? (data.enabled ? 'Precio por configurar' : 'Precio a consultar')}</span>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
                 {p.highlights.map((h) => (
                   <li key={h}>{h}</li>
@@ -882,6 +894,18 @@ function PlanTab({ flash, paid }: { flash: (m: string) => void; paid: boolean })
                 <button type="button" className="btn btn-primary" disabled={!p.available || !!busy} onClick={() => go('/billing/checkout', { plan: p.key })}>
                   {p.available ? `Cambiar a ${p.name}` : 'No disponible'}
                 </button>
+              )}
+              {!data.enabled && data.canManage && !current && p.key !== 'gratis' && data.contactEmail && (
+                <a
+                  className="btn btn-primary"
+                  href={`mailto:${data.contactEmail}?subject=${encodeURIComponent(`Plan ${p.name} para ${me?.organization.name ?? 'mi organización'}`)}&body=${encodeURIComponent(
+                    `Hola, quiero el plan ${p.name} para «${me?.organization.name ?? ''}» (administrador: ${me?.user.email ?? ''}).`,
+                  )}`}
+                  style={{ justifyContent: 'center', textDecoration: 'none' }}
+                >
+                  <Icon name="mail" />
+                  Solicitar {p.name}
+                </a>
               )}
               {data.enabled && data.canManage && !current && p.key === 'gratis' && data.plan !== 'gratis' && (
                 <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => go('/billing/portal')}>

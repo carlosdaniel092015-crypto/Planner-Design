@@ -1,4 +1,5 @@
 import { DEFAULT_MATERIALS, iso, newProject, type ProjectData, type ProjectKind } from '@core';
+import { JoinBanner } from './Join';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
@@ -142,6 +143,7 @@ export function HomePage() {
       {libOpen && <LibraryDialog canWrite={canCreate(me)} onClose={() => setLibOpen(false)} onChanged={() => flash('Biblioteca actualizada')} />}
       <main style={{ flex: 1, overflow: 'auto' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '44px 32px 72px' }} className="home">
+          <JoinBanner />
           <div className="home-hero" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,380px)', alignItems: 'end', gap: 32, paddingBottom: 24, borderBottom: '2px solid var(--color-divider)' }}>
             <div>
               <div style={{ fontSize: 12, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--color-accent-700)', marginBottom: 10, fontWeight: 600 }}>Nuevo proyecto</div>

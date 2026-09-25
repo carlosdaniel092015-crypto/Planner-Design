@@ -1,6 +1,18 @@
 // Thin client for /api/v1. Session travels in the httpOnly cookie (same origin).
 import type { PricingContext, ProjectData } from '@core';
 
+/** Invitation to join another organisation (the person already had an account). */
+export interface JoinRequest {
+  id: string;
+  organizationName: string;
+  invitedBy: string | null;
+  role: Role;
+  expiresAt: string;
+  current: { name: string; projects: number; otherMembers: number };
+  canAccept: boolean;
+  reason: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -49,7 +61,8 @@ export type Status = 'borrador' | 'diseno' | 'enviado' | 'cambios_solicitados' |
 
 export interface Me {
   /** hasPassword is false for accounts that only sign in with Google / Microsoft. */
-  user: { id: string; name: string; email: string; role: Role; hasPassword?: boolean };
+  /** platformAdmin: owner of the installation (PLATFORM_ADMIN_EMAILS), sees /plataforma. */
+  user: { id: string; name: string; email: string; role: Role; hasPassword?: boolean; platformAdmin?: boolean };
   organization: { id: string; name: string; slug: string; logoUrl: string | null; brandColor: string | null; baseCurrency: Currency };
 }
 
@@ -144,6 +157,12 @@ export const api = {
   forgot: (email: string) => request<{ ok: true }>('POST', '/auth/forgot-password', { email }),
   reset: (token: string, password: string) => request<{ ok: true }>('POST', '/auth/reset-password', { token, password }),
   acceptInvite: (token: string, password: string, name?: string) => request<Me>('POST', '/auth/accept-invite', { token, password, name }),
+  signUp: (body: { name: string; email: string; password: string; orgName?: string }) => request<{ ok: true; expiresInSec: number }>('POST', '/auth/sign-up', body),
+  signUpResend: (email: string) => request<{ ok: true; expiresInSec: number }>('POST', '/auth/sign-up/resend', { email }),
+  signUpVerify: (email: string, code: string) => request<Me>('POST', '/auth/sign-up/verify', { email, code }),
+  joinRequests: () => request<{ items: JoinRequest[] }>('GET', '/me/join-requests', undefined, {}, 8000),
+  acceptJoin: (id: string) => request<Me>('POST', `/me/join-requests/${id}/accept`),
+  declineJoin: (id: string) => request<{ ok: true }>('POST', `/me/join-requests/${id}/decline`),
 
   listProjects: (timeoutMs?: number) => request<{ items: ProjectSummary[]; nextCursor: string | null }>('GET', '/projects?limit=100', undefined, {}, timeoutMs),
   createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData; currency?: Currency; clientRef?: string }, timeoutMs?: number) =>
@@ -166,8 +185,9 @@ export const api = {
   catalog: (timeoutMs?: number) => request<Catalog>('GET', '/catalog', undefined, {}, timeoutMs),
 
   approvalLinks: (id: string) => request<{ links: ApprovalLink[]; approvals: Approval[] }>('GET', `/projects/${id}/approval-links`),
-  sendToClient: (id: string, body: { recipientEmail: string; expiresInDays: number }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string }>('POST', `/projects/${id}/approval-links`, body),
+  sendToClient: (id: string, body: { recipientEmail: string; expiresInDays: number }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string; emailSent?: boolean }>('POST', `/projects/${id}/approval-links`, body),
   revokeLink: (linkId: string) => request<ApprovalLink>('POST', `/approval-links/${linkId}/revoke`),
+  reopenProject: (id: string, reason?: string) => request<{ status: 'diseno'; version: number }>('POST', `/projects/${id}/reopen`, { reason }),
   approveInternal: (id: string, body: { signerName: string; signature?: string }) => request<{ approval: Approval; versionId: string }>('POST', `/projects/${id}/approve-internal`, body),
   publicView: (token: string) => request<PublicView>('GET', `/public/approvals/${token}`),
   publicDecide: (token: string, body: { decision: 'aprobado' | 'cambios'; signerName: string; signerEmail?: string; comment?: string; signature?: string; accepted: true }) =>

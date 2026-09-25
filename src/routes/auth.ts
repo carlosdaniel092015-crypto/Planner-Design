@@ -17,9 +17,10 @@ import {
   setSessionCookie,
   verifyPassword,
 } from '../services/auth';
-import { templates } from '../services/mailer';
+import { templates, trySend } from '../services/mailer';
 import { sha256 } from '../lib/crypto';
 import { brandingAllowed } from '../lib/plans';
+import { isPlatformAdmin } from './platform';
 
 export const RoleSchema = z.enum(['admin', 'disenador', 'taller', 'lectura']).openapi('Rol');
 
@@ -32,6 +33,8 @@ export const MeSchema = z
       role: RoleSchema,
       /** false for people who only sign in with Google / Microsoft (they can create one in Mi cuenta). */
       hasPassword: z.boolean().optional(),
+      /** Platform owner (PLATFORM_ADMIN_EMAILS): sees every organisation and assigns plans in /plataforma. */
+      platformAdmin: z.boolean().optional(),
     }),
     organization: z.object({
       id: z.uuid(),
@@ -165,7 +168,7 @@ export function authRoutes() {
     if (u?.active) {
       const token = await issueVerificationToken(db, u.id, 'reset', 60 * 60_000);
       const url = `${config.frontendUrl}/restablecer?token=${encodeURIComponent(token)}`;
-      await mailer.send({ to: u.email, ...templates.passwordReset({ name: u.name, url }) });
+      await trySend(mailer, { to: u.email, ...templates.passwordReset({ name: u.name, url }) });
     }
     return c.json({ ok: true as const }, 200);
   });
@@ -209,7 +212,7 @@ export function meRoutes() {
     const a = requireAuth(c);
     const [cred] = await c.var.deps.db.select({ id: userCredentials.userId }).from(userCredentials).where(eq(userCredentials.userId, a.user.id)).limit(1);
     const me = toMe(a.user, a.org);
-    const withPwd = { ...me, user: { ...me.user, hasPassword: !!cred } };
+    const withPwd = { ...me, user: { ...me.user, hasPassword: !!cred, ...(isPlatformAdmin(c.var.deps.config, a.user.email) ? { platformAdmin: true } : {}) } };
     // PDFs use these; without the branding feature they fall back to Planner's look.
     if (!brandingAllowed(c.var.deps.config, a.org)) withPwd.organization = { ...withPwd.organization, logoUrl: null, brandColor: null };
     return c.json(withPwd, 200);

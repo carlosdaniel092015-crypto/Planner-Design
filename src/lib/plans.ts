@@ -49,7 +49,7 @@ const FEATURE: Record<Feature, string> = {
   bulkPrices: 'El ajuste masivo de precios',
 };
 
-/** Plan limits only apply when billing is configured; a self-hosted install without Stripe has everything. */
+/** Online payments (Stripe) are configured. Plan limits apply either way: without Stripe a plan is only assigned by the platform. */
 export const billingOn = (config: AppConfig) => !!config.billing;
 /** A lapsed subscription (past due, canceled…) falls back to the free plan's limits. */
 export function effectivePlan(org: { plan: Plan; planStatus: string | null }): Plan {
@@ -60,14 +60,12 @@ export function effectivePlan(org: { plan: Plan; planStatus: string | null }): P
 
 const planError = (message: string) => new AppError(402, 'PLAN_REQUERIDO', `${message} Mejora el plan en Administración → Plan.`);
 
-export function requireFeature(config: AppConfig, a: AuthContext, feature: Feature) {
-  if (!billingOn(config)) return;
+export function requireFeature(_config: AppConfig, a: AuthContext, feature: Feature) {
   const plan = effectivePlan(a.org);
   if (!PLANS[plan].features.includes(feature)) throw planError(`${FEATURE[feature]} no está incluido en el plan ${PLANS[plan].name}.`);
 }
 
-export const brandingAllowed = (config: AppConfig, org: { plan: Plan; planStatus: string | null }) =>
-  !billingOn(config) || PLANS[effectivePlan(org)].features.includes('branding');
+export const brandingAllowed = (_config: AppConfig, org: { plan: Plan; planStatus: string | null }) => PLANS[effectivePlan(org)].features.includes('branding');
 
 export async function usage(db: DbOrTx, orgId: string) {
   const [u] = await db.select({ n: count() }).from(users).where(and(eq(users.organizationId, orgId), notLike(users.email, 'eliminada+%@planner.invalid')));
@@ -79,12 +77,16 @@ export async function usage(db: DbOrTx, orgId: string) {
 }
 
 /** Throws 402 before creating a user or a project past the plan's limit. */
-export async function requireRoom(db: DbOrTx, config: AppConfig, a: AuthContext, what: 'users' | 'activeProjects') {
-  if (!billingOn(config)) return;
-  const def = PLANS[effectivePlan(a.org)];
+export async function requireRoom(db: DbOrTx, _config: AppConfig, a: AuthContext, what: 'users' | 'activeProjects') {
+  await requireOrgRoom(db, a.org, what);
+}
+
+/** Same check for an organisation other than the caller's (e.g. accepting an invitation to join it). */
+export async function requireOrgRoom(db: DbOrTx, org: { id: string; plan: Plan; planStatus: string | null }, what: 'users' | 'activeProjects') {
+  const def = PLANS[effectivePlan(org)];
   const limit = def[what];
   if (limit == null) return;
-  const used = (await usage(db, a.org.id))[what];
+  const used = (await usage(db, org.id))[what];
   if (used >= limit)
     throw planError(what === 'users' ? `El plan ${def.name} permite ${limit} usuarios.` : `El plan ${def.name} permite ${limit} proyectos activos (los aprobados no cuentan).`);
 }

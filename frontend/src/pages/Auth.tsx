@@ -144,11 +144,153 @@ export function LoginPage() {
           <Icon name="arrow-right" style={{ marginLeft: 'auto' }} />
         </button>
       </form>
-      <Link to="/olvide" style={{ fontSize: 14 }}>
-        ¿Olvidaste tu contraseña?
-      </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 14 }}>
+        <Link to="/olvide">¿Olvidaste tu contraseña?</Link>
+        <Link to={`/registro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>
+          <strong>Crear cuenta</strong>
+        </Link>
+      </div>
       <span style={{ fontSize: 12, color: MUTED }}>
         Al entrar aceptas los <Link to="/terminos">términos de uso</Link> y la <Link to="/privacidad">política de privacidad</Link>.
+      </span>
+    </Shell>
+  );
+}
+
+/** /registro: name, email and password → 6-digit code by email → account (own organisation, plan Gratis). */
+export function SignupPage() {
+  const { me, setMe } = useAuth();
+  const [params] = useSearchParams();
+  const nav = useNavigate();
+  const next = params.get('next') || '/';
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', orgName: '' });
+  const [step, setStep] = useState<'datos' | 'codigo'>('datos');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  if (me) return <Navigate to={next} replace />;
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (form.password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.');
+    if (form.password !== form.confirm) return setError('Las contraseñas no coinciden.');
+    run(async () => {
+      await api.signUp({ name: form.name.trim(), email: form.email.trim(), password: form.password, orgName: form.orgName.trim() || undefined });
+      setStep('codigo');
+      setNotice(null);
+    });
+  };
+  const verify = (e: FormEvent) => {
+    e.preventDefault();
+    run(async () => {
+      setMe(await api.signUpVerify(form.email.trim(), code.trim()));
+      nav(`${next}${next.includes('?') ? '&' : '?'}bienvenida=1`, { replace: true });
+    });
+  };
+  const withNext = (path: string) => `${path}${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`;
+
+  return (
+    <Shell kicker="Crear cuenta" title="Empieza a diseñar gratis." lead="Crea tu cuenta con tu correo: te enviaremos un código de 6 dígitos para confirmarlo. Empiezas en el plan Gratis (2 usuarios y 5 proyectos activos).">
+      {step === 'datos' ? (
+        <>
+          <h2 style={{ margin: 0, fontSize: 24 }}>Crear cuenta</h2>
+          <ProviderButtons next={next} />
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="field">
+              <label htmlFor="su-name">Tu nombre</label>
+              <input id="su-name" className="input" autoComplete="name" required maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="su-org">Nombre de tu taller o empresa (opcional)</label>
+              <input id="su-org" className="input" autoComplete="organization" maxLength={120} value={form.orgName} onChange={(e) => setForm({ ...form, orgName: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="su-email">Correo</label>
+              <input id="su-email" className="input" type="email" autoComplete="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="su-pw">Contraseña</label>
+              <input id="su-pw" className="input" type="password" autoComplete="new-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <span style={{ fontSize: 12, color: MUTED }}>Mínimo 8 caracteres.</span>
+            </div>
+            <div className="field">
+              <label htmlFor="su-pw2">Repite la contraseña</label>
+              <input id="su-pw2" className="input" type="password" autoComplete="new-password" required value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} />
+            </div>
+            <ErrorBox error={error} />
+            <button className="btn btn-primary" type="submit" disabled={busy} style={{ height: 44 }}>
+              {busy ? 'Enviando código…' : 'Enviarme el código'}
+              <Icon name="arrow-right" style={{ marginLeft: 'auto' }} />
+            </button>
+          </form>
+        </>
+      ) : (
+        <form onSubmit={verify} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 24 }}>Revisa tu correo</h2>
+          <p style={{ margin: 0, fontSize: 15 }}>
+            Enviamos un código de 6 dígitos a <strong>{form.email.trim()}</strong>. Vence en 15 minutos; revisa también la carpeta de spam.
+          </p>
+          <div className="field">
+            <label htmlFor="su-code">Código</label>
+            <input
+              id="su-code"
+              className="input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              required
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              style={{ fontSize: 24, letterSpacing: '.4em', textAlign: 'center' }}
+            />
+          </div>
+          <ErrorBox error={error} />
+          {notice && <p style={{ margin: 0, fontSize: 14 }}>{notice}</p>}
+          <button className="btn btn-primary" type="submit" disabled={busy || code.length !== 6} style={{ height: 44 }}>
+            {busy ? 'Creando tu cuenta…' : 'Confirmar y crear cuenta'}
+          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  await api.signUpResend(form.email.trim());
+                  setCode('');
+                  setNotice('Te enviamos un código nuevo; el anterior ya no sirve.');
+                })
+              }
+            >
+              Reenviar código
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => {
+                setStep('datos');
+                setError(null);
+                setCode('');
+              }}>
+              Cambiar correo
+            </button>
+          </div>
+        </form>
+      )}
+      <span style={{ fontSize: 14 }}>
+        ¿Ya tienes cuenta? <Link to={withNext('/login')}>Inicia sesión</Link>
+      </span>
+      <span style={{ fontSize: 12, color: MUTED }}>
+        Al crear la cuenta aceptas los <Link to="/terminos">términos de uso</Link> y la <Link to="/privacidad">política de privacidad</Link>.
       </span>
     </Shell>
   );

@@ -41,6 +41,12 @@ export function UserMenu() {
                 {me.user.role === 'admin' ? 'Administración' : 'Clientes'}
               </button>
             )}
+            {me.user.platformAdmin && (
+              <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), nav('/plataforma'))}>
+                <Icon name="shield" />
+                Plataforma
+              </button>
+            )}
             <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => (setOpen(false), nav('/cuenta'))}>
               <Icon name="user-cog" />
               Mi cuenta

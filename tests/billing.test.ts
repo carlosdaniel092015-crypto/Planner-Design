@@ -38,9 +38,11 @@ const webhook = (event: unknown, secret?: string) => {
 };
 
 describe('planes y pagos', () => {
-  it('sin Stripe configurado no hay límites', async () => {
-    const r = await t.req('GET', '/billing', { user: t.adminA });
-    expect(r.data).toMatchObject({ enabled: false, effectivePlan: 'empresa' });
+  it('sin Stripe los límites del plan se aplican igual', async () => {
+    // orgB keeps the plan the platform assigned (seed: Empresa, manual); orgA is on Gratis.
+    expect((await t.req('GET', '/billing', { user: t.adminB })).data).toMatchObject({ enabled: false, plan: 'empresa', effectivePlan: 'empresa', status: 'manual' });
+    expect((await t.req('GET', '/billing', { user: t.adminA })).data).toMatchObject({ enabled: false, plan: 'gratis', effectivePlan: 'gratis' });
+    expect((await t.req('GET', '/audit', { user: t.adminA })).status).toBe(402);
   });
 
   it('plan gratis: 2 usuarios, 5 proyectos activos y sin enlace al cliente, exportaciones, marca ni auditoría', async () => {

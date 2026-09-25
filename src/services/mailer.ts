@@ -3,10 +3,36 @@ export interface Mail {
   subject: string;
   html: string;
   text: string;
+  /** Display name shown as the sender (e.g. the organisation); the address stays MAIL_FROM's verified domain. */
+  fromName?: string;
+  /** Replies go here (e.g. the designer who sent the proposal) instead of the no-reply address. */
+  replyTo?: string;
+}
+
+/** "Name <addr>" with the display name replaced; quotes and angle brackets are stripped from the name. */
+export function withDisplayName(from: string, name?: string) {
+  if (!name) return from;
+  const addr = from.match(/<([^>]+)>/)?.[1] ?? from.trim();
+  const clean = name.replace(/["<>\\\r\n]/g, '').trim().slice(0, 80);
+  return clean ? `"${clean}" <${addr}>` : from;
 }
 
 export interface Mailer {
   send(mail: Mail): Promise<void>;
+}
+
+/**
+ * Sends without failing the caller: the work the email reports is already saved, so a mail provider error
+ * (Resend key, unverified MAIL_FROM domain…) is logged and reported as `false` instead of a 500.
+ */
+export async function trySend(mailer: Mailer, mail: Mail): Promise<boolean> {
+  try {
+    await mailer.send(mail);
+    return true;
+  } catch (e) {
+    console.error(`[correo] no se pudo enviar a ${mail.to} ("${mail.subject}"):`, e instanceof Error ? e.message : e);
+    return false;
+  }
 }
 
 export function resendMailer(apiKey: string, from: string): Mailer {
@@ -15,7 +41,14 @@ export function resendMailer(apiKey: string, from: string): Mailer {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, html: mail.html, text: mail.text }),
+        body: JSON.stringify({
+          from: withDisplayName(from, mail.fromName),
+          to: [mail.to],
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+          ...(mail.replyTo ? { reply_to: [mail.replyTo] } : {}),
+        }),
       });
       if (!res.ok) throw new Error(`Resend respondió ${res.status}: ${await res.text()}`);
     },
@@ -84,6 +117,40 @@ export const templates = {
         label: 'Restablecer contraseña',
         url: p.url,
       }),
+    };
+  },
+  signupCode(p: { name: string; code: string }) {
+    return {
+      subject: `${p.code} es tu código de Planner`,
+      ...layout(`Hola, ${p.name}`, [
+        `Tu código para crear la cuenta es: ${p.code}`,
+        'Escríbelo en la pantalla de registro. Vence en 15 minutos.',
+        'Si no fuiste tú, ignora este correo: sin el código no se crea ninguna cuenta.',
+      ]),
+    };
+  },
+  signupExisting(p: { name: string; loginUrl: string; forgotUrl: string }) {
+    return {
+      subject: 'Ya tienes una cuenta en Planner',
+      ...layout(
+        `Hola, ${p.name}`,
+        ['Alguien (quizá tú) intentó registrarse con este correo, pero ya tienes una cuenta.', `Si no recuerdas tu contraseña, crea una nueva aquí: ${p.forgotUrl}`, 'Si no fuiste tú, ignora este correo.'],
+        { label: 'Iniciar sesión', url: p.loginUrl },
+      ),
+    };
+  },
+  joinRequest(p: { name: string; orgName: string; inviterName: string; url: string }) {
+    return {
+      subject: `${p.inviterName} te invita a unirte a ${p.orgName}`,
+      ...layout(
+        `Hola, ${p.name}`,
+        [
+          `${p.inviterName} te invita a unirte a ${p.orgName} en Planner para trabajar con su equipo.`,
+          'Entra con tu cuenta de siempre y acepta la invitación. El enlace vence en 7 días.',
+          'Si no esperabas esta invitación, ignora este correo: no cambia nada hasta que la aceptes.',
+        ],
+        { label: 'Ver invitación', url: p.url },
+      ),
     };
   },
   invite(p: { name: string; orgName: string; url: string }) {

@@ -478,7 +478,7 @@ export function EditorPage() {
   };
   const goPhase = (n: number) => {
     if (n === phase) return;
-    if (project.status === 'aprobado' && n < 3) return flash('El proyecto está aprobado; duplícalo desde Mis proyectos para cambiar el diseño.');
+    if (project.status === 'aprobado' && n < 3) return flash('El proyecto está aprobado. Para cambiar el diseño usa «Reabrir para cambios» en Aprobación.');
     setPhase(n);
     setSel(null);
     markDirty();
@@ -658,7 +658,7 @@ export function EditorPage() {
       {readOnly && !conflict && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: project.status === 'aprobado' ? 'var(--color-accent-100)' : 'var(--color-neutral-200)', color: project.status === 'aprobado' ? 'var(--color-accent-800)' : 'var(--color-text)', fontSize: 13, borderBottom: '1px solid var(--color-divider)' }}>
           <Icon name={project.status === 'aprobado' ? 'lock' : 'eye'} size={15} />
-          {project.status === 'aprobado' ? 'Proyecto aprobado: el diseño está bloqueado para producción. Duplícalo desde Mis proyectos para hacer cambios.' : project.access === 'ver'
+          {project.status === 'aprobado' ? 'Proyecto aprobado: el diseño está bloqueado para producción. Para hacer cambios, usa «Reabrir para cambios» en Aprobación (o duplícalo).' : project.access === 'ver'
               ? `Solo lectura: ${project.ownerName ?? 'otra persona'} te compartió este proyecto para verlo. Puedes duplicarlo desde Mis proyectos para trabajar sobre una copia.`
               : 'Solo lectura: tu rol no permite editar proyectos.'}
         </div>
@@ -674,6 +674,7 @@ export function EditorPage() {
           currency={currency}
           issues={issues}
           canManage={!readOnly}
+          canReopen={project.status === 'aprobado' && canEdit(me, project.access) && conflict == null}
           orgName={me?.organization.name ?? 'Planner'}
           orgLogo={me?.organization.logoUrl}
           orgColor={me?.organization.brandColor}

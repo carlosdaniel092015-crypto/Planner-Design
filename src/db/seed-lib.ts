@@ -9,7 +9,7 @@ export interface SeedOptions {
   orgName: string;
   slug: string;
   /** Without password: the admin signs in with Google / Microsoft (they can set one later with "¿Olvidaste tu contraseña?"). */
-  admin: { name: string; email: string; password?: string };
+  admin: { name: string; email: string; password?: string; passwordHash?: string };
   rate?: number;
   /** Base currency of a new organisation. Catalogue prices (USD in src/core) are converted at `rate` for DOP. */
   currency?: 'USD' | 'DOP';
@@ -35,6 +35,8 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
           slug: o.slug,
           brandColor: '#ec3013',
           plan: o.plan ?? 'empresa',
+          // Paid plans given without Stripe are marked as assigned by the platform.
+          planStatus: (o.plan ?? 'empresa') === 'gratis' ? null : 'manual',
           baseCurrency: currency,
           exchangeRateDopPerUsd: rate,
           rateUpdatedAt: new Date(),
@@ -56,7 +58,8 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
     let [admin] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
     if (!admin) {
       [admin] = await tx.insert(users).values({ organizationId: orgId, name: o.admin.name, email, role: 'admin', active: true }).returning();
-      if (o.admin.password) await tx.insert(userCredentials).values({ userId: admin!.id, passwordHash: await hashPassword(o.admin.password) });
+      const passwordHash = o.admin.passwordHash ?? (o.admin.password ? await hashPassword(o.admin.password) : null);
+      if (passwordHash) await tx.insert(userCredentials).values({ userId: admin!.id, passwordHash });
     }
 
     await tx

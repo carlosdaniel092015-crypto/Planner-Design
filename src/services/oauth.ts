@@ -4,10 +4,10 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import type { Db } from '../db/client';
-import { seedOrganization } from '../db/seed-lib';
 import { userIdentities, users, verificationTokens } from '../db/schema';
 import { audit } from '../lib/audit';
 import type { AppConfig, OAuthClient } from '../lib/config';
+import { createOwnOrganization } from './signup';
 
 export type Provider = 'google' | 'microsoft';
 export const PROVIDERS: readonly Provider[] = ['google', 'microsoft'];
@@ -149,15 +149,6 @@ export async function exchangeCode(config: AppConfig, rt: OAuthRuntime, flow: Fl
   return { provider: p, subject: payload.sub, email, emailVerified, name: name.slice(0, 120) };
 }
 
-const slugBase = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 30) || 'org';
-
 /**
  * Finds or creates the user for a verified provider profile:
  * 1. a linked identity → that user;
@@ -200,15 +191,7 @@ export async function resolveOAuthUser(db: Db, profile: OAuthProfile): Promise<{
   }
 
   // Open sign-up: own organisation, free plan, default catalogue in RD$.
-  const first = profile.name.split(/\s+/)[0] || 'Mi taller';
-  const { org, admin } = await seedOrganization(db, {
-    orgName: `Taller de ${first}`.slice(0, 120),
-    slug: `${slugBase(email.split('@')[0]!)}-${randomBytes(3).toString('hex')}`,
-    admin: { name: profile.name, email },
-    currency: 'DOP',
-    rate: 60,
-    plan: 'gratis',
-  });
+  const { org, admin } = await createOwnOrganization(db, { name: profile.name, email });
   await db.insert(userIdentities).values({ userId: admin.id, provider: profile.provider, subject: profile.subject, email, lastLoginAt: new Date() });
   await audit(db, { organizationId: org.id, userId: admin.id }, 'crear', 'organization', org.id, { registro: profile.provider });
   return { userId: admin.id, created: true };

@@ -35,6 +35,9 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
   **Proyectos privados:** solo los ve su dueño o a quien se los compartieron (`project_shares`, acceso `ver`/`editar`), admin incluido.
   Cargar siempre con `getProject` (trae `access`) y pasar `{ access }` a los `assertCan('project:…')`; sin `access` se niega.
   Añadir una acción nueva = añadirla a la matriz y a `tests/permissions.test.ts`.
+  **Plataforma** (`src/routes/platform.ts`): fuera de la matriz por rol; solo los correos de `PLATFORM_ADMIN_EMAILS` (403 al resto). Ven todas las organizaciones.
+- **Planes**: los límites se aplican siempre (con o sin Stripe). Sin Stripe el plan lo asigna la plataforma (`plan_status = manual`). Cuentas nuevas: Gratis.
+- **Correo**: tras una transacción ya confirmada usar `trySend` (`src/services/mailer.ts`), nunca `mailer.send` directo: un fallo del proveedor no debe dar 500.
 - **Auditoría**: crear/actualizar/eliminar/enviar/aprobar/precios/roles → `audit(...)` dentro de la misma transacción.
 - **Dinero**: `numeric` en la BD, `number` redondeado a 2 decimales en la API (`src/lib/money.ts`).
   Los importes de proyectos aprobados salen de `project_versions.pricing_snapshot`, nunca de los precios vigentes.

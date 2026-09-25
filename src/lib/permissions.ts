@@ -9,6 +9,7 @@ export type Action =
   | 'project:delete'
   | 'project:send'
   | 'project:approve'
+  | 'project:reopen'
   | 'project:export'
   | 'project:share'
   | 'client:read'
@@ -49,7 +50,7 @@ const READ_ONLY: Action[] = ['project:read', 'project:export', 'client:read', 'c
 
 const OWN_ONLY = new Set<Action>(['client:update', 'client:delete', 'file:delete']);
 /** Project actions a share with access "editar" allows. */
-const PROJECT_EDIT = new Set<Action>(['project:update', 'project:send', 'project:approve']);
+const PROJECT_EDIT = new Set<Action>(['project:update', 'project:send', 'project:approve', 'project:reopen']);
 /** Project actions only the owner can do. */
 const PROJECT_OWNER = new Set<Action>(['project:delete', 'project:share']);
 
@@ -62,6 +63,7 @@ const MATRIX: Record<Role, Set<Action>> = {
     'project:delete',
     'project:send',
     'project:approve',
+    'project:reopen',
     'project:share',
     'client:create',
     'client:update',
