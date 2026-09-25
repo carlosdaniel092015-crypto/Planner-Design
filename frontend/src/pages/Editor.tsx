@@ -617,7 +617,7 @@ export function EditorPage() {
           flash={flash}
         />
       ) : phase === 1 ? (
-        <SpecWizard data={data} step={specStep} setStep={setSpecStep} commit={commit} onGenerate={generate} currency={currency} readOnly={readOnly} flash={flash} />
+        <SpecWizard data={data} step={specStep} setStep={setSpecStep} commit={commit} onGenerate={generate} currency={currency} readOnly={readOnly} flash={flash} materials={catalog.materials} />
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="ed-body" style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>

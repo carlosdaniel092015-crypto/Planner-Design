@@ -16,6 +16,7 @@ export const LAYOUTS_K: LayoutOption[] = [
   { k: 'paralela', name: 'Paralela', desc: 'Dos frentes enfrentados, pasillo al centro.', r: [[10, 10, 80, 14], [10, 56, 80, 14]] },
   { k: 'isla', name: 'Con isla', desc: 'L o lineal con isla central independiente.', r: [[10, 10, 80, 14], [10, 24, 14, 46], [42, 44, 34, 14]] },
   { k: 'peninsula', name: 'Con península', desc: 'Barra unida a un extremo del mueble.', r: [[10, 10, 80, 14], [10, 24, 14, 46], [62, 24, 14, 30]] },
+  { k: 'personalizada', name: 'Personalizada', desc: 'Tú eliges los muros con muebles, los fondos y la isla.', r: [] },
 ];
 
 export const LAYOUTS_C: LayoutOption[] = [
@@ -23,6 +24,7 @@ export const LAYOUTS_C: LayoutOption[] = [
   { k: 'L', name: 'En L', desc: 'Aprovecha la esquina con colgado.', r: [[10, 10, 80, 16], [10, 26, 16, 44]] },
   { k: 'U', name: 'En U', desc: 'Tres muros, ideal para vestidor.', r: [[10, 10, 80, 16], [10, 26, 16, 44], [74, 26, 16, 44]] },
   { k: 'abierto', name: 'Vestidor abierto', desc: 'Sin puertas, con isla cajonera.', r: [[10, 10, 80, 12], [10, 22, 12, 48], [40, 44, 30, 14]] },
+  { k: 'personalizada', name: 'Personalizada', desc: 'Tú eliges los muros con módulos y el fondo.', r: [] },
 ];
 
 export const layoutsFor = (ptype: ProjectKind) => (ptype === 'cocina' ? LAYOUTS_K : LAYOUTS_C);
@@ -33,7 +35,13 @@ export interface Appliance {
   w: number;
   h: number;
   d: number;
+  /** Custom items only (keys starting with "x"): the name the designer gave it. */
+  name?: string;
 }
+
+/** Installation options for custom items; the generator maps each to a kind of module. */
+export const CUSTOM_INSTS = ['Bajo encimera', 'Empotrado', 'En columna', 'Libre', 'Colgado'] as const;
+export const isCustomAppl = (k: string) => /^x\d+$/.test(k);
 
 export interface ApplianceOption {
   k: string;
@@ -72,7 +80,11 @@ export function defaultAppl(ptype: ProjectKind): Record<string, Appliance> {
 /** Reads a project's appliance map with defaults for anything missing. */
 export function applOf(ptype: ProjectKind, appl: Record<string, unknown> | null | undefined): Record<string, Appliance> {
   const base = defaultAppl(ptype);
-  for (const [k, v] of Object.entries(appl ?? {})) if (base[k] && v && typeof v === 'object') base[k] = { ...base[k], ...(v as Partial<Appliance>) };
+  for (const [k, v] of Object.entries(appl ?? {})) {
+    if (!v || typeof v !== 'object') continue;
+    if (base[k]) base[k] = { ...base[k], ...(v as Partial<Appliance>) };
+    else if (isCustomAppl(k)) base[k] = { on: true, inst: 'Libre', w: 60, h: 85, d: 60, name: 'Accesorio', ...(v as Partial<Appliance>) };
+  }
   return base;
 }
 
@@ -115,3 +127,49 @@ export function closetOf(closet: Record<string, unknown> | null | undefined): Cl
 
 /** Budget slider range in RD$ (prototype: MXN 80k–400k). */
 export const BUDGET_RANGE = { min: 100_000, max: 3_000_000, step: 25_000 } as const;
+
+// ---------- distribution measurements (Especificaciones paso 1) ----------
+export type FurnitureWall = 'A' | 'B' | 'C' | 'D';
+
+/** Walls that carry furniture for each preset layout. */
+export function wallsFor(layout: string | undefined, ptype: ProjectKind): FurnitureWall[] {
+  if (layout === 'lineal') return ['A'];
+  if (layout === 'U') return ['A', 'B', 'C'];
+  if (layout === 'paralela') return ['A', 'D'];
+  if (ptype !== 'cocina' && layout === 'abierto') return ['A', 'B'];
+  return ['A', 'B'];
+}
+
+export interface DistPrefs {
+  walls: FurnitureWall[];
+  /** Depth of base units / closet modules (cm). */
+  baseD: number;
+  /** Height of the base carcass without plinth (cm); the countertop sits on top. */
+  baseH: number;
+  upperD: number;
+  /** Minimum free aisle in front of the furniture (cm). */
+  aisle: number;
+  island: { on: boolean; w: number | null; d: number };
+}
+
+/** Distribution measurements with defaults filled in (custom layouts keep their own walls). */
+export function distOf(p: { ptype: ProjectKind; layout?: string; dist?: Partial<Omit<DistPrefs, 'island'>> & { island?: Partial<DistPrefs['island']> } }): DistPrefs {
+  const d = p.dist ?? {};
+  const kit = p.ptype === 'cocina';
+  const custom = p.layout === 'personalizada';
+  const presetIsland = kit ? p.layout === 'isla' || p.layout === 'peninsula' : p.layout === 'abierto' || p.ptype === 'vestidor';
+  return {
+    walls: custom && d.walls?.length ? [...new Set(d.walls)].sort() as FurnitureWall[] : custom ? ['A', 'B'] : wallsFor(p.layout, p.ptype),
+    baseD: d.baseD ?? (kit ? 60 : p.ptype === 'vestidor' || p.layout === 'abierto' ? 55 : 60),
+    baseH: d.baseH ?? 76,
+    upperD: d.upperD ?? 35,
+    aisle: d.aisle ?? 90,
+    island: { on: custom ? !!d.island?.on : presetIsland, w: d.island?.w ?? null, d: d.island?.d ?? (kit ? 70 : 55) },
+  };
+}
+
+/** Height (cm) from a preference like "70 cm", "90 cm" or a plain number. */
+export const cmOf = (v: string | number | undefined, fallback: number) => {
+  const n = typeof v === 'number' ? v : v ? parseFloat(v) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};

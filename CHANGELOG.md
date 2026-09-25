@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.8.0 · 2026-09-25
+
+### Especificaciones totalmente editables: crea el proyecto desde cero
+- **Empezar en blanco:** un botón en Especificaciones quita puertas, ventanas, instalaciones, electrodomésticos y muebles para armar todo desde cero (se puede deshacer).
+- **Distribución personalizada:** elige tú qué muros llevan muebles (A, B, C, D en cualquier combinación). En cualquier forma puedes cambiar el fondo y la altura de los bajos, el fondo de las alacenas, el pasillo mínimo y la isla o península (incluirla o no, con su ancho y fondo).
+- **Puertas y ventanas:** ahora también cambias el tipo (una puerta puede pasar a ventana) y puedes quitarlas todas.
+- **Instalaciones:** agrega un punto sin hacer clic en la planta y quita todos de una vez.
+- **Electrodomésticos y accesorios propios:** agrega los tuyos con nombre, instalación y medidas; la distribución los coloca según su instalación (bajo encimera, en columna, de piso o colgado entre las alacenas).
+- **Estilo personalizado:** elige el material de cuerpo, frentes, encimera y jaladeras, incluidas tus texturas.
+- La distribución automática resuelve las esquinas entre los muros B-D y C-D (reserva el fondo del refrigerador) y avisa cuando la toma de agua queda en un muro sin muebles.
+
 ## 1.7.0 · 2026-09-24
 
 ### PDF con despiece por módulo

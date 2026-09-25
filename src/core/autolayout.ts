@@ -5,7 +5,7 @@ import { DEFAULT_MODULES } from './catalog';
 import { templateOf } from './editing';
 import { zocaloCm } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
-import { applOf, closetOf, ESTILOS } from './spec';
+import { applOf, closetOf, cmOf, distOf, ESTILOS, isCustomAppl } from './spec';
 import type { ModuleDefinition, ModuleShape } from './types';
 
 type Wall = 'A' | 'B' | 'C' | 'D';
@@ -41,23 +41,30 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     return templateOf(def);
   };
   const est = ESTILOS.find((e) => e.name === p.prefs.estilo) ?? ESTILOS[0];
-  const mats = { ...est.m };
+  // "Personalizado": the designer picked each material group in Especificaciones.
+  const own = (p.prefs as { mats?: Partial<ProjectData['mats']> }).mats;
+  const mats = { ...est.m, ...(p.prefs.estilo === 'Personalizado' && own ? Object.fromEntries(Object.entries(own).filter(([, v]) => typeof v === 'string' && v)) : {}) } as ProjectData['mats'];
+  const dist = distOf({ ...p, layout });
   const notes: string[] = [];
   const out: Placed[] = [];
   const islands: ModuleInstance[] = [];
 
   const isKitchen = p.ptype === 'cocina';
   const open = p.ptype === 'vestidor' || layout === 'abierto';
-  const walls: Wall[] =
-    layout === 'lineal' ? ['A'] : layout === 'U' ? ['A', 'B', 'C'] : layout === 'paralela' ? ['A', 'D'] : ['A', 'B'];
-  const depth = isKitchen ? 60 : open ? 55 : 60;
+  const walls = dist.walls as Wall[];
+  const depth = dist.baseD;
+  const fridge = isKitchen ? applOf('cocina', p.appl).refri : undefined;
+  const cornerD = Math.max(depth, fridge?.on ? clamp(fridge.d, 45, 70) : 0);
 
   // ----- usable floor segments (corners owned by A; doors removed) -----
   const segs: Seg[] = [];
   for (const w of walls) {
     let a = 0;
     let b = wallLen(w, p);
-    if ((w === 'B' && walls.includes('A')) || (w === 'C' && walls.includes('A'))) a = depth;
+    // Corner ownership: A owns A-B and A-C, B owns B-D, C owns C-D. B and C can end in a fridge, which is deeper.
+    if ((w === 'B' || w === 'C') && walls.includes('A')) a = depth;
+    if (w === 'D' && walls.includes('B')) a = cornerD;
+    if (w === 'D' && walls.includes('C')) b -= cornerD;
     let parts: Seg[] = [{ wall: w, a, b }];
     for (const o of p.ops.filter((o) => o.wall === w && o.t === 'puerta')) {
       const s0 = o.pos - 5;
@@ -102,6 +109,14 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
   if (isKitchen) kitchen();
   else closet();
 
+  // ----- chosen depths and heights -----
+  for (const o of out) {
+    if (o.tpl.type === 'base') o.patch = { ...o.patch, h: o.patch?.h && o.tpl.appl ? o.patch.h : dist.baseH, d: depth };
+    else if (o.tpl.type === 'tall' && isKitchen) o.patch = { ...o.patch, d: depth };
+    else if (o.tpl.type === 'upper') o.patch = { ...o.patch, d: dist.upperD };
+  }
+  for (const m of islands) if (isKitchen) m.h = dist.baseH;
+
   // ----- ids -----
   let id = 0;
   const mods: ModuleInstance[] = out
@@ -116,13 +131,17 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     const zoc = zocaloCm(p.prefs.zocalo);
     const tallH = clamp(p.room.H - zoc - 15, 180, 240) >= 210 ? 210 : clamp(p.room.H - zoc - 15, 180, 240);
     const pt = (t: string) => p.pts.find((x) => x.t === t && walls.includes(x.wall as Wall));
+    const custom = Object.entries(ap)
+      .filter(([k, v]) => isCustomAppl(k) && v.on)
+      .map(([, v]) => ({ name: (v.name || 'Electrodoméstico').slice(0, 60), inst: v.inst, w: clamp(Math.round(v.w), 15, 150), h: Math.round(v.h), d: Math.round(v.d), done: false }));
 
     // Corners first: an L-shaped corner base where A meets B (and C).
-    if (walls.includes('B')) out.push({ wall: 'A', pos: 0, w: 90, tpl: tpl('E-L') });
-    if (walls.includes('C')) out.push({ wall: 'A', pos: p.room.A - 90, w: 90, tpl: tpl('E-L') });
+    if (walls.includes('A') && walls.includes('B')) out.push({ wall: 'A', pos: 0, w: 90, tpl: tpl('E-L') });
+    if (walls.includes('A') && walls.includes('C')) out.push({ wall: 'A', pos: p.room.A - 90, w: 90, tpl: tpl('E-L') });
 
     // Sink on the water point (under the window when there is none).
     const agua = pt('agua');
+    if (ap.freg?.on !== false && !agua && p.pts.some((x) => x.t === 'agua')) notes.push('La toma de agua está en un muro sin muebles; el fregadero quedará lejos de ella.');
     const win = p.ops.find((o) => o.t === 'ventana' && walls.includes(o.wall as Wall));
     const sinkW = clamp(Math.ceil(((ap.freg?.w ?? 76) + 14) / 10) * 10, 60, 120);
     const sinkWall = (agua?.wall as Wall) ?? (win?.wall as Wall) ?? 'A';
@@ -175,6 +194,18 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     if (ap.micro?.on && ap.micro.inst === 'En columna' && !placeNear(tallWall, null, 60, tpl('C-DE'), { h: tallH, name: 'Columna microondas' }, tallAt)) notes.push('No hubo espacio para la columna del microondas.');
     if (ap.cava?.on) placeNear(null, null, clamp(ap.cava.w, 15, 30), tpl('BB-22'), { name: 'Cava de vinos', appl: 1 });
 
+    // Custom appliances, by installation: under the counter, in a column, free-standing (hanging ones go with the uppers).
+    for (const c of custom) {
+      let placed: Placed | null = null;
+      if (c.inst === 'Bajo encimera' || c.inst === 'Empotrado') placed = placeNear(null, null, c.w, tpl('LV-60'), { name: c.name, rw: [c.w, c.w] });
+      else if (c.inst === 'En columna') placed = placeNear(tallWall, null, c.w, tpl('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] }, tallAt) ?? placeNear(null, null, c.w, tpl('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] });
+      else if (c.inst === 'Libre') {
+        const patch = { name: c.name, h: clamp(c.h, 30, p.room.H - 10), d: clamp(c.d, 20, 90), rw: [c.w, c.w] as [number, number] };
+        placed = placeNear(tallWall, null, c.w, tpl('RF-75'), patch, tallAt) ?? placeNear(null, null, c.w, tpl('RF-75'), patch);
+      } else continue;
+      if (!placed) notes.push(`No hubo espacio para ${c.name}.`);
+    }
+
     // Hood centred over the cooktop.
     if (ap.campana?.on && cook) {
       const w = clamp(ap.campana.w, 60, 90);
@@ -187,15 +218,16 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     absorbSmallGaps();
 
     // Uppers over the base runs, skipping windows, tall units and the hood.
-    // Any height the user typed ("80 cm"); 70 cm when missing.
-    const uh = parseFloat(p.prefs.alacena ?? '') || 70;
-    const upperH = Math.min(uh, Math.max(35, p.room.H - 150 - 5));
+    const upperH = Math.min(cmOf(p.prefs.alacena, 70), Math.max(35, p.room.H - 150 - 5));
+    const hanging = custom.filter((c) => c.inst === 'Colgado');
     for (const w of walls) {
       const floor = out.filter((o) => o.wall === w && o.tpl.type === 'base').sort((a, b) => a.pos - b.pos);
       if (!floor.length) continue;
       let a = Math.min(...floor.map((f) => f.pos));
-      const b = Math.max(...floor.map((f) => f.pos + f.w));
-      if ((w === 'B' || w === 'C') && walls.includes('A')) a = Math.max(a, 35);
+      let b = Math.max(...floor.map((f) => f.pos + f.w));
+      if ((w === 'B' || w === 'C') && walls.includes('A')) a = Math.max(a, dist.upperD);
+      if (w === 'D' && walls.includes('B')) a = Math.max(a, dist.upperD);
+      if (w === 'D' && walls.includes('C')) b = Math.min(b, wallLen('D', p) - dist.upperD);
       const blocks: [number, number][] = [
         ...out.filter((o) => o.wall === w && (o.tpl.type === 'tall' || o.tpl.type === 'fridge' || o.tpl.type === 'hood')).map((o) => [o.pos, o.pos + o.w] as [number, number]),
         ...p.ops.filter((o) => o.wall === w).map((o) => [o.pos - 3, o.pos + o.w + 3] as [number, number]),
@@ -208,27 +240,40 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
         cur = Math.max(cur, x1);
       }
       if (b > cur) runs.push([cur, b]);
-      for (const [r0, r1] of runs) fillUppers(w, r0, r1, upperH);
+      for (let [r0, r1] of runs) {
+        // Custom hanging appliances (e.g. a wall microwave) take the first upper slot where they fit.
+        for (const c of hanging.filter((x) => !x.done && r1 - r0 >= x.w)) {
+          out.push({ wall: w, pos: Math.round(r0), w: c.w, tpl: tpl('A-1P'), patch: { name: c.name, appl: 1, h: clamp(c.h, 20, upperH), rw: [c.w, c.w], fr: [{ t: 'door', n: 1, f: 1 }] } });
+          r0 += c.w;
+          c.done = true;
+        }
+        fillUppers(w, r0, r1, upperH);
+      }
+      for (const c of hanging.filter((x) => !x.done)) notes.push(`No hubo espacio en las alacenas para ${c.name}.`);
     }
 
     // Island / peninsula.
-    if (layout === 'isla' || layout === 'peninsula') {
-      const aisle = 90;
-      const iw = clamp(Math.round((p.room.A * (layout === 'isla' ? 0.35 : 0.4)) / 10) * 10, 90, 180);
-      const idp = 70;
+    if (dist.island.on) {
+      const aisle = dist.aisle;
+      const iw = dist.island.w ?? clamp(Math.round((p.room.A * (layout === 'peninsula' ? 0.4 : 0.35)) / 10) * 10, 90, 180);
+      const idp = dist.island.d;
       const t = tpl('IS-120');
       if (layout === 'isla') {
         // Work aisle in front of the wall runs, at least 60 cm walkway behind the island.
-        const y = Math.max(depth + aisle + 5, Math.round(p.room.B / 2 - 20));
+        // Aisle in front of every furnished wall, at least 60 cm walkway on the free sides.
+        const front = (walls.includes('A') ? depth : 0) + aisle;
+        const backLimit = p.room.B - (walls.includes('D') ? depth + aisle : 60);
         const x0 = walls.includes('B') ? depth + aisle : 60;
-        const maxW = Math.min(180, p.room.A - x0 - 60);
-        if (maxW >= 90 && p.room.B - (y + idp) >= 60) {
-          const w = clamp(iw, 90, maxW);
-          islands.push({ ...structuredClone(t), wall: 'F', x: x0 + Math.round((p.room.A - x0 - 60 - w) / 2), y, w, d: idp, id: 0 } as ModuleInstance);
-        } else notes.push(`La habitación es muy pequeña para una isla (pasillos de ${aisle} cm frente a los muebles y 60 cm detrás).`);
+        const x1 = p.room.A - (walls.includes('C') ? depth + aisle : 60);
+        const y = Math.max(front, Math.round((front + backLimit - idp) / 2));
+        const w = Math.min(iw, x1 - x0);
+        if (w >= 60 && y + idp <= backLimit) {
+          islands.push({ ...structuredClone(t), wall: 'F', x: x0 + Math.round((x1 - x0 - w) / 2), y, w, d: idp, rw: [Math.min(60, w), Math.max(w, 180)], id: 0 } as ModuleInstance);
+          if (w < iw) notes.push(`La isla se redujo a ${w} cm para dejar los pasillos de ${aisle} cm.`);
+        } else notes.push(`La habitación es muy pequeña para una isla (pasillos de ${aisle} cm frente a los muebles y 60 cm en los lados libres).`);
       } else {
         const y = Math.round(p.room.B - idp - aisle);
-        if (y > depth + 60) islands.push({ ...structuredClone(t), name: 'Península cajonera', wall: 'F', x: depth, y, w: iw, d: idp, id: 0 } as ModuleInstance);
+        if (y > depth + 60) islands.push({ ...structuredClone(t), name: 'Península cajonera', wall: 'F', x: depth, y, w: iw, d: idp, rw: [Math.min(60, iw), Math.max(iw, 180)], id: 0 } as ModuleInstance);
         else notes.push('No cupo la península; quedó como cocina en L.');
       }
     }
@@ -346,9 +391,13 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
         }
       }
 
-    if (open && p.room.A >= 240 && p.room.B >= 240) {
+    if (dist.island.on) {
       const t = tpl('IC-100');
-      islands.push({ ...structuredClone(t), wall: 'F', x: Math.round((p.room.A - 100) / 2), y: Math.round(p.room.B / 2 - 10), w: 100, d: 55, id: 0 } as ModuleInstance);
+      const w = dist.island.w ?? 100;
+      const d = dist.island.d;
+      const fits = p.room.A - 2 * (depth + 60) >= w && p.room.B - (walls.includes('A') ? depth + 60 : 60) - 60 >= d;
+      if (fits) islands.push({ ...structuredClone(t), wall: 'F', x: Math.round((p.room.A - w) / 2), y: Math.round(p.room.B / 2 - d / 2 + (walls.includes('A') ? depth / 2 : 0)), w, d, rw: [Math.min(60, w), Math.max(w, 150)], id: 0 } as ModuleInstance);
+      else notes.push('No cupo la isla cajonera con pasillos de 60 cm.');
     }
   }
 }

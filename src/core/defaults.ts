@@ -42,3 +42,21 @@ export const DEFAULT_KITCHEN: ProjectData = { ...newProject('cocina', 'Cocina Fa
 
 /** Project type column value (the database only distinguishes cocina / closet). */
 export const projectTypeOf = (ptype: ProjectKind): 'cocina' | 'closet' => (ptype === 'cocina' ? 'cocina' : 'closet');
+
+/**
+ * "Empezar en blanco": keeps the project type, name, room size and style, and clears everything else so the
+ * designer builds it from zero (no openings, installations, appliances or furniture).
+ */
+export function blankProject(p: ProjectData): ProjectData {
+  const appl = Object.fromEntries(Object.entries(defaultAppl(p.ptype)).map(([k, v]) => [k, { ...v, on: false }]));
+  return {
+    ...p,
+    layout: 'personalizada',
+    ops: [],
+    pts: [],
+    appl,
+    mods: [],
+    dist: { walls: ['A'] },
+    ...(p.ptype !== 'cocina' ? { closet: { largo: 0, corto: 0, cajoneras: 0, zapatos: 0, luz: 'Sin iluminación' } } : {}),
+  };
+}
