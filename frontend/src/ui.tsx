@@ -8,9 +8,9 @@ export const MUTED = 'color-mix(in srgb, var(--color-text) 62%, transparent)';
 export const Icon = ({ name, size = 16, style }: { name: string; size?: number; style?: CSSProperties }) => <i className={`icon-${name}`} style={{ fontSize: size, ...style }} aria-hidden />;
 
 /** Renders a core draw list — same mapping as the prototype's svg() helper. */
-export function Svg({ drawing, onPick, style, title = 'Dibujo del proyecto' }: { drawing: Drawing | null; onPick?: (id: number | null) => void; style?: CSSProperties; title?: string }) {
+export function Svg({ drawing, onPick, style, title = 'Dibujo del proyecto' }: { drawing: Drawing | null; onPick?: (id: number | null, add?: boolean) => void; style?: CSSProperties; title?: string }) {
   if (!drawing) return null;
-  const pick = (it: DrawItem) => (onPick && it.mid ? () => onPick(it.mid!) : undefined);
+  const pick = (it: DrawItem) => (onPick && it.mid ? (e: React.MouseEvent) => onPick(it.mid!, e.ctrlKey || e.metaKey || e.shiftKey) : undefined);
   return (
     <svg
       viewBox={drawing.vb.map((v) => +(+v).toFixed(1)).join(' ')}
@@ -18,7 +18,7 @@ export function Svg({ drawing, onPick, style, title = 'Dibujo del proyecto' }: {
       height="100%"
       preserveAspectRatio="xMidYMid meet"
       style={{ display: 'block', ...style }}
-      onClick={onPick ? (e) => e.target === e.currentTarget && onPick(null) : undefined}
+      onClick={onPick ? (e) => e.target === e.currentTarget && !(e.ctrlKey || e.metaKey || e.shiftKey) && onPick(null) : undefined}
       role="img"
     >
       <title>{title}</title>

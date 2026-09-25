@@ -514,6 +514,8 @@ function defaultAz(cfg) {
   if (on('D')) return Math.PI / 2;
   return Math.PI / 4;
 }
+/** A saved camera is used only when every number is finite (a broken one falls back to the automatic view). */
+const validCam = c => !!c && [c.az, c.polar, c.dist, ...(c.target || [])].length === 6 && [c.az, c.polar, c.dist, ...c.target].every(Number.isFinite) && c.dist > 0;
 function camFor(cam, target, dist, az, polar) {
   cam.position.set(target.x + dist * Math.sin(polar) * Math.sin(az), target.y + dist * Math.cos(polar), target.z + dist * Math.sin(polar) * Math.cos(az));
   cam.lookAt(target);
@@ -570,11 +572,12 @@ class Viewer {
     const hits = ray.intersectObjects(Object.values(this.groups).filter(g => g.visible), true);
     let id = null;
     if (hits.length) { let o = hits[0].object; while (o && !(o.userData && o.userData.modId)) o = o.parent; id = o ? o.userData.modId : null; }
-    this.opts.onSelect && this.opts.onSelect(id);
+    // Ctrl/⌘ (or Shift) + click adds or removes the module from the selection.
+    this.opts.onSelect && this.opts.onSelect(id, e.ctrlKey || e.metaKey || e.shiftKey);
   }
   async update(cfg) {
     this.cfg = cfg;
-    const light = JSON.stringify([cfg.sel, cfg.cotas, cfg.altos, cfg.bg]);
+    const light = JSON.stringify([cfg.sel, cfg.sels, cfg.cotas, cfg.altos, cfg.bg]);
     const E = window.SPEngine;
     const texSig = Object.keys(E.MATS).filter(k => E.MATS[k].img).map(k => k + E.MATS[k].tile + E.MATS[k].rough).join();
     const sig = JSON.stringify([cfg.mods, cfg.mats, cfg.room, cfg.ops, cfg.handle, cfg.zoc, cfg.kitchen, texSig]);
@@ -612,6 +615,11 @@ class Viewer {
     this.labels.forEach(l => l.d.remove()); this.labels = [];
     const cfg = this.cfg, m = (cfg.mods || []).find(x => x.id === cfg.sel), g = m && this.groups[m.id];
     const RED = 0xec3013, INK = 0x201e1d, V3 = (x, y, z) => new T.Vector3(x, y, z);
+    // Other selected modules: a thinner box each (the primary keeps its dimensions).
+    (cfg.sels || []).filter(id => id !== cfg.sel).forEach(id => {
+      const og = this.groups[id]; if (!og || !og.visible) return;
+      const h = new T.Box3Helper(new T.Box3().setFromObject(og).expandByScalar(.004), RED); h.material.depthTest = false; h.material.transparent = true; h.material.opacity = .75; h.renderOrder = 999; this.sel.add(h);
+    });
     if (g && g.visible) {
       const bb = new T.Box3().setFromObject(g).expandByScalar(.004);
       const h = new T.Box3Helper(bb, RED); h.material.depthTest = false; h.material.transparent = true; h.renderOrder = 999; this.sel.add(h);
@@ -646,6 +654,11 @@ class Viewer {
     const st = performance.now();
     this.tw = () => { const k = Math.min(1, (performance.now() - st) / 450), e = 1 - Math.pow(1 - k, 3); go(e); if (k >= 1) this.tw = null; };
   }
+  /** Frames one module (detail view) keeping the current azimuth. */
+  focus(id) { const g = this.groups[id]; if (!g) return; const bb = new T.Box3().setFromObject(g), c = bb.getCenter(new T.Vector3()), r = bb.getSize(new T.Vector3()).length() / 2; const s = new T.Spherical().setFromVector3(this.cam.position.clone().sub(this.ctl.target)); this.anim(c, Math.max(1.1, r * 2.6), s.theta, 1.0, true); }
+  /** Current orbit camera (to save a hand-made view). */
+  getCamera() { const s = new T.Spherical().setFromVector3(this.cam.position.clone().sub(this.ctl.target)); const t = this.ctl.target; return { az: s.theta, polar: s.phi, dist: s.radius, target: [t.x, t.y, t.z] }; }
+  setCamera(c) { if (!validCam(c)) return; this.anim(new T.Vector3(...c.target), c.dist, c.az, c.polar, true); }
   setAngle(deg) { const s = new T.Spherical().setFromVector3(this.cam.position.clone().sub(this.ctl.target)); this.anim(this.ctl.target.clone(), s.radius, deg * Math.PI / 180, s.phi); }
   zoomBy(f) { const s = new T.Spherical().setFromVector3(this.cam.position.clone().sub(this.ctl.target)); this.anim(this.ctl.target.clone(), Math.max(1, Math.min(16, s.radius / f)), s.theta, s.phi); }
   dispose() { this.dead = true; cancelAnimationFrame(this.raf); this.ro.disconnect(); this.ctl.dispose(); disposeTree(this.root); this.r.dispose(); this.r.forceContextLoss && this.r.forceContextLoss(); this.r.domElement.remove(); this.ov.remove(); }
@@ -670,7 +683,8 @@ export function snapshot(cfg, o) {
     if (!o.focusId) c.y = Math.min(c.y, 1.05);
     const k = o.w / o.h < 1.2 ? .95 : .78;
     const dist = o.focusId ? Math.max(1.1, r * 2.6) : r / Math.sin(cam.fov * Math.PI / 360) * k;
-    camFor(cam, c, dist, o.ang != null ? o.ang * Math.PI / 180 : defaultAz(cfg), o.polar || (o.focusId ? 1.0 : 1.18));
+    if (validCam(o.cam)) camFor(cam, new T.Vector3(...o.cam.target), o.cam.dist, o.cam.az, o.cam.polar);
+    else camFor(cam, c, dist, o.ang != null ? o.ang * Math.PI / 180 : defaultAz(cfg), o.polar || (o.focusId ? 1.0 : 1.18));
     cutaway(root.userData.walls, cam, cfg);
     snapR.render(scene, cam);
     const url = snapR.domElement.toDataURL('image/jpeg', .88);

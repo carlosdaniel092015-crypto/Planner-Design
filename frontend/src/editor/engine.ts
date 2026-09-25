@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { type Drawing, type DrawItem, front2D, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
+import { type CameraState, type Drawing, type DrawItem, front2D, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -61,10 +61,13 @@ export interface Viewer {
   setAngle(deg: number): void;
   /** Opens (true) or closes all doors and drawers, animated. */
   setOpen(open: boolean): void;
+  getCamera(): CameraState;
+  focus(id: number): void;
+  setCamera(c: CameraState): void;
 }
 interface Renderer {
   init(): Promise<void>;
-  createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null) => void; onReady?: () => void }): Promise<Viewer>;
+  createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null, add: boolean) => void; onReady?: () => void }): Promise<Viewer>;
   snapshot(cfg: unknown, o: SnapOptions): Promise<string | null>;
 }
 
@@ -77,6 +80,8 @@ export interface SnapOptions {
   focusId?: number;
   /** Render with doors and drawers open. */
   open?: boolean;
+  /** Hand-made camera; overrides ang / focusId framing. */
+  cam?: CameraState;
 }
 
 const snapCache = new Map<string, Promise<string | null>>();
@@ -103,7 +108,7 @@ export function loadRenderer(): Promise<Renderer> {
 export const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 'none' : 'bar');
 
 /** Scene config the renderer expects (prototype sceneCfg()). */
-export function sceneCfg(p: ProjectData, extra: { sel: number | null; cotas: boolean; altos: boolean; dark: boolean }) {
+export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: number[]; cotas: boolean; altos: boolean; dark: boolean }) {
   if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
     mods: p.mods,
@@ -114,6 +119,7 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; cotas: boo
     zoc: zocaloCm(p.prefs.zocalo),
     kitchen: p.ptype === 'cocina',
     sel: extra.sel,
+    sels: extra.sels ?? [],
     cotas: extra.cotas,
     altos: extra.altos,
     bg: extra.dark ? '#131211' : '#d3cec6',

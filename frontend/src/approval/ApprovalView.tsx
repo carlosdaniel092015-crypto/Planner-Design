@@ -1,5 +1,6 @@
 // Phase 3 — Aprobación: gallery, assembly drawings, cut list, PDF preview, send to client and sign-off.
 import {
+  camSchema,
   corte,
   type Drawing,
   type Estimate,
@@ -20,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type CatalogMaterial, type Currency, type ProjectDetail } from '../api';
 import { handleOf, sceneCfg } from '../editor/engine';
 import { Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg } from '../ui';
+import { CameraDialog } from './CameraDialog';
 import { downloadApi, exportPdf, Photo, SignaturePad } from './shared';
 
 type Tab = 'galeria' | 'planos' | 'corte' | 'pdf';
@@ -67,7 +69,8 @@ export function ApprovalView(props: {
   const [sendOpen, setSendOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   /** null = automatic angle (faces the most fronts). */
-  const [galAng, setGalAng] = useState<number | null>(null);
+  /** Which gallery photo is being framed by hand. */
+  const [camEdit, setCamEdit] = useState<'persp' | 'det' | null>(null);
   const [regen, setRegen] = useState(0);
   const [planMod, setPlanMod] = useState<number | null>(null);
   const [pdf, setPdf] = useState<{ pct: number; step: string } | null>(null);
@@ -91,7 +94,14 @@ export function ApprovalView(props: {
   const walls: Wall[] = ['A', 'B', ...(['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w))];
   const buildable = useMemo(() => data.mods.filter((m) => parts(m, data.mats, mats).length), [data, mats]);
   const cut = useMemo(() => (tab === 'corte' || tab === 'pdf' ? corte(data, mats) : []), [tab, data, mats]);
-  const detMod = data.mods.find((m) => m.sink) ?? data.mods.find((m) => m.cook) ?? data.mods[0];
+  // Detail view: the module chosen in the gallery, else the sink/cooktop (kitchens) or the long hanging (closets).
+  const cams = data.cams ?? {};
+  const detMod =
+    data.mods.find((m) => m.id === cams.det?.mod) ??
+    (data.ptype === 'cocina' ? (data.mods.find((m) => m.sink) ?? data.mods.find((m) => m.cook)) : data.mods.find((m) => /colgado largo/i.test(m.name) || m.code === 'CL-100' || m.code === 'VL-100')) ??
+    data.mods[0];
+  const detCam = cams.det?.cam && (cams.det.mod == null || cams.det.mod === detMod?.id) ? cams.det.cam : undefined;
+  const setCams = (next: NonNullable<ProjectData['cams']>) => props.commit({ ...data, cams: next });
   const detFocus = (m?: ModuleInstance): [number, number, number, number] | undefined => {
     if (!m) return undefined;
     const g = geo(m, data.room);
@@ -100,10 +110,11 @@ export function ApprovalView(props: {
   const isoOf = (ang: number, focus?: [number, number, number, number]) => iso(data, props.materialsByCode as never, { ang, cotas: false, altos: true, focus });
   const planD = () => plan(data, { cotas: true });
   const elevD = (w: Wall) => elev(data, w, mats, { cotas: true });
-  const persp = (w: number, h: number, ang: number | null = galAng) => <Photo cfg={cfg} opts={ang == null ? { w, h } : { w, h, ang }} fallback={isoOf(ang ?? 45)} title="Render en perspectiva" />;
+  const persp = (w: number, h: number) => <Photo cfg={cfg} opts={cams.persp ? { w, h, cam: cams.persp } : { w, h }} fallback={isoOf(45)} title="Render en perspectiva" />;
   const detail = (w: number, h: number) =>
-    detMod ? <Photo cfg={cfg} opts={{ w, h, ang: 35, focusId: detMod.id }} fallback={isoOf(35, detFocus(detMod))} title={`Detalle · ${detMod.name}`} /> : null;
+    detMod ? <Photo cfg={cfg} opts={detCam ? { w, h, cam: detCam } : { w, h, ang: 35, focusId: detMod.id }} fallback={isoOf(35, detFocus(detMod))} title={`Detalle · ${detMod.name}`} /> : null;
   const detLabel = detMod?.sink ? 'fregadero' : detMod?.cook ? 'parrilla' : (detMod?.name.toLowerCase() ?? '');
+  const camCfg = useMemo(() => sceneCfg(data, { sel: null, cotas: false, altos: true, dark: false }), [data]);
 
   const guard = async () => {
     if (!(await props.ensureSaved())) {
@@ -226,7 +237,7 @@ export function ApprovalView(props: {
       {tab === 'galeria' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
           <div className="gal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gridAutoRows: 300, gap: 16 }}>
-            <Tile title="Render perspectiva" scale={galAng == null ? 'Cámara automática' : `Cámara ${galAng}°`} col="1 / span 2" row="1 / span 2" onRegen={() => setRegen((n) => n + 1)} onAdjust={() => setGalAng(galAng == null ? 30 : galAng === 30 ? 60 : galAng === 60 ? 45 : null)}>
+            <Tile title="Render perspectiva" scale={cams.persp ? 'Cámara manual' : 'Cámara automática'} col="1 / span 2" row="1 / span 2" onRegen={() => setRegen((n) => n + 1)} onAdjust={props.canManage && !approved ? () => setCamEdit('persp') : undefined}>
               {persp(1100, 1000)}
             </Tile>
             <Tile title="Planta acotada" scale="1:25">
@@ -238,7 +249,27 @@ export function ApprovalView(props: {
               </Tile>
             ))}
             {detMod && (
-              <Tile title={`Vista de detalle · ${detLabel}`} scale="Detalle" col="span 2" onRegen={() => setRegen((n) => n + 1)}>
+              <Tile
+                title={`Vista de detalle · ${detLabel}`}
+                scale={detCam ? 'Cámara manual' : 'Detalle'}
+                col="span 2"
+                onRegen={() => setRegen((n) => n + 1)}
+                onAdjust={props.canManage && !approved ? () => setCamEdit('det') : undefined}
+                extra={
+                  props.canManage && !approved ? (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginLeft: 'auto', minWidth: 0 }}>
+                      <span style={{ color: SOFT }}>Módulo</span>
+                      <select className="input" aria-label="Módulo de la vista de detalle" value={detMod.id} onChange={(e) => setCams({ ...cams, det: { mod: Number(e.target.value) } })} style={{ padding: '4px 6px', fontSize: 13, maxWidth: 260 }}>
+                        {data.mods.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.id} · {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : undefined
+                }
+              >
                 {detail(1200, 480)}
               </Tile>
             )}
@@ -337,7 +368,7 @@ export function ApprovalView(props: {
             const pages: PdfPage[] = [];
             if (k.portada) pages.push({ label: 'Portada', cover: true });
             if (k.vistas) {
-              pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760, null) });
+              pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760) });
               if (detMod) pages.push({ label: 'Vista de detalle', title: `Detalle · ${detLabel}`, art: detail(1200, 700) });
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });
@@ -369,6 +400,22 @@ export function ApprovalView(props: {
         </div>
       )}
 
+      {camEdit && (
+        <CameraDialog
+          title={camEdit === 'persp' ? 'Ajustar cámara · render en perspectiva' : `Ajustar cámara · detalle de ${detMod?.name ?? 'módulo'}`}
+          cfg={camCfg}
+          initial={camEdit === 'persp' ? cams.persp : detCam}
+          focusId={camEdit === 'det' ? detMod?.id : undefined}
+          onSave={(cam) => {
+            // A camera read from a collapsed or broken viewer (NaN) must never reach the project: the server would reject every save.
+            if (!camSchema.safeParse(cam).success) return flash('No se pudo leer la cámara. Agranda la ventana e inténtalo de nuevo.');
+            setCams(camEdit === 'persp' ? { ...cams, persp: cam } : { ...cams, det: { mod: detMod?.id, cam } });
+            flash('Vista guardada: se usa en la galería, el PDF y la página del cliente.');
+          }}
+          onReset={() => setCams(camEdit === 'persp' ? { ...cams, persp: undefined } : { ...cams, det: { mod: cams.det?.mod } })}
+          onClose={() => setCamEdit(null)}
+        />
+      )}
       {sendOpen && (
         <SendDialog
           project={project}
@@ -419,7 +466,7 @@ export function budgetRows(e: Estimate, cur: Currency): [string, string][] {
   return rows;
 }
 
-function Tile({ title, scale, col, row, children, onRegen, onAdjust }: { title: string; scale: string; col?: string; row?: string; children: React.ReactNode; onRegen?: () => void; onAdjust?: () => void }) {
+function Tile({ title, scale, col, row, children, onRegen, onAdjust, extra }: { title: string; scale: string; col?: string; row?: string; children: React.ReactNode; onRegen?: () => void; onAdjust?: () => void; extra?: React.ReactNode }) {
   return (
     <div style={{ gridColumn: col, gridRow: row, display: 'flex', flexDirection: 'column', background: 'var(--color-surface)', minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '2px solid var(--color-divider)' }}>
@@ -429,8 +476,8 @@ function Tile({ title, scale, col, row, children, onRegen, onAdjust }: { title: 
         </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', background: 'var(--sp-canvas)', padding: onRegen ? 0 : 10, overflow: 'hidden' }}>{children}</div>
-      {(onRegen || onAdjust) && (
-        <div style={{ display: 'flex', gap: 4, padding: '6px 8px' }}>
+      {(onRegen || onAdjust || extra) && (
+        <div style={{ display: 'flex', gap: 4, padding: '6px 8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {onRegen && (
             <button type="button" className="btn btn-ghost" onClick={onRegen} style={{ fontSize: 13 }}>
               <Icon name="refresh-cw" size={14} />
@@ -443,6 +490,7 @@ function Tile({ title, scale, col, row, children, onRegen, onAdjust }: { title: 
               Ajustar cámara
             </button>
           )}
+          {extra}
         </div>
       )}
     </div>
