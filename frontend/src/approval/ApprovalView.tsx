@@ -148,25 +148,26 @@ export function ApprovalView(props: {
     }
   };
 
-  const tabs: [Tab, string, string][] = [
-    ['galeria', 'Galería de vistas', 'images'],
-    ['planos', 'Planos de ensamblaje', 'drafting-compass'],
-    ['corte', 'Lista de corte', 'scissors'],
-    ['pdf', 'Vista previa PDF', 'file-text'],
+  const tabs: [Tab, string, string, string][] = [
+    ['galeria', 'Galería de vistas', 'images', 'Vistas'],
+    ['planos', 'Planos de ensamblaje', 'drafting-compass', 'Planos'],
+    ['corte', 'Lista de corte', 'scissors', 'Corte'],
+    ['pdf', 'Vista previa PDF', 'file-text', 'PDF'],
   ];
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', flex: 'none', minWidth: 0 }}>
-        <div style={{ display: 'flex', minWidth: 0, overflowX: 'auto' }}>
-          {tabs.map(([k, label, icon]) => (
-            <button type="button" key={k} className="tab-btn" onClick={() => setTab(k)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 12px', background: 'none', border: 0, borderBottom: `3px solid ${tab === k ? 'var(--color-accent)' : 'transparent'}`, marginBottom: -2, font: 'inherit', fontSize: 14, fontWeight: tab === k ? 800 : 600, color: 'var(--color-text)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+      <div className="ap-bar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 12, padding: '0 16px', borderBottom: '2px solid var(--color-divider)', flex: 'none', minWidth: 0 }}>
+        <div className="ap-tabs" role="tablist" aria-label="Vistas de aprobación" style={{ display: 'flex', minWidth: 0, overflowX: 'auto' }}>
+          {tabs.map(([k, label, icon, short]) => (
+            <button type="button" key={k} className="tab-btn" role="tab" aria-selected={tab === k} aria-label={label} onClick={() => setTab(k)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 12px', background: 'none', border: 0, borderBottom: `3px solid ${tab === k ? 'var(--color-accent)' : 'transparent'}`, marginBottom: -2, font: 'inherit', fontSize: 14, fontWeight: tab === k ? 800 : 600, color: 'var(--color-text)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               <Icon name={icon} size={16} />
-              <span className="ap-label">{label}</span>
+              <span className="ap-tlabel">{label}</span>
+              <span className="ap-short">{short}</span>
             </button>
           ))}
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0', flex: 'none', whiteSpace: 'nowrap' }}>
+        <div className="ap-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0', flex: 'none', whiteSpace: 'nowrap' }}>
           <div style={{ position: 'relative' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setExpOpen(!expOpen)} aria-expanded={expOpen} style={{ height: 38 }}>
               <Icon name="download" size={15} />
@@ -176,7 +177,7 @@ export function ApprovalView(props: {
             {expOpen && (
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 89 }} onClick={() => setExpOpen(false)} />
-                <div role="menu" style={{ position: 'absolute', right: 0, top: 44, width: 270, background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-divider)', zIndex: 90, display: 'flex', flexDirection: 'column' }}>
+                <div role="menu" className="ap-menu" style={{ position: 'absolute', right: 0, top: 44, width: 270, maxWidth: 'calc(100vw - 32px)', background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-divider)', zIndex: 90, display: 'flex', flexDirection: 'column' }}>
                   {(
                     [
                       ['file-text', 'Exportar PDF', 'PDF', 'pdf'],
@@ -203,7 +204,7 @@ export function ApprovalView(props: {
           {!approved && props.canManage && (
             <button type="button" className="btn btn-primary" onClick={() => setApproveOpen(true)} style={{ height: 38 }}>
               <Icon name="badge-check" size={16} />
-              Aprobar proyecto
+              Aprobar<span className="ap-long"> proyecto</span>
             </button>
           )}
           {approved && (
@@ -477,7 +478,19 @@ export function ApprovalView(props: {
         />
       )}
       <style>{`
-        @media (max-width: 640px){.ap-approved .btn{flex:1 1 100%!important;justify-content:center}}
+        .ap-short{display:none}
+        @media (max-width: 1400px){.ap-tlabel{display:none}.ap-short{display:inline}}
+        @media (max-width: 1000px){.ap-split{overflow:auto;align-content:start}.ap-split>*{overflow:visible!important;max-height:none!important;border-right:0!important}.ap-split>:first-child{border-bottom:2px solid var(--color-divider)}}
+        @media (max-width: 640px){.ap-modlist{display:none}.ap-modsel{display:flex!important}.ap-split>:nth-child(2){padding:16px!important}}
+        @media (max-width: 640px){
+          .ap-approved .btn{flex:1 1 100%!important;justify-content:center}
+          .ap-bar{padding:0!important;gap:0!important}
+          .ap-tabs{flex:1 1 100%;overflow:visible!important;border-bottom:1px solid var(--color-divider)}
+          .ap-tabs .tab-btn{flex:1 1 0;min-width:0;flex-direction:column;justify-content:center;gap:3px!important;padding:10px 4px 8px!important;font-size:12px!important}
+          .ap-short{display:inline}.ap-long{display:none}.ap-menu{left:0;right:auto!important}
+          .ap-actions{flex:1 1 100%!important;margin-left:0!important;padding:8px 16px!important}
+          .ap-actions>*{flex:1 1 auto}.ap-actions>div>.btn{width:100%;justify-content:center}.ap-actions>.btn,.ap-actions>span{justify-content:center}
+        }
         .cut-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) 56px 90px 90px 80px 60px;gap:8px;min-width:620px}
         .part-row{display:grid;grid-template-columns:28px minmax(0,1.3fr) 40px 100px 52px minmax(0,1.5fr) 72px 48px;gap:8px;min-width:600px}
         @media (max-width: 1000px){.gal-grid{grid-template-columns:minmax(0,1fr)!important}.gal-grid>*{grid-column:auto!important;grid-row:auto!important}.ap-label{display:none}.ap-2col{grid-template-columns:minmax(0,1fr)!important}}
@@ -538,6 +551,7 @@ function Planos(props: { buildable: ModuleInstance[]; sel: number | null; setSel
       </div>
     );
   const pr = parts(pm, data.mats, mats);
+  const idx = buildable.indexOf(pm);
   const views: [string, Drawing][] = [
     ['Vista frontal', ortho(pm, data.mats, mats, 'front', props.hstyle)],
     ['Vista lateral', ortho(pm, data.mats, mats, 'side', props.hstyle)],
@@ -550,8 +564,8 @@ function Planos(props: { buildable: ModuleInstance[]; sel: number | null; setSel
     </div>
   );
   return (
-    <div className="ap-2col" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '260px minmax(0,1fr)' }}>
-      <div style={{ borderRight: '2px solid var(--color-divider)', overflow: 'auto', maxHeight: '100%' }}>
+    <div className="ap-2col ap-split" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '260px minmax(0,1fr)' }}>
+      <div className="ap-modlist" style={{ borderRight: '2px solid var(--color-divider)', overflow: 'auto', maxHeight: '100%' }}>
         <div style={{ padding: '14px 16px 10px', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, borderBottom: '2px solid var(--color-divider)' }}>Módulos · {buildable.length}</div>
         {buildable.map((m) => {
           const on = m.id === pm.id;
@@ -569,6 +583,22 @@ function Planos(props: { buildable: ModuleInstance[]; sel: number | null; setSel
         })}
       </div>
       <div style={{ overflow: 'auto', padding: '20px 24px 32px' }}>
+        {/* Phones: pick the module here instead of the long list */}
+        <div className="ap-modsel" style={{ display: 'none', gap: 6, alignItems: 'center', marginBottom: 14 }}>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Módulo anterior" disabled={idx <= 0} onClick={() => props.setSel(buildable[idx - 1]!.id)}>
+            <Icon name="chevron-left" />
+          </button>
+          <select className="input" aria-label="Módulo" value={pm.id} onChange={(e) => props.setSel(Number(e.target.value))} style={{ flex: 1, minWidth: 0 }}>
+            {buildable.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id}. {m.name} · {m.w * 10}×{m.h * 10}×{m.d * 10}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn btn-secondary btn-icon" aria-label="Módulo siguiente" disabled={idx >= buildable.length - 1} onClick={() => props.setSel(buildable[idx + 1]!.id)}>
+            <Icon name="chevron-right" />
+          </button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'end', gap: 16, paddingBottom: 14, borderBottom: '2px solid var(--color-divider)', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--color-accent-700)', fontWeight: 600 }}>Plano de ensamblaje · Módulo {pm.id}</div>
@@ -588,7 +618,7 @@ function Planos(props: { buildable: ModuleInstance[]; sel: number | null; setSel
             <div key={t}>{card(t, <Svg drawing={d} title={t} />, 240)}</div>
           ))}
         </div>
-        <div className="ap-2col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.5fr)', gap: 16, marginTop: 16, alignItems: 'start' }}>
+        <div className="ap-2col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,0.8fr) minmax(0,1.7fr)', gap: 16, marginTop: 16, alignItems: 'start' }}>
           {card('Vista explosionada', <Svg drawing={exploded(pm, data.mats, mats)} title="Vista explosionada" />, 380)}
           <div style={{ background: 'var(--color-surface)', padding: '0 12px 8px', overflow: 'auto' }}>
             <div style={{ padding: '8px 0', fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>Despiece · {pr.reduce((a, p) => a + p.cant, 0)} piezas</div>
@@ -647,7 +677,7 @@ function PdfTab(props: {
   const setClient = (k: 'nombre' | 'tel' | 'dir', v: string) => props.commit({ ...data, client: { ...client, [k]: v } });
   const kind = data.ptype === 'cocina' ? 'cocina' : data.ptype === 'closet' ? 'closet' : 'vestidor';
   return (
-    <div className="ap-2col" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }}>
+    <div className="ap-2col ap-split" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }}>
       <div style={{ borderRight: '2px solid var(--color-divider)', overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <h6 style={{ margin: '0 0 8px' }}>Contenido del PDF</h6>

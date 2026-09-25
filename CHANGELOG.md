@@ -5,8 +5,12 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 
 ## 1.13.1 · 2026-09-25
 
-### Corrección
-- En el teléfono, el aviso «Aprobado por…» de un proyecto aprobado ya no se amontona: el texto ocupa todo el ancho y debajo quedan la firma y el botón «Reabrir para cambios».
+### Aprobación en el teléfono
+- El aviso «Aprobado por…» ya no se amontona: el texto ocupa todo el ancho y debajo quedan la firma y el botón «Reabrir para cambios».
+- Las pestañas **Vistas, Planos, Corte y PDF** siempre se ven: antes, en un proyecto sin aprobar, los botones Exportar / Enviar / Aprobar las tapaban y no se podía cambiar de vista. Ahora las pestañas van arriba y las acciones debajo.
+- El menú Exportar ya no se sale de la pantalla.
+- En Planos, el módulo se elige con una lista y flechas ‹ › en lugar de una columna larga; en PDF y Planos la página baja completa en vez de tener recuadros con su propio desplazamiento.
+- En computadora, las pestañas usan nombres cortos cuando no cabe todo y el despiece de Planos muestra todas sus columnas.
 
 ## 1.13.0 · 2026-09-25
 
