@@ -216,16 +216,18 @@ export function ApprovalView(props: {
       </div>
 
       {approved && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: 'var(--color-accent-100)', color: 'var(--color-accent-800)', fontSize: 14, borderBottom: '1px solid var(--color-divider)' }}>
-          <Icon name="badge-check" size={17} />
-          {lastApproval ? `Aprobado por ${lastApproval.signerName} · ${dateEs(lastApproval.createdAt)}` : 'Proyecto aprobado'} · El diseño está bloqueado para producción.
-          {lastApproval?.signature && <img src={lastApproval.signature} alt={`Firma de ${lastApproval.signerName}`} style={{ height: 28, marginLeft: 'auto', background: '#fff', padding: 2 }} />}
+        <div className="ap-approved" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 10px', padding: '10px 16px', background: 'var(--color-accent-100)', color: 'var(--color-accent-800)', fontSize: 14, borderBottom: '1px solid var(--color-divider)' }}>
+          <span style={{ display: 'flex', alignItems: 'start', gap: 10, flex: '1 1 260px', minWidth: 0 }}>
+            <Icon name="badge-check" size={17} style={{ flex: 'none', marginTop: 2 }} />
+            <span>{lastApproval ? `Aprobado por ${lastApproval.signerName} · ${dateEs(lastApproval.createdAt)}` : 'Proyecto aprobado'} · El diseño está bloqueado para producción.</span>
+          </span>
+          {lastApproval?.signature && <img src={lastApproval.signature} alt={`Firma de ${lastApproval.signerName}`} style={{ height: 32, maxWidth: 160, objectFit: 'contain', background: '#fff', padding: 2, flex: 'none' }} />}
           {props.canReopen && (
             <button
               type="button"
               className="btn btn-secondary"
               disabled={reopening}
-              style={{ marginLeft: lastApproval?.signature ? 8 : 'auto', flex: 'none' }}
+              style={{ flex: 'none' }}
               onClick={async () => {
                 if (!window.confirm('¿Reabrir el proyecto para hacer cambios? Vuelve a Diseño con los precios vigentes; la aprobación y su firma quedan en el historial. Para cerrarlo de nuevo, vuelve a enviarlo o aprobarlo.')) return;
                 setReopening(true);
@@ -475,6 +477,7 @@ export function ApprovalView(props: {
         />
       )}
       <style>{`
+        @media (max-width: 640px){.ap-approved .btn{flex:1 1 100%!important;justify-content:center}}
         .cut-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) 56px 90px 90px 80px 60px;gap:8px;min-width:620px}
         .part-row{display:grid;grid-template-columns:28px minmax(0,1.3fr) 40px 100px 52px minmax(0,1.5fr) 72px 48px;gap:8px;min-width:600px}
         @media (max-width: 1000px){.gal-grid{grid-template-columns:minmax(0,1fr)!important}.gal-grid>*{grid-column:auto!important;grid-row:auto!important}.ap-label{display:none}.ap-2col{grid-template-columns:minmax(0,1fr)!important}}

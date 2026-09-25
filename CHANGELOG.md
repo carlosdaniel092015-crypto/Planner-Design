@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.13.1 · 2026-09-25
+
+### Corrección
+- En el teléfono, el aviso «Aprobado por…» de un proyecto aprobado ya no se amontona: el texto ocupa todo el ancho y debajo quedan la firma y el botón «Reabrir para cambios».
+
 ## 1.13.0 · 2026-09-25
 
 ### Correos desde Gmail
