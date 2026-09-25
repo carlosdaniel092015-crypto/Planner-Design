@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.10.0 · 2026-09-25
+
+### Entrar con Google o Microsoft
+- En la pantalla de acceso aparecen **«Continuar con Google»** y **«Continuar con Microsoft»** (cuando la instalación tiene configuradas sus credenciales).
+- **¿Primera vez?** Se crea tu cuenta con tu propio espacio de trabajo (plan Gratis), con el catálogo base listo para diseñar. Si ya tenías cuenta con ese correo, se vincula; si te invitaron, entrar con el correo invitado acepta la invitación.
+- Por seguridad, solo se aceptan correos que Google o Microsoft confirman como tuyos.
+- Si entras así no necesitas contraseña; puedes crear una en **Mi cuenta** para entrar también con tu correo.
+
+### Servidor
+- La imagen de Docker usa **Node 24** (LTS) con npm 11.
+
 ## 1.9.0 · 2026-09-25
 
 ### Diseño: selección múltiple y atajos de teclado

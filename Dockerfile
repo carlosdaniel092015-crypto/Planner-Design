@@ -5,7 +5,7 @@
 # with growing waits, the whole install is retried twice more, and the download cache survives between builds.
 ARG NPM_RETRY="npm_config_fetch_retries=5 npm_config_fetch_retry_mintimeout=20000 npm_config_fetch_retry_maxtimeout=120000"
 
-FROM node:22-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 ARG NPM_RETRY
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -19,7 +19,7 @@ COPY frontend ./frontend
 COPY CHANGELOG.md ./
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 ARG NPM_RETRY
 WORKDIR /app
 ENV NODE_ENV=production \

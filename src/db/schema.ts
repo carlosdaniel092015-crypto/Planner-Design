@@ -95,6 +95,24 @@ export const userCredentials = pgTable('user_credentials', {
   ...timestamps,
 });
 
+/** Sign-in with Google / Microsoft (OpenID Connect): the provider's stable subject id → our user. */
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider', { enum: ['google', 'microsoft'] }).notNull(),
+    /** `sub` claim: stable per user and app for both providers. */
+    subject: text('subject').notNull(),
+    email: text('email'),
+    lastLoginAt: ts('last_login_at'),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('user_identities_provider_subject_uq').on(t.provider, t.subject), index('user_identities_user_idx').on(t.userId)],
+);
+
 export const sessions = pgTable(
   'sessions',
   {

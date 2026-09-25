@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client';
-import { projectShares, projects, sessions, userCredentials, users, verificationTokens } from '../db/schema';
+import { projectShares, projects, sessions, userCredentials, userIdentities, users, verificationTokens } from '../db/schema';
 import { audit } from '../lib/audit';
 import { sha256 } from '../lib/crypto';
 import { AppError, conflict } from '../lib/errors';
@@ -12,9 +12,11 @@ const tags = ['Mi cuenta'];
 const Password = z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.').max(200);
 const wrongPassword = () => new AppError(403, 'CONTRASENA_INCORRECTA', 'La contraseña actual no es correcta.');
 
-async function checkPassword(db: DbOrTx, userId: string, password: string) {
+/** Accounts created with Google / Microsoft have no password: then none is asked (the session proves who they are). */
+async function checkPassword(db: DbOrTx, userId: string, password: string | undefined) {
   const [cred] = await db.select().from(userCredentials).where(eq(userCredentials.userId, userId)).limit(1);
-  if (!cred || !(await verifyPassword(cred.passwordHash, password))) throw wrongPassword();
+  if (!cred) return;
+  if (!password || !(await verifyPassword(cred.passwordHash, password))) throw wrongPassword();
 }
 
 export function accountRoutes() {
@@ -47,9 +49,9 @@ export function accountRoutes() {
       path: '/me/password',
       tags,
       summary: 'Cambiar mi contraseña',
-      description: 'Pide la contraseña actual. Cierra las demás sesiones abiertas (otros dispositivos); esta sigue activa.',
+      description: 'Pide la contraseña actual (salvo cuentas creadas con Google / Microsoft, que la crean aquí por primera vez). Cierra las demás sesiones abiertas (otros dispositivos); esta sigue activa.',
       security,
-      request: body(z.object({ currentPassword: z.string().min(1).max(200), newPassword: Password })),
+      request: body(z.object({ currentPassword: z.string().min(1).max(200).optional(), newPassword: Password })),
       responses: { 200: json(z.object({ ok: z.literal(true) })), ...authErrors },
     }),
     async (c) => {
@@ -59,7 +61,8 @@ export function accountRoutes() {
       await checkPassword(db, a.user.id, currentPassword);
       const token = readSessionToken(c);
       await db.transaction(async (tx) => {
-        await tx.update(userCredentials).set({ passwordHash: await hashPassword(newPassword) }).where(eq(userCredentials.userId, a.user.id));
+        const passwordHash = await hashPassword(newPassword);
+        await tx.insert(userCredentials).values({ userId: a.user.id, passwordHash }).onConflictDoUpdate({ target: userCredentials.userId, set: { passwordHash, updatedAt: new Date() } });
         await tx.delete(sessions).where(and(eq(sessions.userId, a.user.id), token ? ne(sessions.tokenHash, sha256(token)) : undefined));
         await audit(tx, a, 'actualizar', 'user', a.user.id, { password: 'cambiada' });
       });
@@ -77,7 +80,7 @@ export function accountRoutes() {
         'Pide la contraseña. Elimina los proyectos de la persona, los accesos que tenía compartidos, sus sesiones y su contraseña, y anonimiza su nombre y correo. ' +
         'El registro de auditoría y las aprobaciones firmadas por clientes se conservan sin sus datos personales. El último administrador activo no puede borrarse: primero debe nombrar a otro.',
       security,
-      request: body(z.object({ password: z.string().min(1).max(200), confirm: z.literal('ELIMINAR').openapi({ description: 'Escribe ELIMINAR para confirmar.' }) })),
+      request: body(z.object({ password: z.string().min(1).max(200).optional(), confirm: z.literal('ELIMINAR').openapi({ description: 'Escribe ELIMINAR para confirmar.' }) })),
       responses: { 204: { description: 'Cuenta borrada' }, ...authErrors, ...pick(409) },
     }),
     async (c) => {
@@ -104,6 +107,8 @@ export function accountRoutes() {
         await tx.delete(sessions).where(eq(sessions.userId, a.user.id));
         await tx.delete(verificationTokens).where(eq(verificationTokens.userId, a.user.id));
         await tx.delete(userCredentials).where(eq(userCredentials.userId, a.user.id));
+        // Signing in with Google / Microsoft again must start fresh, not land on the anonymised account.
+        await tx.delete(userIdentities).where(eq(userIdentities.userId, a.user.id));
         await tx
           .update(users)
           .set({ name: 'Cuenta eliminada', email: `eliminada+${a.user.id}@planner.invalid`, active: false, updatedAt: now })

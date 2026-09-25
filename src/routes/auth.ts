@@ -25,7 +25,14 @@ export const RoleSchema = z.enum(['admin', 'disenador', 'taller', 'lectura']).op
 
 export const MeSchema = z
   .object({
-    user: z.object({ id: z.uuid(), name: z.string(), email: z.email(), role: RoleSchema }),
+    user: z.object({
+      id: z.uuid(),
+      name: z.string(),
+      email: z.email(),
+      role: RoleSchema,
+      /** false for people who only sign in with Google / Microsoft (they can create one in Mi cuenta). */
+      hasPassword: z.boolean().optional(),
+    }),
     organization: z.object({
       id: z.uuid(),
       name: z.string(),
@@ -198,12 +205,14 @@ export function authRoutes() {
 
 export function meRoutes() {
   const r = router();
-  r.openapi(meRoute, (c) => {
+  r.openapi(meRoute, async (c) => {
     const a = requireAuth(c);
+    const [cred] = await c.var.deps.db.select({ id: userCredentials.userId }).from(userCredentials).where(eq(userCredentials.userId, a.user.id)).limit(1);
     const me = toMe(a.user, a.org);
+    const withPwd = { ...me, user: { ...me.user, hasPassword: !!cred } };
     // PDFs use these; without the branding feature they fall back to Planner's look.
-    if (!brandingAllowed(c.var.deps.config, a.org)) me.organization = { ...me.organization, logoUrl: null, brandColor: null };
-    return c.json(me, 200);
+    if (!brandingAllowed(c.var.deps.config, a.org)) withPwd.organization = { ...withPwd.organization, logoUrl: null, brandColor: null };
+    return c.json(withPwd, 200);
   });
   return r;
 }
