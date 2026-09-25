@@ -6,7 +6,7 @@ import { MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
 import { assertCan } from '../lib/permissions';
 import { clientIp, rateLimit } from '../lib/rate-limit';
-import { approveInternal, createApprovalLink, decidePublic, resolveLink, revokeLink } from '../services/approvals';
+import { approveInternal, createApprovalLink, decidePublic, reopenProject, resolveLink, revokeLink } from '../services/approvals';
 import { requireAuth } from '../services/auth';
 import { cutlistDxf, slug } from '../services/exports';
 import { getProject, parseProjectData, pricingFor, snapshotOf } from '../services/projects';
@@ -94,7 +94,11 @@ export function approvalRoutes() {
         'envía el correo y devuelve la URL pública `/p/:token`. **El token en claro solo se devuelve aquí**; en la base se guarda su SHA-256.',
       security,
       request: { params: IdParam, ...body(z.object({ recipientEmail: z.email(), expiresInDays: z.number().int().min(1).max(90).default(14) }).openapi({ example: { recipientEmail: 'cliente@ejemplo.com', expiresInDays: 14 } })) },
-      responses: { 201: json(z.object({ link: Link, url: z.string(), token: z.string(), versionId: z.uuid() }), 'Creado'), ...authErrors, ...pick(409, 422) },
+      responses: {
+        201: json(z.object({ link: Link, url: z.string(), token: z.string(), versionId: z.uuid(), emailSent: z.boolean().openapi({ description: 'false: el enlace se creó pero el correo no salió; compártelo tú.' }) }), 'Creado'),
+        ...authErrors,
+        ...pick(409, 422),
+      },
     }),
     async (c) => {
       const a = requireAuth(c);
@@ -104,7 +108,7 @@ export function approvalRoutes() {
       assertCan(a.user, 'project:send', { access: p.access });
       const { recipientEmail, expiresInDays } = c.req.valid('json');
       const out = await createApprovalLink(c.var.deps, a, id, recipientEmail, expiresInDays);
-      return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id }, 201);
+      return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id, emailSent: out.emailSent }, 201);
     },
   );
 
@@ -156,6 +160,29 @@ export function approvalRoutes() {
       const input = c.req.valid('json');
       const out = await approveInternal(c.var.deps, a, id, input.signerName, meta(c), input.signature);
       return c.json({ approval: approvalJson(out.approval), versionId: out.version.id }, 200);
+    },
+  );
+
+  r.openapi(
+    createRoute({
+      method: 'post',
+      path: '/projects/{id}/reopen',
+      tags,
+      summary: 'Reabrir un proyecto aprobado para hacer cambios',
+      description:
+        'Vuelve a `diseno` con precios vigentes para editarlo y reenviarlo. La aprobación, la firma y la versión congelada quedan en el historial. ' +
+        'Pueden hacerlo quienes pueden aprobarlo. 409 si no está aprobado.',
+      security,
+      request: { params: IdParam, ...body(z.object({ reason: z.string().max(500).optional() })) },
+      responses: { 200: json(z.object({ status: z.literal('diseno'), version: z.number() })), ...authErrors, ...pick(409) },
+    }),
+    async (c) => {
+      const a = requireAuth(c);
+      const { id } = c.req.valid('param');
+      const p = await getProject(c.var.deps.db, a, id);
+      assertCan(a.user, 'project:reopen', { access: p.access });
+      const row = await reopenProject(c.var.deps.db, a, id, c.req.valid('json').reason);
+      return c.json({ status: 'diseno' as const, version: row.version }, 200);
     },
   );
 

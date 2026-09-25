@@ -51,7 +51,7 @@ export function billingRoutes() {
       path: '/billing',
       tags,
       summary: 'Plan actual, límites, uso y planes disponibles',
-      description: 'Sin Stripe configurado (`enabled: false`) no se aplica ningún límite.',
+      description: 'Los límites del plan se aplican siempre. Sin Stripe (`enabled: false`) no hay pago en línea: el plan lo asigna la plataforma (`status: manual`).',
       security,
       responses: {
         200: json(
@@ -62,6 +62,8 @@ export function billingRoutes() {
             status: z.string().nullable(),
             renewsAt: z.iso.datetime().nullable(),
             canManage: z.boolean(),
+            /** Without online payments, a plan change is requested by email here. */
+            contactEmail: z.string().nullable(),
             usage: z.object({ users: z.number(), activeProjects: z.number() }),
             plans: z.array(
               z.object({ key: PlanName, name: z.string(), users: z.number().nullable(), activeProjects: z.number().nullable(), highlights: z.array(z.string()), price: z.string().nullable(), available: z.boolean() }),
@@ -101,10 +103,11 @@ export function billingRoutes() {
         {
           enabled: billingOn(config),
           plan: a.org.plan,
-          effectivePlan: billingOn(config) ? effectivePlan(a.org) : ('empresa' as Plan),
+          effectivePlan: effectivePlan(a.org),
           status: a.org.planStatus,
           renewsAt: a.org.planRenewsAt?.toISOString() ?? null,
           canManage: a.user.role === 'admin',
+          contactEmail: config.supportEmail,
           usage: await usage(db, a.org.id),
           plans,
         },

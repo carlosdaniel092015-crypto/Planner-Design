@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { type Access, ApiError, api, isNetworkError, type Person, type Share } from './api';
+import { useAuth } from './auth';
 import { Dialog, Icon, initials, MUTED } from './ui';
 
 const ROLE: Record<string, string> = { admin: 'Administrador', disenador: 'Diseñador', taller: 'Taller', lectura: 'Solo lectura' };
@@ -18,6 +20,7 @@ export function ShareDialog({ projectId, projectName, myAccess, meId, onClose, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isOwner = myAccess === 'propietario';
+  const { me } = useAuth();
   const localOnly = projectId.startsWith('local-');
 
   const fail = (e: unknown) => setError(isNetworkError(e) ? 'Compartir necesita conexión a internet. Inténtalo cuando vuelvas a estar en línea.' : e instanceof ApiError ? e.message : 'No se pudo completar.');
@@ -64,12 +67,18 @@ export function ShareDialog({ projectId, projectName, myAccess, meId, onClose, o
       {localOnly && <p style={{ fontSize: 14 }}>Este proyecto se creó sin conexión. Podrás compartirlo cuando se haya subido al servidor.</p>}
       {error && <p style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>{error}</p>}
 
+      {isOwner && !localOnly && available.length === 0 && (
+        <p style={{ margin: '0 0 10px', fontSize: 13 }}>
+          Solo puedes compartir con personas de tu organización. {me?.user.role === 'admin' ? <Link to="/admin?t=usuarios">Invítalas en Administración → Usuarios</Link> : 'Pide a tu administrador que las invite.'}{' '}
+          Si ya usan Planner con su propia cuenta, les llega una solicitud para unirse.
+        </p>
+      )}
       {isOwner && !localOnly && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginBottom: 14 }}>
           <div className="field" style={{ flex: '1 1 220px' }}>
             <label htmlFor="share-user">Persona</label>
             <select id="share-user" className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
-              <option value="">{available.length ? 'Elige a alguien de tu organización' : 'No hay más personas para agregar'}</option>
+              <option value="">{available.length ? 'Elige a alguien de tu organización' : 'No hay más personas en tu organización'}</option>
               {available.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} · {ROLE[p.role] ?? p.role}

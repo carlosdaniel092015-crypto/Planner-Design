@@ -50,6 +50,8 @@ export function ApprovalView(props: {
   issues: ValidationIssue[];
   /** Can edit, send and approve (owner designer or admin, project not approved). */
   canManage: boolean;
+  /** Can reopen an approved project for changes (same people who can approve it). */
+  canReopen?: boolean;
   orgName: string;
   /** Organisation logo and brand colour for the PDF (Administración → Organización). */
   orgLogo?: string | null;
@@ -68,6 +70,7 @@ export function ApprovalView(props: {
   const [expOpen, setExpOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
+  const [reopening, setReopening] = useState(false);
   /** null = automatic angle (faces the most fronts). */
   /** Which gallery photo is being framed by hand. */
   const [camEdit, setCamEdit] = useState<'persp' | 'det' | null>(null);
@@ -217,6 +220,31 @@ export function ApprovalView(props: {
           <Icon name="badge-check" size={17} />
           {lastApproval ? `Aprobado por ${lastApproval.signerName} · ${dateEs(lastApproval.createdAt)}` : 'Proyecto aprobado'} · El diseño está bloqueado para producción.
           {lastApproval?.signature && <img src={lastApproval.signature} alt={`Firma de ${lastApproval.signerName}`} style={{ height: 28, marginLeft: 'auto', background: '#fff', padding: 2 }} />}
+          {props.canReopen && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={reopening}
+              style={{ marginLeft: lastApproval?.signature ? 8 : 'auto', flex: 'none' }}
+              onClick={async () => {
+                if (!window.confirm('¿Reabrir el proyecto para hacer cambios? Vuelve a Diseño con los precios vigentes; la aprobación y su firma quedan en el historial. Para cerrarlo de nuevo, vuelve a enviarlo o aprobarlo.')) return;
+                setReopening(true);
+                try {
+                  await api.reopenProject(project.id);
+                  props.onStatus('diseno');
+                  loadHistory();
+                  flash('Proyecto reabierto: ya puedes editarlo y volver a enviarlo.');
+                } catch (e) {
+                  flash(e instanceof ApiError ? e.message : 'No se pudo reabrir. Revisa tu conexión.');
+                } finally {
+                  setReopening(false);
+                }
+              }}
+            >
+              <Icon name="lock-open" />
+              {reopening ? 'Reabriendo…' : 'Reabrir para cambios'}
+            </button>
+          )}
         </div>
       )}
       {lastChanges && (
@@ -728,6 +756,7 @@ function SendDialog(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [mailed, setMailed] = useState(true);
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const send = async () => {
     setErr(null);
@@ -736,6 +765,7 @@ function SendDialog(props: {
       if (!(await props.guard())) return;
       const r = await api.sendToClient(props.project.id, { recipientEmail: email.trim(), expiresInDays: days });
       setSent(r.url);
+      setMailed(r.emailSent !== false);
       props.onSent();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo enviar. Inténtalo de nuevo.');
@@ -771,9 +801,16 @@ function SendDialog(props: {
     >
       {sent ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ margin: 0 }}>
-            Enviamos la propuesta a <strong>{email.trim()}</strong>. El cliente puede revisarla, firmarla o pedir cambios desde este enlace (vence en {days} días):
-          </p>
+          {mailed ? (
+            <p style={{ margin: 0 }}>
+              Enviamos la propuesta a <strong>{email.trim()}</strong>. El cliente puede revisarla, firmarla o pedir cambios desde este enlace (vence en {days} días):
+            </p>
+          ) : (
+            <p role="alert" style={{ margin: 0, background: 'var(--color-accent-100)', padding: '10px 12px' }}>
+              La propuesta quedó lista, pero <strong>el correo a {email.trim()} no salió</strong> (revisa la configuración de correo del servidor). Mándale tú este enlace por WhatsApp o
+              copiándolo (vence en {days} días):
+            </p>
+          )}
           <div style={{ display: 'flex', gap: 6 }}>
             <input className="input" readOnly value={sent} onFocus={(e) => e.currentTarget.select()} aria-label="Enlace de aprobación" style={{ flex: 1 }} />
             <button

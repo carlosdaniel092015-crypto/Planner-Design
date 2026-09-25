@@ -27,8 +27,10 @@ App en React 19 con Vite. Tiene el diseño del prototipo de Claude Design (siste
 
 Planes por organización (`src/lib/plans.ts`): **Gratis** (2 usuarios, 5 proyectos activos), **Profesional** (10 usuarios,
 proyectos ilimitados, enlace al cliente con firma, logo y color propios, CSV/DXF) y **Empresa** (todo ilimitado, auditoría y
-ajuste masivo de precios). Los límites los aplica el servidor (402 `PLAN_REQUERIDO`) **solo si Stripe está configurado**
-(`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PROFESIONAL`, `STRIPE_PRICE_EMPRESA`); sin Stripe todo está incluido.
+ajuste masivo de precios). Los límites los aplica siempre el servidor (402 `PLAN_REQUERIDO`). Con Stripe
+(`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PROFESIONAL`, `STRIPE_PRICE_EMPRESA`) cada organización paga en línea;
+sin Stripe, un administrador de la plataforma (`PLATFORM_ADMIN_EMAILS`) asigna el plan en **/plataforma** y queda como «asignado por la plataforma»
+(`plan_status = manual`). Toda cuenta nueva (registro con código, Google o Microsoft) empieza en Gratis.
 
 1. En Stripe crea un producto por plan con un precio mensual y copia sus `price_…`.
 2. Crea un webhook a `https://TU-DOMINIO/api/v1/billing/webhook` con `checkout.session.completed` y `customer.subscription.*`, y copia su secreto.
@@ -91,7 +93,9 @@ Copia `.env.example` a `.env`. Cada variable está explicada ahí. Las important
 | `FRONTEND_URL` | Único origen permitido por CORS y base de los enlaces de correo. |
 | `UPLOADS_DIR` | Carpeta de archivos (en Docker: `/data/uploads`, en el volumen). |
 | `BLOB_READ_WRITE_TOKEN` | Opcional: guarda los archivos en Vercel Blob en vez del disco. |
-| `RESEND_API_KEY`, `MAIL_FROM` | Correo. Sin clave, los correos se imprimen en consola. |
+| `RESEND_API_KEY`, `MAIL_FROM` | Correo (códigos de registro, invitaciones, envíos al cliente). Sin clave, los correos se imprimen en consola. `MAIL_FROM` debe ser de un dominio verificado en Resend. Si un correo falla, la operación no se pierde: queda en el log `[correo] no se pudo enviar…`. |
+| `PLATFORM_ADMIN_EMAILS` | Correos (separados por coma) que ven todas las organizaciones, sus usuarios y asignan planes en `/plataforma`. |
+| `SUPPORT_EMAIL` | Opcional: a dónde piden un cambio de plan los clientes (si falta, el primero de `PLATFORM_ADMIN_EMAILS`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Opcional: botón «Continuar con Google» (ver *Inicio de sesión con Google y Microsoft*). |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` | Opcional: botón «Continuar con Microsoft». `MICROSOFT_TENANT` vale `common` si no se indica. |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | Admin inicial que crea `npm run db:seed`. |

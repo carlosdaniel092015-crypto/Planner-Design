@@ -3,6 +3,32 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.11.0 · 2026-09-25
+
+### Crear cuenta con código por correo
+- Nueva pantalla **«Crear cuenta»** (enlace en el inicio de sesión): nombre, correo y contraseña. Te llega un **código de 6 dígitos** al correo y la cuenta se crea solo cuando lo confirmas (vence en 15 minutos, 5 intentos; puedes pedir otro).
+- Si el correo ya tiene cuenta no se crea otra: le llega un aviso con el enlace para entrar o recuperar la contraseña.
+
+### Planes de verdad
+- Las cuentas nuevas empiezan en **Gratis** (2 usuarios, 5 proyectos activos) y **los límites se aplican siempre**, aunque todavía no haya pago en línea.
+- La página **Plan** muestra tu uso (usuarios y proyectos activos), dice «Precio a consultar» y trae **«Solicitar Profesional / Empresa»** para pedir el cambio por correo. Si el plan te lo asignó la plataforma lo verás como «asignado por la plataforma».
+
+### Panel de la plataforma
+- Los administradores de la plataforma ven en **Plataforma** (menú de usuario) todas las organizaciones con su plan, usuarios, proyectos activos y último acceso, y **asignan el plan** de cada una.
+
+### Invitar a quien ya usa Planner
+- Si invitas un correo que ya tiene cuenta (por ejemplo, alguien que entró con Google), en vez de «ya existe» le llega una **solicitud para unirse** a tu organización. La ve en su correo y al entrar a Planner; al aceptarla pasa a tu equipo con el rol que elegiste y ya puedes **compartirle proyectos**.
+
+### Reabrir un proyecto aprobado
+- En **Aprobación**, «**Reabrir para cambios**» devuelve un proyecto aprobado a Diseño con los precios vigentes para editarlo y volver a enviarlo al cliente. La aprobación anterior y su firma quedan en el historial.
+
+### Correos con el nombre de tu organización
+- Las propuestas e invitaciones llegan con **el nombre de tu organización como remitente**, y si el cliente responde, **la respuesta te llega a ti** (al correo de quien lo envió).
+
+### Correcciones
+- **Enviar al cliente** y **Aprobar** ya no fallan con error 500 cuando el correo no sale (por ejemplo, remitente sin verificar): el proyecto se envía/aprueba y la pantalla avisa que el correo no salió para que compartas el enlace por WhatsApp o copiándolo.
+- Compartir: si no hay más personas en tu organización, el diálogo explica cómo invitarlas.
+
 ## 1.10.0 · 2026-09-25
 
 ### Entrar con Google o Microsoft

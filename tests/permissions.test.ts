@@ -19,8 +19,8 @@ describe('can(user, action, resource)', () => {
     expect(can(d, 'project:read', { access: null })).toBe(false);
     expect(can(d, 'project:read', {})).toBe(false);
     for (const a of ['project:read', 'project:export'] as Action[]) expect(can(d, a, { access: 'ver' })).toBe(true);
-    for (const a of ['project:update', 'project:send', 'project:approve', 'project:delete', 'project:share'] as Action[]) expect(can(d, a, { access: 'ver' })).toBe(false);
-    for (const a of ['project:update', 'project:send', 'project:approve'] as Action[]) expect(can(d, a, { access: 'editar' })).toBe(true);
+    for (const a of ['project:update', 'project:send', 'project:approve', 'project:reopen', 'project:delete', 'project:share'] as Action[]) expect(can(d, a, { access: 'ver' })).toBe(false);
+    for (const a of ['project:update', 'project:send', 'project:approve', 'project:reopen'] as Action[]) expect(can(d, a, { access: 'editar' })).toBe(true);
     for (const a of ['project:delete', 'project:share'] as Action[]) {
       expect(can(d, a, { access: 'editar' })).toBe(false);
       expect(can(d, a, { access: 'propietario' })).toBe(true);

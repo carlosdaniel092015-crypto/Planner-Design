@@ -113,6 +113,40 @@ export const userIdentities = pgTable(
   (t) => [uniqueIndex('user_identities_provider_subject_uq').on(t.provider, t.subject), index('user_identities_user_idx').on(t.userId)],
 );
 
+/** Self-service sign-up waiting for the 6-digit code sent by email; the account is created only once the code is confirmed. */
+export const pendingSignups = pgTable('pending_signups', {
+  id: id(),
+  /** Lower-cased; one pending sign-up per address (a new request replaces the code). */
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  orgName: text('org_name'),
+  passwordHash: text('password_hash').notNull(),
+  /** HMAC of the code with AUTH_SECRET; the code itself is never stored. */
+  codeHash: text('code_hash').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: ts('expires_at').notNull(),
+  ...timestamps,
+});
+
+/** Invitation for someone who already has an account in another organisation: accepting it moves them here. */
+export const orgJoinRequests = pgTable(
+  'org_join_requests',
+  {
+    id: id(),
+    organizationId: orgId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: roleEnum('role').notNull(),
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: ts('expires_at').notNull(),
+    acceptedAt: ts('accepted_at'),
+    ...timestamps,
+  },
+  (t) => [index('org_join_requests_user_idx').on(t.userId)],
+);
+
 export const sessions = pgTable(
   'sessions',
   {

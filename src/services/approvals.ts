@@ -7,7 +7,7 @@ import type { AuthContext, Deps } from '../lib/context';
 import { canonicalJson, randomToken, sha256 } from '../lib/crypto';
 import { conflict, gone, notFound } from '../lib/errors';
 import { loadPricingContext } from './catalog';
-import { templates } from './mailer';
+import { templates, trySend } from './mailer';
 import { assertApprovable, createVersion, getProject, getVersion, parseProjectData, type ProjectRow, snapshotOf, type VersionRow } from './projects';
 
 export type LinkRow = typeof approvalLinks.$inferSelect;
@@ -39,8 +39,8 @@ export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: 
     return { row, link: link!, version, token };
   });
   const url = `${config.frontendUrl}/p/${out.token}`;
-  await mailer.send({ to: recipientEmail, ...templates.approvalRequest({ orgName: a.org.name, projectName: out.row.name, url, expiresAt: out.link.expiresAt }) });
-  return { link: out.link, version: out.version, token: out.token, url };
+  const emailSent = await trySend(mailer, { to: recipientEmail, fromName: a.org.name, replyTo: a.user.email, ...templates.approvalRequest({ orgName: a.org.name, projectName: out.row.name, url, expiresAt: out.link.expiresAt }) });
+  return { link: out.link, version: out.version, token: out.token, url, emailSent };
 }
 
 export async function revokeLink(db: Db, a: AuthContext, linkId: string) {
@@ -70,7 +70,7 @@ async function markApproved(tx: DbOrTx, row: ProjectRow, version: VersionRow) {
 async function notifyOwner(deps: Deps, row: ProjectRow, p: { decision: 'aprobado' | 'cambios'; signerName: string; comment?: string | null }) {
   const [owner] = await deps.db.select({ email: users.email }).from(users).where(eq(users.id, row.ownerId));
   if (!owner) return;
-  await deps.mailer.send({
+  await trySend(deps.mailer, {
     to: owner.email,
     ...templates.approvalResult({ projectName: row.name, decision: p.decision, signerName: p.signerName, comment: p.comment, url: `${deps.config.frontendUrl}/proyectos/${row.id}` }),
   });
@@ -110,6 +110,24 @@ export async function approveInternal(deps: Deps, a: AuthContext, projectId: str
   });
   await notifyOwner(deps, out.row, { decision: 'aprobado', signerName });
   return out;
+}
+
+/**
+ * Reopens an approved project for changes: back to `diseno` with live prices. The approval, its signature and the
+ * frozen version stay in the history (approvals are append-only); sending or approving again creates a new version.
+ */
+export async function reopenProject(db: Db, a: AuthContext, projectId: string, reason?: string) {
+  return db.transaction(async (tx) => {
+    const row = await getProject(tx, a, projectId);
+    if (row.status !== 'aprobado') throw conflict('PROYECTO_NO_APROBADO', 'El proyecto no está aprobado.');
+    const [upd] = await tx
+      .update(projects)
+      .set({ status: 'diseno', approvedVersionId: null, version: row.version + 1 })
+      .where(eq(projects.id, row.id))
+      .returning();
+    await audit(tx, a, 'reabrir', 'project', row.id, { versionAprobada: row.approvedVersionId, ...(reason ? { motivo: reason } : {}) });
+    return upd!;
+  });
 }
 
 // ---------- public (token) ----------

@@ -5,7 +5,9 @@ import { AuthProvider, RequireAuth } from './auth';
 import './errors';
 import './offline/install';
 import { PwaUpdater } from './offline/pwa';
-import { ForgotPage, LoginPage, SetPasswordPage } from './pages/Auth';
+import { ForgotPage, LoginPage, SetPasswordPage, SignupPage } from './pages/Auth';
+import { JoinPage } from './pages/Join';
+import { PlatformPage } from './pages/Platform';
 import { AccountPage } from './pages/Account';
 import { AdminPage } from './pages/Admin';
 import { PrivacyPage, TermsPage } from './pages/Legal';
@@ -25,7 +27,10 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/login', element: <LoginPage /> },
+      { path: '/registro', element: <SignupPage /> },
       { path: '/olvide', element: <ForgotPage /> },
+      { path: '/unirse', element: <RequireAuth><JoinPage /></RequireAuth> },
+      { path: '/plataforma', element: <RequireAuth><PlatformPage /></RequireAuth> },
       { path: '/restablecer', element: <SetPasswordPage mode="reset" /> },
       { path: '/invitacion', element: <SetPasswordPage mode="invite" /> },
       { path: '/', element: <RequireAuth><HomePage /></RequireAuth> },

@@ -1,12 +1,13 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
-import { sessions, users, verificationTokens } from '../db/schema';
+import { orgJoinRequests, sessions, users, verificationTokens } from '../db/schema';
+import { randomToken, sha256 } from '../lib/crypto';
 import { audit } from '../lib/audit';
 import { conflict, notFound } from '../lib/errors';
 import { authErrors, body, IdParam, json, pick, router, security } from '../lib/openapi';
 import { assertCan } from '../lib/permissions';
 import { issueVerificationToken, requireAuth } from '../services/auth';
-import { templates } from '../services/mailer';
+import { templates, trySend } from '../services/mailer';
 import { RoleSchema } from './auth';
 import { requireRoom } from '../lib/plans';
 
@@ -46,10 +47,17 @@ const invite = createRoute({
   path: '/',
   tags: ['Usuarios'],
   summary: 'Invitar a un usuario (solo admin)',
-  description: 'Crea el usuario inactivo y le envía un correo para crear su contraseña (vence en 7 días).',
+  description:
+    'Crea el usuario inactivo y le envía un correo para crear su contraseña (vence en 7 días). ' +
+    'Si el correo ya tiene cuenta en otra organización, le envía una solicitud para unirse (202); al aceptarla pasa a esta organización con el rol elegido.',
   security,
   request: body(z.object({ name: z.string().min(1).max(120), email: z.email(), role: RoleSchema.default('disenador') }).openapi({ example: { name: 'Luis Gómez', email: 'luis@ejemplo.com', role: 'disenador' } })),
-  responses: { 201: json(UserSchema, 'Creado'), ...authErrors, ...pick(409) },
+  responses: {
+    201: json(UserSchema.extend({ emailSent: z.boolean() }), 'Creado'),
+    202: json(z.object({ joinRequest: z.literal(true), name: z.string(), email: z.email(), emailSent: z.boolean() }), 'Ya tenía cuenta: se le envió la solicitud para unirse'),
+    ...authErrors,
+    ...pick(409),
+  },
 });
 
 const patch = createRoute({
@@ -102,8 +110,21 @@ export function userRoutes() {
     await requireRoom(db, config, a, 'users');
     const input = c.req.valid('json');
     const email = input.email.trim().toLowerCase();
-    const [dup] = await db.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, email)).limit(1);
-    if (dup) throw conflict('CORREO_EN_USO', 'Ya existe un usuario con ese correo.');
+    const [dup] = await db.select().from(users).where(eq(sql`lower(${users.email})`, email)).limit(1);
+    if (dup?.organizationId === a.org.id) throw conflict('CORREO_EN_USO', 'Esa persona ya está en tu organización.');
+    if (dup && !dup.active) throw conflict('CORREO_EN_USO', 'Ese correo tiene una invitación pendiente de otra organización.');
+    if (dup) {
+      // Already has an account elsewhere: ask them to join instead of creating a second user.
+      const token = randomToken(32);
+      await db.transaction(async (tx) => {
+        await tx.delete(orgJoinRequests).where(and(eq(orgJoinRequests.organizationId, a.org.id), eq(orgJoinRequests.userId, dup.id), isNull(orgJoinRequests.acceptedAt)));
+        await tx.insert(orgJoinRequests).values({ organizationId: a.org.id, userId: dup.id, role: input.role, invitedBy: a.user.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+        await audit(tx, a, 'invitar', 'user', dup.id, { email, role: input.role, union: true });
+      });
+      const url = `${config.frontendUrl}/unirse?token=${encodeURIComponent(token)}`;
+      const emailSent = await trySend(mailer, { to: dup.email, fromName: a.org.name, replyTo: a.user.email, ...templates.joinRequest({ name: dup.name, orgName: a.org.name, inviterName: a.user.name, url }) });
+      return c.json({ joinRequest: true as const, name: dup.name, email: dup.email, emailSent }, 202);
+    }
     const { user, token } = await db.transaction(async (tx) => {
       const [user] = await tx.insert(users).values({ organizationId: a.org.id, name: input.name, email, role: input.role, active: false }).returning();
       const token = await issueVerificationToken(tx, user!.id, 'invite', 7 * 86_400_000);
@@ -111,8 +132,8 @@ export function userRoutes() {
       return { user: user!, token };
     });
     const url = `${config.frontendUrl}/invitacion?token=${encodeURIComponent(token)}`;
-    await mailer.send({ to: email, ...templates.invite({ name: user.name, orgName: a.org.name, url }) });
-    return c.json(toUser(user), 201);
+    const emailSent = await trySend(mailer, { to: email, fromName: a.org.name, replyTo: a.user.email, ...templates.invite({ name: user.name, orgName: a.org.name, url }) });
+    return c.json({ ...toUser(user), emailSent }, 201);
   });
 
   r.openapi(patch, async (c) => {
