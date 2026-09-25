@@ -35,11 +35,14 @@ describe('reabrir un proyecto aprobado', () => {
     const hist = (await t.req('GET', `/projects/${p.id}/approval-links`, { user: dis })).data;
     expect(hist.approvals.some((a: any) => a.decision === 'aprobado')).toBe(true);
 
-    // Sending again works, as the organisation's name and replying to the designer.
-    const send = await t.req('POST', `/projects/${p.id}/approval-links`, { user: dis, body: { recipientEmail: 'cliente@x.test' } });
+    // Sending again works.
+    const before = t.mailer.outbox.length;
+    const send = await t.req('POST', `/projects/${p.id}/approval-links`, { user: dis, body: { recipient: 'Familia Ortega · 809 555 0101' } });
     expect(send.status).toBe(201);
-    const mail = t.mailer.outbox.at(-1)!;
-    expect(mail).toMatchObject({ to: 'cliente@x.test', fromName: 'Org A', replyTo: 'dis-reopen@a.test' });
+    expect(send.data.link.recipient).toBe('Familia Ortega · 809 555 0101');
+    expect(t.mailer.outbox.length).toBe(before);
+    const bare = await t.req('POST', `/projects/${p.id}/approval-links`, { user: dis, body: {} });
+    expect(bare.data.link.recipient).toBe('Cliente');
   });
 
   it('el nombre del remitente cambia, la dirección verificada no', () => {

@@ -14,15 +14,19 @@ export type LinkRow = typeof approvalLinks.$inferSelect;
 
 export const snapshotHash = (data: unknown) => sha256(canonicalJson(data));
 
-export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipientEmail: string, expiresInDays: number) {
-  const { db, mailer, config } = deps;
+/**
+ * Freezes a version and creates the client's link. Nothing is emailed: the designer shares the link (WhatsApp or copy).
+ * `recipient` is only a label for the history (client name, phone or email).
+ */
+export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipient: string, expiresInDays: number) {
+  const { db, config } = deps;
   const out = await db.transaction(async (tx) => {
     const row = await getProject(tx, a, projectId);
     if (row.status === 'aprobado') throw conflict('PROYECTO_APROBADO', 'El proyecto ya está aprobado.');
     const data = parseProjectData(row.data);
     const ctx = await loadPricingContext(tx, a.org);
     assertApprovable(validateProject(data, ctx));
-    const version = await createVersion(tx, row, data, ctx, `Enviado a ${recipientEmail}`, a.user.id);
+    const version = await createVersion(tx, row, data, ctx, `Enviado a ${recipient}`, a.user.id);
     // Only one live offer per project: older links stop working.
     await tx
       .update(approvalLinks)
@@ -32,15 +36,14 @@ export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: 
     const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000);
     const [link] = await tx
       .insert(approvalLinks)
-      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail, expiresAt, createdBy: a.user.id })
+      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail: recipient, expiresAt, createdBy: a.user.id })
       .returning();
     await tx.update(projects).set({ status: 'enviado' }).where(eq(projects.id, row.id));
-    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipientEmail });
+    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipient });
     return { row, link: link!, version, token };
   });
   const url = `${config.frontendUrl}/p/${out.token}`;
-  const emailSent = await trySend(mailer, { to: recipientEmail, fromName: a.org.name, replyTo: a.user.email, ...templates.approvalRequest({ orgName: a.org.name, projectName: out.row.name, url, expiresAt: out.link.expiresAt }) });
-  return { link: out.link, version: out.version, token: out.token, url, emailSent };
+  return { link: out.link, version: out.version, token: out.token, url };
 }
 
 export async function revokeLink(db: Db, a: AuthContext, linkId: string) {
@@ -169,7 +172,8 @@ export async function decidePublic(
         linkId: link.id,
         decision: input.decision,
         signerName: input.signerName,
-        signerEmail: input.signerEmail ?? link.recipientEmail,
+        // The link's recipient is a free label now (name or phone); only reuse it when it is an email.
+        signerEmail: input.signerEmail ?? (link.recipientEmail.includes('@') ? link.recipientEmail : null),
         comment: input.comment ?? null,
         signaturePng: input.signature ?? null,
         ip: meta.ip,

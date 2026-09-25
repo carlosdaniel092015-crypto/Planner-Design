@@ -86,19 +86,6 @@ ${cta ? `<p><a href="${esc(cta.url)}" style="display:inline-block;background:#11
 }
 
 export const templates = {
-  approvalRequest(p: { orgName: string; projectName: string; url: string; expiresAt: Date }) {
-    return {
-      subject: `${p.orgName}: revisa y aprueba tu proyecto "${p.projectName}"`,
-      ...layout(
-        `Tu proyecto "${p.projectName}" está listo para revisión`,
-        [
-          `${p.orgName} te comparte el diseño y el presupuesto de tu proyecto.`,
-          `Puedes aprobarlo o solicitar cambios desde el enlace. Vence el ${p.expiresAt.toLocaleDateString('es-MX', { dateStyle: 'long' })}.`,
-        ],
-        { label: 'Ver proyecto', url: p.url },
-      ),
-    };
-  },
   approvalResult(p: { projectName: string; decision: 'aprobado' | 'cambios'; signerName: string; comment?: string | null; url: string }) {
     const approved = p.decision === 'aprobado';
     return {

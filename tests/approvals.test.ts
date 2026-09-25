@@ -31,7 +31,9 @@ describe('aprobación pública', () => {
     expect(s.data.token).toHaveLength(43);
     const [row] = await t.db.select().from(approvalLinks).where(eq(approvalLinks.id, s.data.link.id));
     expect(row!.tokenHash).not.toContain(s.data.token);
-    expect(t.mailer.outbox.some((m) => m.to === 'cliente@ejemplo.com' && m.text.includes(s.data.url))).toBe(true);
+    // The link is shared by WhatsApp or copied: no email goes to the client.
+    expect(t.mailer.outbox.some((m) => m.to === 'cliente@ejemplo.com')).toBe(false);
+    expect(s.data.link).toMatchObject({ recipient: 'cliente@ejemplo.com' });
     expect((await t.req('GET', `/projects/${p.id}`, { user: dis })).data.status).toBe('enviado');
 
     const view = await t.req('GET', `/public/approvals/${s.data.token}`);

@@ -741,6 +741,14 @@ function PdfTab(props: {
   );
 }
 
+/** Digits for wa.me: 10-digit numbers get country code 1 (República Dominicana, EE. UU.). */
+const waNumber = (phone: string) => {
+  const d = phone.replace(/\D/g, '');
+  return d.length === 10 ? `1${d}` : d;
+};
+const waText = (name: string, project: string, url: string, days: number) =>
+  `Hola${name ? ` ${name}` : ''}, te comparto la propuesta de «${project}» con su diseño y presupuesto. Puedes revisarla, aprobarla con tu firma o pedir cambios aquí: ${url} (el enlace vence en ${days} días).`;
+
 function SendDialog(props: {
   project: ProjectDetail;
   history: { links: ApprovalLink[]; approvals: Approval[] } | null;
@@ -751,21 +759,22 @@ function SendDialog(props: {
   onRevoked: () => void;
   flash: (m: string) => void;
 }) {
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [days, setDays] = useState(14);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
-  const [mailed, setMailed] = useState(true);
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const digits = waNumber(phone);
+  const valid = !phone.trim() || digits.length >= 10;
   const send = async () => {
     setErr(null);
     setBusy(true);
     try {
       if (!(await props.guard())) return;
-      const r = await api.sendToClient(props.project.id, { recipientEmail: email.trim(), expiresInDays: days });
+      const recipient = [name.trim(), phone.trim()].filter(Boolean).join(' · ') || undefined;
+      const r = await api.sendToClient(props.project.id, { recipient, expiresInDays: days });
       setSent(r.url);
-      setMailed(r.emailSent !== false);
       props.onSent();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo enviar. Inténtalo de nuevo.');
@@ -793,7 +802,7 @@ function SendDialog(props: {
             </button>
             <button type="button" className="btn btn-primary" onClick={send} disabled={!valid || busy || props.blocked}>
               <Icon name="send" size={15} />
-              {busy ? 'Enviando…' : 'Enviar propuesta'}
+              {busy ? 'Creando enlace…' : 'Crear enlace'}
             </button>
           </>
         )
@@ -801,16 +810,20 @@ function SendDialog(props: {
     >
       {sent ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {mailed ? (
-            <p style={{ margin: 0 }}>
-              Enviamos la propuesta a <strong>{email.trim()}</strong>. El cliente puede revisarla, firmarla o pedir cambios desde este enlace (vence en {days} días):
-            </p>
-          ) : (
-            <p role="alert" style={{ margin: 0, background: 'var(--color-accent-100)', padding: '10px 12px' }}>
-              La propuesta quedó lista, pero <strong>el correo a {email.trim()} no salió</strong> (revisa la configuración de correo del servidor). Mándale tú este enlace por WhatsApp o
-              copiándolo (vence en {days} días):
-            </p>
-          )}
+          <p style={{ margin: 0 }}>
+            La propuesta quedó lista. Mándale este enlace {name.trim() ? <strong>a {name.trim()}</strong> : 'al cliente'} por WhatsApp: desde ahí la revisa, la firma o pide cambios (vence en {days}{' '}
+            días).
+          </p>
+          <a
+            className="btn btn-primary"
+            href={`https://wa.me/${digits}?text=${encodeURIComponent(waText(name.trim(), props.project.name, sent, days))}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ justifyContent: 'center', textDecoration: 'none', height: 44 }}
+          >
+            <Icon name="message-circle" size={16} />
+            {digits ? `Enviar por WhatsApp a ${phone.trim()}` : 'Enviar por WhatsApp'}
+          </a>
           <div style={{ display: 'flex', gap: 6 }}>
             <input className="input" readOnly value={sent} onFocus={(e) => e.currentTarget.select()} aria-label="Enlace de aprobación" style={{ flex: 1 }} />
             <button
@@ -822,18 +835,23 @@ function SendDialog(props: {
               Copiar
             </button>
           </div>
-          <a className="btn btn-ghost" href={`https://wa.me/?text=${encodeURIComponent(`Tu propuesta de ${props.project.name}: ${sent}`)}`} target="_blank" rel="noreferrer" style={{ width: 'max-content' }}>
-            <Icon name="message-circle" size={15} />
-            Compartir por WhatsApp
-          </a>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ margin: 0 }}>Congelamos esta versión con sus precios y le enviamos un enlace al cliente para revisarla y firmarla. Un envío nuevo anula el enlace anterior.</p>
+          <p style={{ margin: 0 }}>
+            Congelamos esta versión con sus precios y creamos un enlace para que el cliente la revise y la firme; se lo mandas por WhatsApp. Un envío nuevo anula el enlace anterior.
+          </p>
           {props.blocked && <p style={{ margin: 0, color: 'var(--color-accent-700)' }}>Resuelve los errores de validación antes de enviar.</p>}
           <div className="field">
-            <label htmlFor="send-email">Correo del cliente</label>
-            <input id="send-email" className="input" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@correo.com" />
+            <label htmlFor="send-name">Nombre del cliente (opcional)</label>
+            <input id="send-name" className="input" autoComplete="off" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} placeholder="Familia Ortega" />
+          </div>
+          <div className="field">
+            <label htmlFor="send-phone">WhatsApp del cliente (opcional)</label>
+            <input id="send-phone" className="input" type="tel" autoComplete="off" maxLength={30} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="809 555 0101" />
+            <span style={{ fontSize: 12, color: valid ? SOFT : 'var(--color-accent-700)' }}>
+              {valid ? 'Con el número se abre su chat directo; sin él, eliges el contacto en WhatsApp.' : 'Escribe el número completo (10 dígitos, o con código de país).'}
+            </span>
           </div>
           <div className="field">
             <label htmlFor="send-days">Vigencia del enlace</label>
@@ -854,7 +872,7 @@ function SendDialog(props: {
           {props.history.links.slice(0, 5).map((l) => (
             <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--color-divider)', fontSize: 13 }}>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <strong>{l.recipientEmail}</strong>
+                <strong>{l.recipient ?? l.recipientEmail}</strong>
                 <span style={{ display: 'block', color: SOFT }}>
                   {dateEs(l.createdAt)} · {stateOf(l)}
                 </span>
