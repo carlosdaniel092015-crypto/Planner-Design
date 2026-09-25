@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.8.1 · 2026-09-25
+
+### Despliegue más resistente
+- Si la conexión con el registro de npm se corta durante el despliegue, la instalación se reintenta sola en lugar de fallar, y los paquetes descargados se reutilizan en los siguientes despliegues (más rápidos y con menos descargas).
+
 ## 1.8.0 · 2026-09-25
 
 ### Especificaciones totalmente editables: crea el proyecto desde cero
