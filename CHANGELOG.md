@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.13.0 · 2026-09-25
+
+### Correos desde Gmail
+- La app puede enviar sus correos (código de registro, invitaciones, recuperar contraseña) **desde una cuenta de Gmail**, sin necesidad de dominio propio. Llegan con el nombre de tu organización como remitente y las respuestas van a quien los envió.
+
 ## 1.12.0 · 2026-09-25
 
 ### Enviar al cliente por WhatsApp

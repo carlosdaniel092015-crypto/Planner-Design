@@ -94,6 +94,7 @@ Copia `.env.example` a `.env`. Cada variable está explicada ahí. Las important
 | `UPLOADS_DIR` | Carpeta de archivos (en Docker: `/data/uploads`, en el volumen). |
 | `BLOB_READ_WRITE_TOKEN` | Opcional: guarda los archivos en Vercel Blob en vez del disco. |
 | `RESEND_API_KEY`, `MAIL_FROM` | Correo (códigos de registro, invitaciones, envíos al cliente). Sin clave, los correos se imprimen en consola. `MAIL_FROM` debe ser de un dominio verificado en Resend. Si un correo falla, la operación no se pierde: queda en el log `[correo] no se pudo enviar…`. |
+| `SMTP_USER`, `SMTP_PASS`, `SMTP_HOST`, `SMTP_PORT` | Opcional: enviar por SMTP, p. ej. **Gmail** con una contraseña de aplicación (`smtp.gmail.com`, `465`). Tiene prioridad sobre Resend; `MAIL_FROM` debe ser esa cuenta. |
 | `PLATFORM_ADMIN_EMAILS` | Correos (separados por coma) que ven todas las organizaciones, sus usuarios y asignan planes en `/plataforma`. |
 | `SUPPORT_EMAIL` | Opcional: a dónde piden un cambio de plan los clientes (si falta, el primero de `PLATFORM_ADMIN_EMAILS`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Opcional: botón «Continuar con Google» (ver *Inicio de sesión con Google y Microsoft*). |

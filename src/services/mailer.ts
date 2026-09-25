@@ -1,3 +1,5 @@
+import { createTransport, type Transporter } from 'nodemailer';
+
 export interface Mail {
   to: string;
   subject: string;
@@ -51,6 +53,29 @@ export function resendMailer(apiKey: string, from: string): Mailer {
         }),
       });
       if (!res.ok) throw new Error(`Resend respondió ${res.status}: ${await res.text()}`);
+    },
+  };
+}
+
+/**
+ * SMTP (e.g. Gmail with an app password: smtp.gmail.com:465). Gmail sends as the authenticated account,
+ * so MAIL_FROM should be that same address; the display name is still the organisation's.
+ */
+export function smtpMailer(
+  o: { host: string; port: number; user: string; pass: string },
+  from: string,
+  transport: Pick<Transporter, 'sendMail'> = createTransport({ host: o.host, port: o.port, secure: o.port === 465, auth: { user: o.user, pass: o.pass } }),
+): Mailer {
+  return {
+    async send(mail) {
+      await transport.sendMail({
+        from: withDisplayName(from, mail.fromName),
+        to: mail.to,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
+      });
     },
   };
 }
