@@ -1,6 +1,6 @@
 import { DEFAULT_MATERIALS, iso, newProject, type ProjectData, type ProjectKind } from '@core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, type ProjectSummary } from '../api';
 import { canCreate, isOwner, useAuth } from '../auth';
 import { LibraryDialog } from '../library/LibraryDialog';
@@ -34,6 +34,17 @@ export function HomePage() {
   const { me } = useAuth();
   const nav = useNavigate();
   const { flash, toast } = useToast();
+  // First sign-in with Google / Microsoft lands here with ?bienvenida=1.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!params.get('bienvenida')) return;
+    flash(`¡Bienvenido! Creamos «${me?.organization.name ?? 'tu espacio'}» para tus proyectos (plan Gratis).`);
+    setParams((p) => {
+      p.delete('bienvenida');
+      return p;
+    }, { replace: true });
+    // biome-ignore lint/correctness/useExhaustiveDependencies: once, on arrival
+  }, []);
   const [items, setItems] = useState<ProjectSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState<ProjectKind | null>(null);

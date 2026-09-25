@@ -8,6 +8,7 @@ import type { Role } from '../src/lib/permissions';
 import { createSession, hashPassword } from '../src/services/auth';
 import { memoryMailer } from '../src/services/mailer';
 import { memoryStorage } from '../src/services/storage';
+import type { OAuthRuntime } from '../src/services/oauth';
 import { userCredentials } from '../src/db/schema';
 
 export const API = 'http://localhost:3000';
@@ -21,13 +22,13 @@ export interface TestUser {
   orgId: string;
 }
 
-export async function setup() {
+export async function setup(opts: { env?: Record<string, string>; oauth?: OAuthRuntime } = {}) {
   const handle: DbHandle = await connect('pglite://memory');
   await handle.migrate(resolve('drizzle'));
-  const config = { ...loadConfig({ NODE_ENV: 'test', API_URL: API, FRONTEND_URL: FRONT }) };
+  const config = { ...loadConfig({ NODE_ENV: 'test', API_URL: API, FRONTEND_URL: FRONT, ...opts.env }) };
   const storage = memoryStorage(API, config.authSecret);
   const mailer = memoryMailer();
-  const app = createApp({ db: handle.db, storage, mailer, config });
+  const app = createApp({ db: handle.db, storage, mailer, config, oauth: opts.oauth });
 
   const a = await seedOrganization(handle.db, { orgName: 'Org A', slug: 'org-a', admin: { name: 'Admin A', email: 'admin@a.test', password: 'clave-segura-123' } });
   const b = await seedOrganization(handle.db, { orgName: 'Org B', slug: 'org-b', admin: { name: 'Admin B', email: 'admin@b.test', password: 'clave-segura-123' } });

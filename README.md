@@ -92,6 +92,8 @@ Copia `.env.example` a `.env`. Cada variable está explicada ahí. Las important
 | `UPLOADS_DIR` | Carpeta de archivos (en Docker: `/data/uploads`, en el volumen). |
 | `BLOB_READ_WRITE_TOKEN` | Opcional: guarda los archivos en Vercel Blob en vez del disco. |
 | `RESEND_API_KEY`, `MAIL_FROM` | Correo. Sin clave, los correos se imprimen en consola. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Opcional: botón «Continuar con Google» (ver *Inicio de sesión con Google y Microsoft*). |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` | Opcional: botón «Continuar con Microsoft». `MICROSOFT_TENANT` vale `common` si no se indica. |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | Admin inicial que crea `npm run db:seed`. |
 | `RUN_MIGRATIONS` | `true` aplica migraciones al arrancar (la imagen Docker lo trae activado). |
 
@@ -180,6 +182,37 @@ Son 60 pruebas de integración en `tests/`. Cada archivo levanta la app con un P
 7. **Verifica** con `https://tudominio.com/api/v1/health`, que debe responder `{"status":"ok","db":"ok"}`, y con `https://tudominio.com/api/v1/docs`.
 
 La imagen incluye `HEALTHCHECK` contra `/api/v1/health`. El proceso cierra con `SIGTERM` de forma ordenada.
+
+### Inicio de sesión con Google y Microsoft
+
+Opcional. Cada botón aparece en la pantalla de acceso solo cuando sus credenciales están configuradas. Quien entra por primera vez y no tiene cuenta
+recibe su **propia organización** en plan Gratis, como administradora. Si el correo ya existe, se vincula a esa cuenta, siempre que el proveedor lo marque
+como verificado. Una invitación pendiente se acepta entrando con el correo invitado.
+
+Las URL de regreso (*redirect URI*) son, con tu dominio:
+
+- Google: `https://tudominio.com/api/v1/auth/oauth/google/callback`
+- Microsoft: `https://tudominio.com/api/v1/auth/oauth/microsoft/callback`
+
+**Google** ([console.cloud.google.com](https://console.cloud.google.com)):
+
+1. Crea un proyecto.
+2. En *APIs y servicios → Pantalla de consentimiento de OAuth*, elige *Externo* y agrega tu dominio. Los permisos `openid`, `email` y `profile` no requieren revisión de Google.
+3. En *Credenciales → Crear credenciales → ID de cliente de OAuth*, elige *Aplicación web* y pega la URL de regreso de Google.
+4. Copia el ID y el secreto a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+5. Pasa la app a *En producción*; en modo prueba solo entran los usuarios de prueba.
+
+**Microsoft** ([portal.azure.com](https://portal.azure.com) → *Microsoft Entra ID → Registros de aplicaciones → Nuevo registro*):
+
+1. En *Tipos de cuenta*, elige *Cuentas de cualquier directorio organizativo y cuentas personales de Microsoft*.
+2. En *URI de redirección*, elige *Web* y pega la URL de regreso de Microsoft.
+3. En *Certificados y secretos → Nuevo secreto de cliente*, crea un secreto y copia su **Valor** a `MICROSOFT_CLIENT_SECRET`. El secreto vence: renuévalo antes de su fecha.
+4. Copia el *Id. de aplicación (cliente)* a `MICROSOFT_CLIENT_ID`.
+5. `MICROSOFT_TENANT` puede quedarse vacío (`common`). Si quieres limitar el acceso a una sola empresa, pon el Id. de su directorio.
+
+Seguridad: el flujo es OpenID Connect con PKCE, todo en el servidor. El token de identidad se verifica con las llaves públicas del proveedor (firma,
+emisor, audiencia, caducidad y `nonce`). Un correo que el proveedor no verifica nunca crea ni vincula cuentas; esto evita que alguien se haga pasar por
+otra persona con una cuenta de trabajo de Microsoft mal configurada. Quien entra así no tiene contraseña: puede crearla en *Mi cuenta*.
 
 ### Respaldos y monitoreo
 

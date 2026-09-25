@@ -13,6 +13,8 @@ import { AppError, errorBody } from './lib/errors';
 import { json, pick, router } from './lib/openapi';
 import { memoryRateLimiter, type RateLimiter } from './lib/rate-limit';
 import { authRoutes, meRoutes } from './routes/auth';
+import { oauthRoutes } from './routes/oauth';
+import type { OAuthRuntime } from './services/oauth';
 import { accountRoutes } from './routes/account';
 import { billingRoutes } from './routes/billing';
 import { clientErrorRoutes } from './routes/client-errors';
@@ -34,6 +36,8 @@ export interface CreateAppOptions {
   mailer: Mailer;
   config: AppConfig;
   rateLimiter?: RateLimiter;
+  /** Fake Google / Microsoft for tests (defaults to the real endpoints). */
+  oauth?: OAuthRuntime;
 }
 
 export function createApp(opts: CreateAppOptions) {
@@ -123,6 +127,7 @@ export function createApp(opts: CreateAppOptions) {
   );
 
   v1.route('/auth', authRoutes());
+  v1.route('/auth', oauthRoutes());
   v1.route('/', meRoutes());
   v1.route('/', accountRoutes());
   v1.route('/', versionRoutes());

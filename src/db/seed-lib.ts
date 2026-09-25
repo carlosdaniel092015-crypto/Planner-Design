@@ -8,10 +8,13 @@ import { exchangeRates, hardwarePrices, materials, moduleDefinitions, organizati
 export interface SeedOptions {
   orgName: string;
   slug: string;
-  admin: { name: string; email: string; password: string };
+  /** Without password: the admin signs in with Google / Microsoft (they can set one later with "¿Olvidaste tu contraseña?"). */
+  admin: { name: string; email: string; password?: string };
   rate?: number;
   /** Base currency of a new organisation. Catalogue prices (USD in src/core) are converted at `rate` for DOP. */
   currency?: 'USD' | 'DOP';
+  /** Plan of a new organisation; the installation's own one gets every feature. */
+  plan?: 'gratis' | 'profesional' | 'empresa';
 }
 
 /**
@@ -31,8 +34,7 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
           name: o.orgName,
           slug: o.slug,
           brandColor: '#ec3013',
-          // The installation's own organisation has every feature.
-          plan: 'empresa',
+          plan: o.plan ?? 'empresa',
           baseCurrency: currency,
           exchangeRateDopPerUsd: rate,
           rateUpdatedAt: new Date(),
@@ -54,7 +56,7 @@ export async function seedOrganization(db: Db, o: SeedOptions) {
     let [admin] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
     if (!admin) {
       [admin] = await tx.insert(users).values({ organizationId: orgId, name: o.admin.name, email, role: 'admin', active: true }).returning();
-      await tx.insert(userCredentials).values({ userId: admin!.id, passwordHash: await hashPassword(o.admin.password) });
+      if (o.admin.password) await tx.insert(userCredentials).values({ userId: admin!.id, passwordHash: await hashPassword(o.admin.password) });
     }
 
     await tx

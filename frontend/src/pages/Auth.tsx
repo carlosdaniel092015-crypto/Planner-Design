@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../api';
 import { useAuth } from '../auth';
@@ -37,6 +37,64 @@ function ErrorBox({ error }: { error: string | null }) {
   );
 }
 
+/** ?error=<code> from the Google / Microsoft sign-in (src/routes/oauth.ts). */
+const OAUTH_ERRORS: Record<string, string> = {
+  cancelado: 'Cancelaste el inicio de sesión. Puedes intentarlo de nuevo cuando quieras.',
+  estado_invalido: 'La sesión de inicio caducó o se abrió en otra pestaña. Vuelve a intentarlo.',
+  proveedor_no_disponible: 'Ese proveedor no está configurado en esta instalación.',
+  proveedor_error: 'El proveedor no respondió. Inténtalo de nuevo en un momento.',
+  intercambio_fallido: 'No pudimos confirmar tu acceso con el proveedor. Inténtalo de nuevo.',
+  token_invalido: 'No pudimos verificar tu identidad con el proveedor. Inténtalo de nuevo.',
+  sin_correo: 'Tu cuenta del proveedor no comparte un correo. Usa otra cuenta o entra con correo y contraseña.',
+  correo_no_verificado:
+    'Tu proveedor no confirma que ese correo sea tuyo (pasa con algunas cuentas de trabajo de Microsoft). Entra con Google, con una cuenta personal de Microsoft o con correo y contraseña.',
+  cuenta_desactivada: 'Tu cuenta está desactivada. Pide a tu administrador que la active.',
+};
+
+function ProviderLogo({ id }: { id: 'google' | 'microsoft' }) {
+  return id === 'google' ? (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
+      <path fill="#f25022" d="M1 1h9v9H1z" />
+      <path fill="#7fba00" d="M11 1h9v9h-9z" />
+      <path fill="#00a4ef" d="M1 11h9v9H1z" />
+      <path fill="#ffb900" d="M11 11h9v9h-9z" />
+    </svg>
+  );
+}
+
+/** "Continuar con Google / Microsoft": full-page navigation to the server, which talks to the provider. */
+function ProviderButtons({ next }: { next: string }) {
+  const [providers, setProviders] = useState<{ id: 'google' | 'microsoft'; name: string }[]>([]);
+  useEffect(() => {
+    api
+      .authProviders()
+      .then((r) => setProviders(r.providers))
+      .catch(() => setProviders([]));
+  }, []);
+  if (!providers.length) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {providers.map((p) => (
+        <a key={p.id} className="btn btn-secondary" href={`/api/v1/auth/oauth/${p.id}/start?redirect=${encodeURIComponent(next)}`} style={{ height: 44, justifyContent: 'center', gap: 10, textDecoration: 'none' }}>
+          <ProviderLogo id={p.id} />
+          Continuar con {p.name}
+        </a>
+      ))}
+      <span style={{ fontSize: 12, color: MUTED }}>¿Primera vez? Se crea tu cuenta con tu propio espacio de trabajo (plan Gratis).</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: MUTED }} aria-hidden="true">
+        <span style={{ flex: 1, height: 1, background: 'var(--color-divider)' }} />o con tu correo<span style={{ flex: 1, height: 1, background: 'var(--color-divider)' }} />
+      </div>
+    </div>
+  );
+}
+
 const message = (e: unknown) => (e instanceof ApiError ? e.message : 'No se pudo conectar con el servidor. Revisa tu conexión.');
 
 export function LoginPage() {
@@ -46,7 +104,8 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const oauthError = params.get('error');
+  const [error, setError] = useState<string | null>(oauthError ? (OAUTH_ERRORS[oauthError] ?? 'No se pudo iniciar sesión con el proveedor.') : null);
   const next = params.get('next') || '/';
   // ?reauth=1: the session expired while the app kept working offline; show the form even though `me` is still cached.
   if (me && !params.get('reauth')) return <Navigate to={next} replace />;
@@ -69,6 +128,7 @@ export function LoginPage() {
     <Shell kicker="Acceso" title="Diseña cocinas y closets a medida." lead="Inicia sesión para ver tus proyectos, editarlos en 3D y enviarlos a tus clientes para su aprobación.">
       <h2 style={{ margin: 0, fontSize: 24 }}>Iniciar sesión</h2>
       {params.get('borrada') && <p style={{ margin: 0, fontSize: 14 }}>Tu cuenta se borró. Gracias por usar Planner.</p>}
+      <ProviderButtons next={next} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="field">
           <label htmlFor="email">Correo</label>

@@ -1,3 +1,4 @@
+import type { OAuthRuntime } from '../services/oauth';
 import type { Db } from '../db/client';
 import type { organizations } from '../db/schema';
 import type { Mailer } from '../services/mailer';
@@ -12,6 +13,8 @@ export interface Deps {
   mailer: Mailer;
   config: AppConfig;
   rateLimiter: RateLimiter;
+  /** Network access for Google / Microsoft sign-in; tests pass a fake provider. */
+  oauth?: OAuthRuntime;
 }
 
 export type Organization = typeof organizations.$inferSelect;

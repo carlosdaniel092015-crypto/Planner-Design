@@ -18,6 +18,8 @@ export function AccountPage() {
   const [del, setDel] = useState({ password: '', confirm: '' });
   const [busy, setBusy] = useState<string | null>(null);
   if (!me) return null;
+  // Accounts created with Google / Microsoft have no password until they create one here.
+  const hasPassword = me.user.hasPassword !== false;
 
   const run = async (k: string, fn: () => Promise<void>) => {
     setBusy(k);
@@ -72,18 +74,23 @@ export function AccountPage() {
             e.preventDefault();
             if (pw.next !== pw.repeat) return flash('Las contraseñas nuevas no coinciden.');
             run('pw', async () => {
-              await request('POST', '/me/password', { currentPassword: pw.current, newPassword: pw.next });
+              await request('POST', '/me/password', { ...(hasPassword ? { currentPassword: pw.current } : {}), newPassword: pw.next });
               setPw({ current: '', next: '', repeat: '' });
-              flash('Contraseña cambiada. Se cerró la sesión en tus otros dispositivos.');
+              if (!hasPassword) setMe({ ...me, user: { ...me.user, hasPassword: true } });
+              flash(hasPassword ? 'Contraseña cambiada. Se cerró la sesión en tus otros dispositivos.' : 'Contraseña creada: ahora también puedes entrar con tu correo.');
             });
           }}
           style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
         >
           <h2 style={{ margin: 0, fontSize: 20 }}>Contraseña</h2>
-          <div className="field">
-            <label htmlFor="pw-cur">Contraseña actual</label>
-            <input id="pw-cur" className="input" type="password" autoComplete="current-password" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
-          </div>
+          {hasPassword ? (
+            <div className="field">
+              <label htmlFor="pw-cur">Contraseña actual</label>
+              <input id="pw-cur" className="input" type="password" autoComplete="current-password" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Entras con Google o Microsoft. Si quieres, crea una contraseña para entrar también con tu correo.</p>
+          )}
           <div className="field">
             <label htmlFor="pw-new">Nueva contraseña (mínimo 8 caracteres)</label>
             <input id="pw-new" className="input" type="password" autoComplete="new-password" required minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
@@ -93,7 +100,7 @@ export function AccountPage() {
             <input id="pw-rep" className="input" type="password" autoComplete="new-password" required minLength={8} value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: e.target.value })} />
           </div>
           <button type="submit" className="btn btn-primary" disabled={busy === 'pw'} style={{ alignSelf: 'start' }}>
-            Cambiar contraseña
+            {hasPassword ? 'Cambiar contraseña' : 'Crear contraseña'}
           </button>
         </form>
 
@@ -103,10 +110,12 @@ export function AccountPage() {
             Se eliminan tus proyectos, los accesos que te compartieron, tus sesiones y tu contraseña, y se borran tu nombre y correo. No se puede deshacer. Las aprobaciones firmadas por clientes y
             el registro de auditoría se conservan sin tus datos personales. Si eres el único administrador, primero nombra a otro en Administración → Usuarios.
           </p>
-          <div className="field">
-            <label htmlFor="del-pw">Tu contraseña</label>
-            <input id="del-pw" className="input" type="password" autoComplete="current-password" value={del.password} onChange={(e) => setDel({ ...del, password: e.target.value })} />
-          </div>
+          {hasPassword && (
+            <div className="field">
+              <label htmlFor="del-pw">Tu contraseña</label>
+              <input id="del-pw" className="input" type="password" autoComplete="current-password" value={del.password} onChange={(e) => setDel({ ...del, password: e.target.value })} />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="del-ok">Escribe ELIMINAR para confirmar</label>
             <input id="del-ok" className="input" value={del.confirm} onChange={(e) => setDel({ ...del, confirm: e.target.value })} />
@@ -114,11 +123,11 @@ export function AccountPage() {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={busy === 'del' || !del.password || del.confirm !== 'ELIMINAR'}
+            disabled={busy === 'del' || (hasPassword && !del.password) || del.confirm !== 'ELIMINAR'}
             style={{ alignSelf: 'start', background: 'var(--color-accent-700)' }}
             onClick={() =>
               run('del', async () => {
-                await request('DELETE', '/me', { password: del.password, confirm: 'ELIMINAR' });
+                await request('DELETE', '/me', { ...(hasPassword ? { password: del.password } : {}), confirm: 'ELIMINAR' });
                 await wipeUser(me.user.id).catch(() => {});
                 try {
                   localStorage.removeItem('planner:me');

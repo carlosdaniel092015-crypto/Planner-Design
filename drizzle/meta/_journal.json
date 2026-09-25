@@ -43,6 +43,13 @@
       "when": 1790251635007,
       "tag": "0005_planes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790358506751,
+      "tag": "0006_identidades_oauth",
+      "breakpoints": true
     }
   ]
 }

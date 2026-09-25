@@ -48,7 +48,8 @@ export type Currency = 'USD' | 'DOP';
 export type Status = 'borrador' | 'diseno' | 'enviado' | 'cambios_solicitados' | 'aprobado';
 
 export interface Me {
-  user: { id: string; name: string; email: string; role: Role };
+  /** hasPassword is false for accounts that only sign in with Google / Microsoft. */
+  user: { id: string; name: string; email: string; role: Role; hasPassword?: boolean };
   organization: { id: string; name: string; slug: string; logoUrl: string | null; brandColor: string | null; baseCurrency: Currency };
 }
 
@@ -139,6 +140,7 @@ export const api = {
   me: (timeoutMs?: number) => request<Me>('GET', '/me', undefined, {}, timeoutMs),
   signIn: (email: string, password: string) => request<Me>('POST', '/auth/sign-in', { email, password }),
   signOut: () => request<{ ok: true }>('POST', '/auth/sign-out'),
+  authProviders: () => request<{ providers: { id: 'google' | 'microsoft'; name: string }[] }>('GET', '/auth/providers', undefined, {}, 8000),
   forgot: (email: string) => request<{ ok: true }>('POST', '/auth/forgot-password', { email }),
   reset: (token: string, password: string) => request<{ ok: true }>('POST', '/auth/reset-password', { token, password }),
   acceptInvite: (token: string, password: string, name?: string) => request<Me>('POST', '/auth/accept-invite', { token, password, name }),
