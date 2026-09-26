@@ -215,9 +215,25 @@ function buildModule(m, ctx) {
   const zr = E.zr(m, ctx.zoc), yb = zr[0] / 100, yt = zr[1] / 100;
   const bodyId = m.cue || ctx.mats.cuerpo, frId = m.fre || ctx.mats.frentes, hdMat = baseMat(ctx.mats.jaladeras);
   let seed = m.id * 97 + Math.round(m.pos || m.x || 0);
+  // Uploaded modules stand on the plinth like the parametric ones (recessed 6 cm; islands on both faces).
+  const plinth = () => { if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
+  if (m.boards && m.boards.length) {
+    plinth();
+    // Uploaded model built from boards: each board where it is, in the project's body / front material.
+    for (const bd of m.boards) {
+      const [x0, x1, y0, y1, z0, z1] = bd.b.map(v => v / 1000);
+      const bw = x1 - x0, bh = z1 - z0, bdp = y1 - y0;
+      const faceW = bd.thin === 0 ? bdp : bw, faceH = bd.thin === 2 ? bdp : bh;
+      const id = bd.slot === 'frentes' ? frId : bodyId;
+      bx(g, bw, bh, bdp, texMat(id, faceW, faceH, bd.slot === 'frentes' && faceW > faceH, seed++), x0, yb + z0, y0);
+    }
+    return g;
+  }
   if (m.glb) {
     const src = glbCache[m.glb + '_scene'];
-    const y0 = m.type === 'upper' ? 1.5 : 0, y1 = m.type === 'upper' ? 1.5 + H : yt;
+    // The model fills the module's body (above the plinth), not the plinth height too.
+    const y0 = m.type === 'upper' ? 1.5 : m.type === 'fridge' ? 0 : yb, y1 = m.type === 'upper' ? 1.5 + H : yt;
+    plinth();
     if (src) {
       const o = src.clone(true), bb = new T.Box3().setFromObject(o), sz = bb.getSize(new T.Vector3());
       o.scale.set(W / (sz.x || 1), (y1 - y0) / (sz.y || 1), D / (sz.z || 1));

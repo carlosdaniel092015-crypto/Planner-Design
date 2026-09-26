@@ -1,7 +1,7 @@
 // Assembly drawings per module (millimetres) — ported from the prototype's exploded()/ortho().
 import { cols, type Drawing, type DrawItem, front2D } from './drawing';
 import { shade } from './geometry';
-import { type Part, parts } from './parts';
+import { frontsOf, type Part, panelDims, parts, placedPanels } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -35,23 +35,41 @@ export function exploded(m: ModuleInstance, mats: ProjectData['mats'], materials
   const boxes: Box[] = [];
   const pr = parts(m, mats, materials);
   const ref = (g: string) => pr.find((p) => p.grp === g)?.ref;
-  boxes.push([-e, t - e, 0, D, 0, H, C.b, ref('lat')]);
-  boxes.push([W - t + e, W + e, 0, D, 0, H, C.b, ref('lat')]);
-  boxes.push([t, W - t, 0, D, -e, t - e, C.b, ref('base')]);
-  if (m.type === 'base') {
-    boxes.push([t, W - t, D - 100, D, H - t + e, H + e, C.b, ref('trav')]);
-    boxes.push([t, W - t, 0, 100, H - t + e, H + e, C.b, ref('trav')]);
-  } else boxes.push([t, W - t, 0, D, H - t + e, H + e, C.b, ref('top')]);
-  boxes.push([0, W, -6 - e, -e, 0, H, '#e8e4dc', ref('back')]);
-  if (ref('shelf')) boxes.push([t, W - t, 0, D - 20, H / 2, H / 2 + t, shade(C.b, -0.04), ref('shelf')]);
-  let v = 0;
-  for (const seg of m.fr) {
-    const z0 = v * H;
-    const z1 = (v + seg.f) * H;
-    v += seg.f;
-    if (seg.t === 'open') continue;
-    const n = seg.t === 'door' ? seg.n || 1 : 1;
-    for (let i = 0; i < n; i++) boxes.push([(W * i) / n + 2, (W * (i + 1)) / n - 2, D + e * 1.3, D + e * 1.3 + 18, z0 + 2, z1 - 2, seg.t === 'oven' ? '#2d2c2b' : C.f, ref(seg.t === 'door' ? 'door' : 'drawer')]);
+  const placed = placedPanels(m);
+  if (placed.length) {
+    // Boards of the uploaded model where they really are, pushed outwards along their thickness.
+    const T = [W, D, H];
+    for (const pp of placed) {
+      const b = [...pp.box];
+      const a = pp.thin;
+      const rel = ((b[2 * a]! + b[2 * a + 1]!) / 2 - T[a]! / 2) / (T[a]! / 2);
+      const off = rel > 0.3 ? (a === 1 ? e * 1.3 : e) : rel < -0.3 ? -e : 0;
+      b[2 * a] = b[2 * a]! + off;
+      b[2 * a + 1] = b[2 * a + 1]! + off;
+      const { L, A } = panelDims(pp);
+      const part = pr.find((p) => p.pieza === pp.panel.n && p.L === L && p.A === A);
+      const col = pp.slot === 'frentes' ? C.f : pp.slot === 'trasera' ? '#e8e4dc' : C.b;
+      boxes.push([b[0]!, b[1]!, b[2]!, b[3]!, b[4]!, b[5]!, col, part?.ref]);
+    }
+  } else {
+    boxes.push([-e, t - e, 0, D, 0, H, C.b, ref('lat')]);
+    boxes.push([W - t + e, W + e, 0, D, 0, H, C.b, ref('lat')]);
+    boxes.push([t, W - t, 0, D, -e, t - e, C.b, ref('base')]);
+    if (m.type === 'base') {
+      boxes.push([t, W - t, D - 100, D, H - t + e, H + e, C.b, ref('trav')]);
+      boxes.push([t, W - t, 0, 100, H - t + e, H + e, C.b, ref('trav')]);
+    } else boxes.push([t, W - t, 0, D, H - t + e, H + e, C.b, ref('top')]);
+    boxes.push([0, W, -6 - e, -e, 0, H, '#e8e4dc', ref('back')]);
+    if (ref('shelf')) boxes.push([t, W - t, 0, D - 20, H / 2, H / 2 + t, shade(C.b, -0.04), ref('shelf')]);
+    let v = 0;
+    for (const seg of frontsOf(m)) {
+      const z0 = v * H;
+      const z1 = (v + seg.f) * H;
+      v += seg.f;
+      if (seg.t === 'open') continue;
+      const n = seg.t === 'door' ? seg.n || 1 : 1;
+      for (let i = 0; i < n; i++) boxes.push([(W * i) / n + 2, (W * (i + 1)) / n - 2, D + e * 1.3, D + e * 1.3 + 18, z0 + 2, z1 - 2, seg.t === 'oven' ? '#2d2c2b' : C.f, ref(seg.t === 'door' ? 'door' : 'drawer')]);
+    }
   }
   boxes.sort((p, q) => (p[0] + p[1]) * s + (p[2] + p[3]) * c - ((q[0] + q[1]) * s + (q[2] + q[3]) * c));
   const labels: [readonly [number, number], number][] = [];
@@ -152,7 +170,7 @@ export function ortho(m: ModuleInstance, mats: ProjectData['mats'], materials: R
   let w: number;
   let h: number;
   if (view === 'front') {
-    front2D({ ...m, w: W, h: H }, 0, 0, W, H, C, hstyle, it);
+    front2D({ ...m, fr: frontsOf(m), w: W, h: H }, 0, 0, W, H, C, hstyle, it);
     for (const p of it) if (p.sw) p.sw *= k * 0.8;
     w = W;
     h = H;

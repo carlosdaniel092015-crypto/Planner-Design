@@ -3,6 +3,20 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.16.0 · 2026-09-26
+
+### Módulos y texturas que subes
+- **Despiece real de tus muebles:** si el modelo que subes (3DS, SketchUp o GLB) está hecho por tablas, como los que exportan los programas de carpintería, Planner lee **cada pieza con su nombre y medida real** (laterales, suelo, trasera, entrepaños, divisiones, puertas…). Aparecen en **Planos de ensamblaje**, la **vista explosionada**, la **lista de corte** y el **PDF**. Las puertas y frentes toman el material de frentes y el resto el del cuerpo, incluidas las texturas que subas.
+- En la **vista 3D** esos muebles se dibujan pieza por pieza con los materiales y texturas que elijas (la puerta con el de frentes, el resto con el del cuerpo), en lugar del color fijo del archivo.
+- Si cambias el ancho, alto o fondo del módulo, las piezas se ajustan: los espesores no cambian, los laterales siguen en su lugar y las tablas que van de lado a lado crecen lo mismo que el mueble.
+- Un modelo que no está hecho por tablas se despieza como una caja estándar con sus medidas.
+- El **ancho** de un módulo subido ya se puede editar, de la mitad al doble de su ancho original, también en los que ya tenías.
+- Lo que subes a la biblioteca aparece en el editor **al momento**; antes podía tardar hasta un minuto.
+- Los módulos subidos se colocan **sobre el zócalo** como los demás (en 3D y en alzados), en lugar de estirarse hasta el piso.
+- Al seleccionar un módulo subido aparece **«Materiales y herrajes»** (cuerpo, frente y herrajes), como en los módulos del catálogo.
+- El precio de los módulos subidos no cambia.
+- Los módulos que ya habías subido usan la caja estándar. Para que tomen sus piezas reales, vuelve a subir el modelo.
+
 ## 1.15.0 · 2026-09-26
 
 ### Presupuesto en una propuesta ya enviada

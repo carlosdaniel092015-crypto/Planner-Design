@@ -17,7 +17,7 @@ describe('catálogo', () => {
     expect(r.data.materials.find((m: any) => m.code === 'roble')).toMatchObject({ type: 'Melamina texturizada', uses: ['cuerpo', 'frentes'], color: '#c49a6c' });
     expect(r.data.pricing).toMatchObject({ taxName: 'ITBIS', taxRate: 0.18, exchangeRateDopPerUsd: 60 });
     const etag = r.headers.get('etag')!;
-    expect(r.headers.get('cache-control')).toMatch(/max-age/);
+    expect(r.headers.get('cache-control')).toMatch(/no-cache/); // always revalidated: new library items show up at once
     const again = await t.req('GET', '/catalog', { user: dis, headers: { 'if-none-match': etag } });
     expect(again.status).toBe(304);
   });

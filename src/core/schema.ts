@@ -10,6 +10,23 @@ const frontSegmentSchema = z.object({
 
 const flag = z.union([z.literal(0), z.literal(1), z.boolean()]).optional();
 
+/**
+ * One board of a module uploaded as a 3D model (read from its meshes): name, lowest corner and size in mm
+ * (x = width, y = depth from the back, z = height) and the material slot it takes.
+ */
+export const panelSchema = z.object({
+  n: z.string().max(80),
+  p: z.tuple([z.number(), z.number(), z.number()]),
+  s: z.tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()]),
+  slot: z.enum(['cuerpo', 'frentes', 'trasera']).optional(),
+});
+const panelsFields = {
+  /** Boards read from the uploaded 3D model; when present the despiece uses them instead of the standard box. */
+  panels: z.array(panelSchema).max(300).optional(),
+  /** Model size in cm (w, h, d) the panels were measured at; resizing the module scales them from it. */
+  pdim: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
+};
+
 export const moduleSchema = z
   .object({
     id: z.number().int().positive(),
@@ -36,6 +53,7 @@ export const moduleSchema = z
     fre: z.string().max(60).optional(),
     /** GLB url (library modules made from a 3D model). */
     glb: z.string().max(2000).optional(),
+    ...panelsFields,
     /** Library module base price (base currency) and the width it refers to. */
     pBase: z.number().min(0).optional(),
     w0: z.number().positive().optional(),
@@ -155,6 +173,7 @@ export const recipeSchema = z.object({
   cook: flag,
   appl: flag,
   oven: flag,
+  ...panelsFields,
 }).refine((r) => r.fr.length === 0 || Math.abs(r.fr.reduce((a, s) => a + s.f, 0) - 1) < 0.02, {
   message: 'Las fracciones de los frentes (f) deben sumar 1.',
   path: ['fr'],
@@ -162,6 +181,7 @@ export const recipeSchema = z.object({
 
 export type ProjectData = z.infer<typeof projectDataSchema>;
 export type ModuleInstance = z.infer<typeof moduleSchema>;
+export type ModelPanel = z.infer<typeof panelSchema>;
 export type Opening = z.infer<typeof openingSchema>;
 export type InstallPoint = z.infer<typeof pointSchema>;
 export type Recipe = z.infer<typeof recipeSchema>;
