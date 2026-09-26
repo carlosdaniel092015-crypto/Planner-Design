@@ -6,7 +6,7 @@ import { MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
 import { assertCan } from '../lib/permissions';
 import { clientIp, rateLimit } from '../lib/rate-limit';
-import { approveInternal, createApprovalLink, decidePublic, reopenProject, resolveLink, revokeLink } from '../services/approvals';
+import { approveInternal, createApprovalLink, decidePublic, reopenProject, resolveLink, revokeLink, setLinkPrices } from '../services/approvals';
 import { requireAuth } from '../services/auth';
 import { cutlistDxf, slug } from '../services/exports';
 import { getProject, parseProjectData, pricingFor, snapshotOf } from '../services/projects';
@@ -177,6 +177,31 @@ export function approvalRoutes() {
         assertCan(a.user, 'project:send', { access: p.access });
       }
       const { link } = await revokeLink(db, a, c.req.valid('param').id);
+      return c.json(linkJson(link), 200);
+    },
+  );
+
+  r.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/approval-links/{id}',
+      tags,
+      summary: 'Mostrar u ocultar el presupuesto en un enlace ya enviado',
+      description: 'Mismo enlace, sin reenviar: el cliente ve el cambio al recargar. Solo en enlaces activos (409 si ya respondió, se revocó o caducó).',
+      security,
+      request: { params: IdParam, ...body(z.object({ showPrices: z.boolean() }).openapi({ example: { showPrices: false } })) },
+      responses: { 200: json(Link), ...authErrors, ...pick(409) },
+    }),
+    async (c) => {
+      const a = requireAuth(c);
+      const { db } = c.var.deps;
+      const { id } = c.req.valid('param');
+      const [l] = await db.select({ projectId: approvalLinks.projectId }).from(approvalLinks).where(eq(approvalLinks.id, id));
+      if (l) {
+        const p = await getProject(db, a, l.projectId);
+        assertCan(a.user, 'project:send', { access: p.access });
+      }
+      const { link } = await setLinkPrices(db, a, id, c.req.valid('json').showPrices);
       return c.json(linkJson(link), 200);
     },
   );

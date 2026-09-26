@@ -23,6 +23,25 @@ const accept = { signerName: 'María Ortega', accepted: true };
 const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('aprobación pública', () => {
+  it('en un enlace ya enviado se puede ocultar y volver a mostrar el presupuesto, sin reenviar', async () => {
+    const p = await create();
+    const s = await send(p.id);
+    const id = s.data.link.id;
+    const off = await t.req('PATCH', `/approval-links/${id}`, { user: dis, body: { showPrices: false } });
+    expect(off.status).toBe(200);
+    expect(off.data.showPrices).toBe(false);
+    expect((await t.req('GET', `/public/approvals/${s.data.token}`)).data).toMatchObject({ showPrices: false, estimate: null });
+    expect((await t.req('PATCH', `/approval-links/${id}`, { user: dis, body: { showPrices: true } })).data.showPrices).toBe(true);
+    expect((await t.req('GET', `/public/approvals/${s.data.token}`)).data.estimate.amount).toBeGreaterThan(0);
+    // Other organisations don't see the link; the shop can't send; an answered link can't change.
+    expect((await t.req('PATCH', `/approval-links/${id}`, { user: t.adminB, body: { showPrices: false } })).status).toBe(404);
+    expect((await t.req('PATCH', `/approval-links/${id}`, { user: taller, body: { showPrices: false } })).status).not.toBe(200);
+    await t.req('POST', `/public/approvals/${s.data.token}`, { body: { ...accept, decision: 'aprobado' } });
+    const used = await t.req('PATCH', `/approval-links/${id}`, { user: dis, body: { showPrices: false } });
+    expect(used.status).toBe(409);
+    expect(used.data.error.code).toBe('ENLACE_USADO');
+  });
+
   it('se puede enviar sin presupuesto: la página del cliente no trae precios, totales ni ajustes', async () => {
     const data = { ...APPROVABLE, priceAdj: { inst: 10, desc: 5, final: 250000, counter: null, taxRate: null }, prefs: { ...APPROVABLE.prefs, presupuesto: 500000 } };
     const p = await create(data);

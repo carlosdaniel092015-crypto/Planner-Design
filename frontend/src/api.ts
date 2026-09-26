@@ -187,6 +187,7 @@ export const api = {
   approvalLinks: (id: string) => request<{ links: ApprovalLink[]; approvals: Approval[] }>('GET', `/projects/${id}/approval-links`),
   sendToClient: (id: string, body: { recipient?: string; expiresInDays: number; showPrices?: boolean }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string }>('POST', `/projects/${id}/approval-links`, body),
   revokeLink: (linkId: string) => request<ApprovalLink>('POST', `/approval-links/${linkId}/revoke`),
+  setLinkPrices: (linkId: string, showPrices: boolean) => request<ApprovalLink>('PATCH', `/approval-links/${linkId}`, { showPrices }),
   reopenProject: (id: string, reason?: string) => request<{ status: 'diseno'; version: number }>('POST', `/projects/${id}/reopen`, { reason }),
   approveInternal: (id: string, body: { signerName: string; signature?: string }) => request<{ approval: Approval; versionId: string }>('POST', `/projects/${id}/approve-internal`, body),
   publicView: (token: string) => request<PublicView>('GET', `/public/approvals/${token}`),
