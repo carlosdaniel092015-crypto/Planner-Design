@@ -11,6 +11,7 @@ import { requireAuth } from '../services/auth';
 import { cutlistDxf, slug } from '../services/exports';
 import { getProject, parseProjectData, pricingFor, snapshotOf } from '../services/projects';
 import { brandingAllowed, requireFeature } from '../lib/plans';
+import { DEFAULT_TERMS, DEFAULT_TERMS_NO_PRICES } from './organization';
 
 const Link = z
   .object({
@@ -21,6 +22,8 @@ const Link = z
     recipient: z.string(),
     /** @deprecated same as `recipient`. */
     recipientEmail: z.string(),
+    /** Whether the client page shows the budget. */
+    showPrices: z.boolean(),
     expiresAt: z.iso.datetime(),
     revokedAt: z.iso.datetime().nullable(),
     openedAt: z.iso.datetime().nullable(),
@@ -39,6 +42,7 @@ const linkJson = (l: typeof approvalLinks.$inferSelect) => ({
   versionId: l.versionId,
   recipient: l.recipientEmail,
   recipientEmail: l.recipientEmail,
+  showPrices: l.showPrices,
   expiresAt: l.expiresAt.toISOString(),
   revokedAt: iso(l.revokedAt),
   openedAt: iso(l.openedAt),
@@ -81,6 +85,24 @@ const meta = (c: any) => {
   return { ip: /^[0-9a-f:.]+$/i.test(ip) ? ip : null, userAgent: c.req.header('user-agent') ?? null };
 };
 
+/** Approval terms shown to the client; the default text drops "el presupuesto" when the link has no budget (custom text stays as written). */
+const termsFor = (custom: string | undefined, showPrices: boolean) => {
+  const terms = custom?.trim() || DEFAULT_TERMS;
+  return !showPrices && terms === DEFAULT_TERMS ? DEFAULT_TERMS_NO_PRICES : terms;
+};
+
+/** Project data for a client link sent without the budget: no price overrides, adjustments or budget preference. */
+function withoutPrices(raw: unknown): Record<string, unknown> {
+  const d = { ...(raw as Record<string, unknown>) };
+  delete d.priceAdj;
+  if (Array.isArray(d.mods)) d.mods = d.mods.map(({ pOv: _p, ...m }: Record<string, unknown>) => m);
+  if (d.prefs && typeof d.prefs === 'object') {
+    const { presupuesto: _b, ...prefs } = d.prefs as Record<string, unknown>;
+    d.prefs = prefs;
+  }
+  return d;
+}
+
 const TokenParam = z.object({ token: z.string().min(20).max(100).openapi({ param: { name: 'token', in: 'path' } }) });
 
 export function approvalRoutes() {
@@ -106,8 +128,10 @@ export function approvalRoutes() {
               /** @deprecated kept for older app versions; stored as the label, no email is sent. */
               recipientEmail: z.string().trim().max(254).optional(),
               expiresInDays: z.number().int().min(1).max(90).default(14),
+              /** false = the client page leaves the budget out (no prices or totals). */
+              showPrices: z.boolean().default(true),
             })
-            .openapi({ example: { recipient: 'Familia Ortega · 809 555 0101', expiresInDays: 14 } }),
+            .openapi({ example: { recipient: 'Familia Ortega · 809 555 0101', expiresInDays: 14, showPrices: true } }),
         ),
       },
       responses: {
@@ -123,7 +147,7 @@ export function approvalRoutes() {
       const p = await getProject(c.var.deps.db, a, id);
       assertCan(a.user, 'project:send', { access: p.access });
       const input = c.req.valid('json');
-      const out = await createApprovalLink(c.var.deps, a, id, input.recipient || input.recipientEmail || 'Cliente', input.expiresInDays);
+      const out = await createApprovalLink(c.var.deps, a, id, input.recipient || input.recipientEmail || 'Cliente', input.expiresInDays, input.showPrices);
       return c.json({ link: linkJson(out.link), url: out.url, token: out.token, versionId: out.version.id }, 201);
     },
   );
@@ -255,8 +279,10 @@ export function publicRoutes() {
             plan: z.record(z.string(), z.unknown()),
             elevations: z.record(z.string(), z.unknown()),
             materials: z.array(z.record(z.string(), z.unknown())),
-            estimate: MoneySchema,
-            estimateDetail: z.record(z.string(), z.unknown()),
+            /** false when the designer sent it without the budget: estimate/estimateDetail/pdfUrl are then null and data has no price adjustments. */
+            showPrices: z.boolean(),
+            estimate: MoneySchema.nullable(),
+            estimateDetail: z.record(z.string(), z.unknown()).nullable(),
             pdfUrl: z.string().nullable(),
             canApprove: z.boolean(),
             expiresAt: z.iso.datetime(),
@@ -284,7 +310,7 @@ export function publicRoutes() {
           organization: {
             name: org!.name,
             // The client page only carries the organisation's branding on plans that include it.
-            ...(brandingAllowed(c.var.deps.config, org!) ? { logoUrl: org!.logoUrl, brandColor: org!.brandColor } : { logoUrl: null, brandColor: null }), terms: settings.aprobacion?.terminos ?? 'Acepto la distribución, materiales, medidas y el presupuesto estimado.' },
+            ...(brandingAllowed(c.var.deps.config, org!) ? { logoUrl: org!.logoUrl, brandColor: org!.brandColor } : { logoUrl: null, brandColor: null }), terms: termsFor(settings.aprobacion?.terminos, link.showPrices) },
           project: { name: row.name, type: data.ptype, client: data.client?.nombre ?? null, version: version.version },
           views: projectFiles.filter((f) => f.kind === 'render').map((f) => ({ name: f.name, url: f.variants.view2k ?? f.blobUrl, thumb: f.variants.thumb ?? null })),
           plan: plan(data) as unknown as Record<string, unknown>,
@@ -293,12 +319,14 @@ export function publicRoutes() {
             const m = ctx.materials[code];
             return { code, name: m?.name ?? code, type: m?.type ?? '', color: m?.color ?? null, groups: m?.groups ?? [] };
           }),
-          estimate: { amount: est.total, currency: est.currency, rate: est.rate },
-          estimateDetail: est as unknown as Record<string, unknown>,
-          pdfUrl: pdf?.blobUrl ?? null,
+          showPrices: link.showPrices,
+          estimate: link.showPrices ? { amount: est.total, currency: est.currency, rate: est.rate } : null,
+          estimateDetail: link.showPrices ? (est as unknown as Record<string, unknown>) : null,
+          // The stored PDF may carry the budget page, so it is only offered when prices are shown.
+          pdfUrl: link.showPrices ? (pdf?.blobUrl ?? null) : null,
           canApprove: !hasErrors(validateProject(data, ctx)),
           expiresAt: link.expiresAt.toISOString(),
-          data: version.data,
+          data: link.showPrices ? version.data : withoutPrices(version.data),
         },
         200,
       );

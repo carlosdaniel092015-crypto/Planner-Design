@@ -10,7 +10,9 @@ import { requireAuth } from '../services/auth';
 import { getFile } from '../services/files';
 import { requireFeature } from '../lib/plans';
 
-const DEFAULT_TERMS = 'Acepto la distribución, materiales, medidas y el presupuesto estimado.';
+export const DEFAULT_TERMS = 'Acepto la distribución, materiales, medidas y el presupuesto estimado.';
+/** Same terms for a client link sent without the budget. */
+export const DEFAULT_TERMS_NO_PRICES = 'Acepto la distribución, materiales y medidas.';
 
 const Org = z
   .object({

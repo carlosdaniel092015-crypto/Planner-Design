@@ -795,6 +795,7 @@ function SendDialog(props: {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [days, setDays] = useState(14);
+  const [showPrices, setShowPrices] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -806,7 +807,7 @@ function SendDialog(props: {
     try {
       if (!(await props.guard())) return;
       const recipient = [name.trim(), phone.trim()].filter(Boolean).join(' · ') || undefined;
-      const r = await api.sendToClient(props.project.id, { recipient, expiresInDays: days });
+      const r = await api.sendToClient(props.project.id, { recipient, expiresInDays: days, showPrices });
       setSent(r.url);
       props.onSent();
     } catch (e) {
@@ -874,6 +875,15 @@ function SendDialog(props: {
           <p style={{ margin: 0 }}>
             Congelamos esta versión con sus precios y creamos un enlace para que el cliente la revise y la firme; se lo mandas por WhatsApp. Un envío nuevo anula el enlace anterior.
           </p>
+          <label style={{ display: 'flex', alignItems: 'start', gap: 10, padding: 12, background: 'var(--color-surface)', border: '1px solid var(--color-divider)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={showPrices} onChange={(e) => setShowPrices(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: '2px 0 0', flex: 'none' }} />
+            <span>
+              <strong style={{ display: 'block', fontSize: 14 }}>Incluir el presupuesto</strong>
+              <span style={{ fontSize: 13, color: SOFT }}>
+                {showPrices ? 'El cliente verá los precios, el total y el PDF.' : 'El cliente verá el diseño, los planos y los materiales, sin precios ni totales.'}
+              </span>
+            </span>
+          </label>
           {props.blocked && <p style={{ margin: 0, color: 'var(--color-accent-700)' }}>Resuelve los errores de validación antes de enviar.</p>}
           <div className="field">
             <label htmlFor="send-name">Nombre del cliente (opcional)</label>
@@ -908,6 +918,7 @@ function SendDialog(props: {
                 <strong>{l.recipient ?? l.recipientEmail}</strong>
                 <span style={{ display: 'block', color: SOFT }}>
                   {dateEs(l.createdAt)} · {stateOf(l)}
+                  {l.showPrices === false && ' · sin presupuesto'}
                 </span>
               </span>
               {live(l) && (

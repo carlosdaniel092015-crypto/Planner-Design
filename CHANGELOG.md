@@ -3,6 +3,12 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.14.0 · 2026-09-26
+
+### Enviar al cliente con o sin presupuesto
+- Al crear el enlace para el cliente hay una casilla **«Incluir el presupuesto»**. Si la quitas, el cliente ve el diseño, los planos, los alzados y los materiales, **sin precios ni totales** (el servidor ni siquiera los manda a su teléfono), y el texto que acepta al firmar no menciona el presupuesto.
+- En «Envíos anteriores» se marca qué enlaces se mandaron «sin presupuesto». Tu proyecto conserva sus precios igual.
+
 ## 1.13.1 · 2026-09-25
 
 ### Aprobación en el teléfono
