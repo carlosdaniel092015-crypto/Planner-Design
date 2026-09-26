@@ -11,6 +11,9 @@ import {
   type ModuleInstance,
   plan,
   type ProjectData,
+  moveModule,
+  type Place,
+  placeOf,
   removeModule,
   replaceModule,
   setDim,
@@ -436,7 +439,65 @@ export function EditorPage() {
   // ---------- derived drawings ----------
   const cfg = useMemo(() => (data ? sceneCfg(data, { sel, sels: selIds, cotas, altos, dark }) : null), [data, sel, selIds, cotas, altos, dark]);
   const isoDrawing = useMemo(() => (data ? iso(data, materialsByCode as never, { sel, cotas, altos, zoom }) : null), [data, materialsByCode, sel, cotas, altos, zoom]);
-  const planDrawing = useMemo(() => (data && view === 'planta' ? plan(data, { sel, sels: selIds, altos, cotas }) : null), [data, view, sel, selIds, altos, cotas]);
+  // ---------- moving modules by dragging them in the plan (mouse, finger or pen) ----------
+  const [drag, setDrag] = useState<{ id: number; place: Place } | null>(null);
+  const dragStart = useRef<{ id: number; place: Place; x: number; y: number; sx: number; sy: number; moved: boolean; pointer: number } | null>(null);
+  const planData = useMemo(() => (data && drag ? moveModule(data, drag.id, drag.place) : data), [data, drag]);
+  const planDrawing = useMemo(() => (planData && view === 'planta' ? plan(planData, { sel, sels: selIds, altos, cotas }) : null), [planData, view, sel, selIds, altos, cotas]);
+  const toPlan = (e: React.PointerEvent, host: HTMLElement) => {
+    const svg = host.querySelector('svg');
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const q = pt.matrixTransform(ctm.inverse());
+    return { x: q.x, y: q.y };
+  };
+  const placeLabel = (pl: Place) => (pl.wall === 'F' ? `Isla · X ${Math.round(pl.x)} · Y ${Math.round(pl.y)} cm` : `Muro ${pl.wall} · ${Math.round(pl.pos)} cm desde la esquina`);
+  const planPointer = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (readOnly || !data || view !== 'planta' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const id = Number((e.target as Element).closest('[data-mid]')?.getAttribute('data-mid'));
+      const m = id ? data.mods.find((x) => x.id === id) : undefined;
+      const pt = m && toPlan(e, e.currentTarget);
+      if (!m || !pt) return;
+      dragStart.current = { id, place: placeOf(m), x: pt.x, y: pt.y, sx: e.clientX, sy: e.clientY, moved: false, pointer: e.pointerId };
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      const st = dragStart.current;
+      if (!st || st.pointer !== e.pointerId) return;
+      if (!st.moved) {
+        if (Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < 6) return;
+        st.moved = true;
+        // Captured only once it is a drag, so a plain tap still selects the module.
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+      const pt = toPlan(e, e.currentTarget);
+      if (!pt) return;
+      const dx = pt.x - st.x;
+      const dy = pt.y - st.y;
+      const p0 = st.place;
+      const place: Place = p0.wall === 'F' ? { wall: 'F', x: p0.x + dx, y: p0.y + dy } : { wall: p0.wall, pos: p0.pos + (p0.wall === 'A' || p0.wall === 'D' ? dx : dy) };
+      setDrag({ id: st.id, place });
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+      const st = dragStart.current;
+      dragStart.current = null;
+      if (!st || !st.moved || !data || !drag) return setDrag(null);
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      const next = moveModule(data, st.id, drag.place);
+      setDrag(null);
+      const m = next.mods.find((x) => x.id === st.id)!;
+      commit(next);
+      setSel(st.id);
+      flash(`Módulo ${st.id} movido · ${placeLabel(placeOf(m))} · Ctrl+Z para deshacer`);
+    },
+    onPointerCancel: () => {
+      dragStart.current = null;
+      setDrag(null);
+    },
+  };
   const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, sels: selIds, altos, cotas }) : null), [data, view, wall, materialsByCode, sel, selIds, altos, cotas]);
 
   if (loadError)
@@ -734,8 +795,16 @@ export function EditorPage() {
           <div style={{ flex: 1, minWidth: 0, position: 'relative', background: 'var(--sp-canvas)', overflow: 'hidden' }}>
             {cfg && <div style={{ position: 'absolute', inset: 0, visibility: is3d ? 'visible' : 'hidden' }}><Viewer3D cfg={cfg} onSelect={(i, add) => { pickModule(i, add); if (i) setRightOpen(true); setReplaceMode(false); }} onViewer={(v) => { viewer.current = v; v?.setOpen(open); }} fallback={<Svg drawing={isoDrawing} onPick={pickModule} />} /></div>}
             {flatView && (
-              <div style={{ position: 'absolute', inset: '64px 72px 24px 32px', transform: `scale(${zoom})`, transformOrigin: 'center' }}>
+              <div
+                {...(view === 'planta' ? planPointer : {})}
+                style={{ position: 'absolute', inset: '64px 72px 24px 32px', transform: `scale(${zoom})`, transformOrigin: 'center', touchAction: view === 'planta' && !readOnly ? 'none' : undefined }}
+              >
                 <Svg drawing={flatView} onPick={(i, add) => (pickModule(i, add), i && setRightOpen(true))} />
+              </div>
+            )}
+            {view === 'planta' && drag && planData && (
+              <div role="status" style={{ position: 'absolute', left: '50%', bottom: 16, transform: 'translateX(-50%)', background: 'var(--color-text)', color: 'var(--color-bg)', padding: '8px 14px', fontSize: 13, fontWeight: 700, zIndex: 4, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+                {placeLabel(placeOf(planData.mods.find((x) => x.id === drag.id)!))}
               </div>
             )}
 
@@ -861,6 +930,11 @@ export function EditorPage() {
                 setReplaceMode(true);
                 setLeftOpen(true);
                 setLeftTab('modulos');
+              }}
+              onMove={(to) => {
+                if (!sel) return;
+                const next = moveModule(data, sel, to);
+                commit(next);
               }}
               onRemove={() => {
                 if (!sel) return;
