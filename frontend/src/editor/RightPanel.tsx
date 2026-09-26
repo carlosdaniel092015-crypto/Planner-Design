@@ -1,4 +1,4 @@
-import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type Place, placeOf, type ProjectData, ranges } from '@core';
+import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type Place, placeOf, type ProjectData, ranges, usesBoards } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import type { CatalogMaterial } from '../api';
 import { fmtMoney, Icon, MUTED, Svg } from '../ui';
@@ -197,8 +197,10 @@ export function RightPanel(props: {
             {sel.glb && (
               <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
                 {sel.panels?.length
-                  ? `Módulo subido hecho por tablas (${sel.panels.length} piezas): se dibuja en 3D y se despieza con estos materiales.`
-                  : 'Módulo subido en 3D: el material elegido va a la lista de corte y al despiece; el modelo conserva sus colores en la vista 3D.'}
+                  ? usesBoards(sel)
+                    ? `Módulo subido convertido a nativo: sus puertas y cajones funcionan como los del catálogo y sus ${sel.panels.length} piezas reales van al despiece.`
+                    : 'Módulo subido convertido a nativo. Cambiaste sus frentes, así que se despieza como un módulo estándar.'
+                  : 'Módulo subido en 3D: se dibuja con su forma; el material que elijas se le aplica y va a la lista de corte y al despiece.'}
               </p>
             )}
             <div className="field">

@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
-import { kindOfType, modelWidthRange } from '../core';
+import { frontsFromPanels, kindOfType, type ModelPanel, modelWidthRange } from '../core';
 import type { DbOrTx } from '../db/client';
 import { files, materials, moduleDefinitions } from '../db/schema';
 import type { AuthContext } from '../lib/context';
@@ -119,6 +119,18 @@ export interface LibraryModuleResult {
   model: ModelInspection | null;
 }
 
+/**
+ * A model built from boards becomes a native module: its doors and drawers (read from the front boards) are its
+ * recipe, so it opens, takes handles and is drawn like the catalogue ones. A recipe that already has fronts stays.
+ */
+export function withNativeFronts<R extends Record<string, unknown>>(recipe: R): R {
+  const panels = recipe.panels as ModelPanel[] | undefined;
+  const pdim = recipe.pdim as [number, number, number] | undefined;
+  if (!panels?.length || !pdim || (Array.isArray(recipe.fr) && recipe.fr.length)) return recipe;
+  const fr = frontsFromPanels({ w: pdim[0], h: pdim[1], panels, pdim });
+  return fr.length ? { ...recipe, fr } : recipe;
+}
+
 export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthContext, input: z.infer<typeof LibraryModuleInput>): Promise<LibraryModuleResult> {
   const clean = noPriceUnlessAdmin(a, input);
   let model: ModelInspection | null = null;
@@ -152,7 +164,7 @@ export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
       fixedH: h,
       fixedD: input.fixedD ?? model?.bbox.d ?? 60,
       // A model built from boards brings its own despiece (each board with its real size).
-      recipe: { ...(input.recipe ?? { fr: [] }), ...(model?.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) },
+      recipe: withNativeFronts({ ...(input.recipe ?? { fr: [] }), ...(model?.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) }),
       modelFileId,
       materialSlots: input.materialSlots ?? (model ? Object.fromEntries(model.materials.map((m) => [m, 'fijo'])) : null),
       unitPrice: clean.unitPrice ?? 0,
@@ -173,7 +185,9 @@ export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
     // New model file: its boards replace the old despiece (or drop it if it isn't built from boards).
     const [cur] = await db.select({ recipe: moduleDefinitions.recipe }).from(moduleDefinitions).where(and(eq(moduleDefinitions.id, id), eq(moduleDefinitions.organizationId, a.org.id)));
     const { panels: _p, pdim: _d, ...base } = ((rest.recipe ?? cur?.recipe ?? { fr: [] }) as Record<string, unknown>);
-    rest.recipe = { ...base, ...(model.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) };
+    // The fronts follow the new model unless this same change sets them.
+    if (!(rest.recipe as { fr?: unknown[] } | undefined)?.fr?.length) base.fr = [];
+    rest.recipe = withNativeFronts({ ...base, ...(model.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) }) as typeof rest.recipe;
   }
   return { module: await updateModule(db, a, id, rest), model };
 }
@@ -190,25 +204,30 @@ export async function backfillModelPanels(db: DbOrTx, storage: Storage, orgId: s
   let done = 0;
   for (const r of rows) {
     const recipe = (r.recipe ?? { fr: [] }) as Record<string, unknown>;
-    if (!r.modelFileId || (Array.isArray(recipe.panels) && recipe.panels.length) || recipe.pscan) continue;
-    let next: Record<string, unknown> = { ...recipe, pscan: 1 };
+    let next = recipe;
     let widths: { minW: number; maxW: number } | undefined;
-    try {
-      const [f] = await db.select({ blobUrl: files.blobUrl }).from(files).where(and(eq(files.id, r.modelFileId), eq(files.organizationId, orgId)));
-      if (f) {
-        const insp = await inspectModel(await storage.get(f.blobUrl));
-        if (insp.panels.length) {
-          next = { ...next, panels: insp.panels, pdim: [insp.bbox.w, insp.bbox.h, insp.bbox.d] };
-          // A board-built model resizes: a fixed width (older uploads) opens to the usual range.
-          if (r.minW === r.maxW) {
-            const [minW, maxW] = modelWidthRange(r.defW);
-            widths = { minW, maxW };
+    if (r.modelFileId && !(Array.isArray(recipe.panels) && recipe.panels.length) && !recipe.pscan) {
+      next = { ...recipe, pscan: 1 };
+      try {
+        const [f] = await db.select({ blobUrl: files.blobUrl }).from(files).where(and(eq(files.id, r.modelFileId), eq(files.organizationId, orgId)));
+        if (f) {
+          const insp = await inspectModel(await storage.get(f.blobUrl));
+          if (insp.panels.length) {
+            next = { ...next, panels: insp.panels, pdim: [insp.bbox.w, insp.bbox.h, insp.bbox.d] };
+            // A board-built model resizes: a fixed width (older uploads) opens to the usual range.
+            if (r.minW === r.maxW) {
+              const [minW, maxW] = modelWidthRange(r.defW);
+              widths = { minW, maxW };
+            }
           }
         }
+      } catch (e) {
+        console.warn('[modelos] no se pudieron leer las piezas', r.id, (e as Error).message);
       }
-    } catch (e) {
-      console.warn('[modelos] no se pudieron leer las piezas', r.id, (e as Error).message);
     }
+    // Models whose boards were read before they became native modules get their doors and drawers.
+    next = withNativeFronts(next);
+    if (next === recipe && !widths) continue;
     await db.update(moduleDefinitions).set({ recipe: next, ...widths }).where(eq(moduleDefinitions.id, r.id));
     done++;
   }

@@ -1,7 +1,7 @@
 // Assembly drawings per module (millimetres) — ported from the prototype's exploded()/ortho().
 import { cols, type Drawing, type DrawItem, front2D } from './drawing';
 import { shade } from './geometry';
-import { frontsOf, type Part, panelDims, parts, placedPanels } from './parts';
+import { frontsOf, type Part, panelDims, parts, placedPanels, usesBoards } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -35,7 +35,7 @@ export function exploded(m: ModuleInstance, mats: ProjectData['mats'], materials
   const boxes: Box[] = [];
   const pr = parts(m, mats, materials);
   const ref = (g: string) => pr.find((p) => p.grp === g)?.ref;
-  const placed = placedPanels(m);
+  const placed = usesBoards(m) ? placedPanels(m) : [];
   if (placed.length) {
     // Boards of the uploaded model where they really are, pushed outwards along their thickness.
     const T = [W, D, H];

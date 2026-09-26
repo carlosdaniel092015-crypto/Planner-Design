@@ -5,6 +5,7 @@ import {
   type Currency,
   duplicateModule,
   elev,
+  frontsFromPanels,
   generateDesign,
   iso,
   type ModuleDefinition,
@@ -208,17 +209,23 @@ export function EditorPage() {
     },
     [data, readOnly],
   );
-  // Modules placed from the library before their model's boards were read get them now (despiece and 3D by
-  // board). Saved like any edit, without an undo step.
+  // Modules placed from the library before their model's boards were read get them now, and become native
+  // modules (doors and drawers from their boards). Saved like any edit, without an undo step.
   useEffect(() => {
     if (!data || !catalog || readOnly) return;
     const defs = catalog.context.modules;
     let changed = false;
     const mods = data.mods.map((m) => {
       const def = defs[m.code];
-      if (m.panels?.length || !def?.panels?.length || (!m.glb && !def.glb)) return m;
-      changed = true;
-      return { ...m, panels: def.panels, pdim: def.pdim };
+      let next = m;
+      if (!m.panels?.length && def?.panels?.length && (m.glb || def.glb)) next = { ...next, panels: def.panels, pdim: def.pdim };
+      // Native doors and drawers read from the boards (the module opens and is drawn like a catalogue one).
+      if (next.panels?.length && !next.fr.length) {
+        const fr = def?.panels?.length && def.fr.length ? def.fr : frontsFromPanels(next);
+        if (fr.length) next = { ...next, fr: structuredClone(fr) };
+      }
+      if (next !== m) changed = true;
+      return next;
     });
     if (!changed) return;
     dirty.current = true;

@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.18.0 · 2026-09-26
+
+### Lo que subes a la biblioteca funciona como un módulo nativo
+- Los muebles que subes hechos por tablas (3DS, SketchUp, GLB) **se convierten en módulos nativos**: Planner lee sus puertas y gavetas de las piezas de frente (una puerta, dos puertas, tres gavetas…) y los dibuja con el mismo motor que los del catálogo. Así tienen **zócalo, el material y la textura que elijas, jaladeras, y puertas y gavetas que se abren**, en 3D, en planta, en los alzados, en la vista isométrica y en el PDF. También en islas.
+- Sus **piezas reales** siguen yendo al despiece y a la lista de corte. Si cambias el número de puertas o gavetas en el editor, se despieza como un módulo estándar.
+- Las piezas de la caja de una gaveta (laterales, trasera, fondo) ya no se toman como frentes.
+- Los módulos que ya habías subido y los que ya tenías colocados se convierten solos al abrir el editor.
+
+### Corrección
+- Después de actualizar, el 3D podía seguir usando el motor anterior hasta cerrar la app (por eso tu módulo se veía como caja blanca sin zócalo). Ahora cada versión trae su propio motor 3D y nunca se mezclan.
+
 ## 1.17.0 · 2026-09-26
 
 ### Mover módulos en el teléfono y la tableta
