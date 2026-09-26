@@ -157,3 +157,58 @@ export function updateModule(p: ProjectData, id: number, patch: Partial<ModuleIn
     }),
   };
 }
+
+// ---------- moving ----------
+export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number };
+
+/** Distance (cm) within which a moved module snaps to a corner or to the edge of a neighbour. */
+export const SNAP_CM = 4;
+
+/**
+ * Moves a module along a wall (kept inside it and snapped to corners and neighbours on the same level) or to
+ * a free-standing spot (inside the room). Widths never change; overlaps are left to validation to flag.
+ */
+export function moveModule(p: ProjectData, id: number, to: Place, snap = SNAP_CM): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m) return p;
+  const { A, B } = p.room;
+  const snapTo = (v: number, targets: number[], lo: number, hi: number) => {
+    const c = Math.max(lo, Math.min(hi, v));
+    let best = c;
+    let dist = snap + 1e-9;
+    for (const t of targets) {
+      if (t < lo - 1e-9 || t > hi + 1e-9) continue;
+      const d = Math.abs(c - t);
+      if (d <= dist) {
+        best = t;
+        dist = d;
+      }
+    }
+    return Math.round(best);
+  };
+  let patch: Partial<ModuleInstance>;
+  if (to.wall === 'F') {
+    const hiX = Math.max(0, A - m.w);
+    const hiY = Math.max(0, B - m.d);
+    patch = { wall: 'F', pos: undefined, x: snapTo(to.x, [0, hiX], 0, hiX), y: snapTo(to.y, [0, hiY], 0, hiY) };
+  } else {
+    const len = to.wall === 'A' || to.wall === 'D' ? A : B;
+    const hi = Math.max(0, len - m.w);
+    const neighbours = p.mods.filter((x) => x.id !== id && x.wall === to.wall && isFloor(x) === isFloor(m) && x.pos != null);
+    const targets = [0, hi, ...neighbours.flatMap((x) => [x.pos! - m.w, x.pos! + x.w])];
+    patch = { wall: to.wall, pos: snapTo(to.pos, targets, 0, hi), x: undefined, y: undefined };
+  }
+  return {
+    ...p,
+    mods: p.mods.map((x) => {
+      if (x.id !== id) return x;
+      const next = { ...x, ...patch };
+      for (const k of ['pos', 'x', 'y'] as const) if (next[k] === undefined) delete next[k];
+      return next;
+    }),
+  };
+}
+
+/** Where a module stands, as a Place (islands have x/y, the rest a wall and a distance from its corner). */
+export const placeOf = (m: Pick<ModuleInstance, 'wall' | 'pos' | 'x' | 'y'>): Place =>
+  m.wall === 'F' ? { wall: 'F', x: m.x ?? 0, y: m.y ?? 0 } : { wall: m.wall, pos: m.pos ?? 0 };

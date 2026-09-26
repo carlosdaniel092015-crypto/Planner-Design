@@ -112,7 +112,7 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
   if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
     // Modules uploaded as boards are drawn board by board (planner-3d.js), so they take the chosen materials.
-    mods: p.mods.map((m) => (m.panels?.length ? { ...m, boards: placedPanels(m).map((pp) => ({ b: pp.box, slot: pp.slot, thin: pp.thin })) } : m)),
+    mods: p.mods.map((m) => (m.panels?.length ? { ...m, boards: placedPanels(m).map((pp) => ({ b: pp.box, slot: pp.slot, thin: pp.thin, drawer: /caj[oó]n|drawer/i.test(pp.panel.n) })) } : m)),
     mats: p.mats,
     room: p.room,
     ops: p.ops,

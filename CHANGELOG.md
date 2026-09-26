@@ -3,6 +3,19 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.17.0 · 2026-09-26
+
+### Mover módulos en el teléfono y la tableta
+- **Arrastra los módulos en la vista Planta** con el dedo, el ratón o el lápiz: el módulo se desliza por su muro (o libremente si es de isla) y **se alinea solo** con las esquinas y con el borde de los módulos vecinos. Mientras lo mueves ves «Muro A · 120 cm desde la esquina». Un toque sin arrastrar lo sigue seleccionando.
+- Nueva sección **«Ubicación»** en las propiedades del módulo: elige el **muro** (A, B, C, D o isla), escribe la **distancia desde la esquina** o usa los botones **‹ › « »** para moverlo 1 o 5 cm (si los mantienes presionados, sigue avanzando). En los de isla, X, Y y flechas.
+- Todo se puede deshacer con Ctrl+Z o el botón deshacer.
+
+### Módulos subidos: puertas, texturas y zócalo
+- **Las puertas y cajones de tus modelos se abren** con el botón «Abrir puertas y cajones» de la vista 3D, girando sobre su bisagra como los del catálogo, con su jaladera.
+- **La textura o el material de frente que eliges se ve en el 3D**, también en los modelos que no están hechos por tablas (antes solo cambiaba en el despiece).
+- En los **alzados** los módulos subidos dibujan sus **puertas en su posición real**, con jaladera y línea de apertura.
+- Los modelos que **ya habías subido** leen sus piezas solos la próxima vez que abres el editor, y los que ya estaban colocados en tus proyectos las toman al abrir el proyecto: **no hace falta volver a subirlos**. Su ancho deja de ser fijo.
+
 ## 1.16.0 · 2026-09-26
 
 ### Módulos y texturas que subes

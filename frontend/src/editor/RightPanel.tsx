@@ -1,5 +1,5 @@
-import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type ProjectData, ranges } from '@core';
-import { useEffect, useState } from 'react';
+import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type Place, placeOf, type ProjectData, ranges } from '@core';
+import { useEffect, useRef, useState } from 'react';
 import type { CatalogMaterial } from '../api';
 import { fmtMoney, Icon, MUTED, Svg } from '../ui';
 import { frontThumb } from './engine';
@@ -51,6 +51,7 @@ export function RightPanel(props: {
   onDuplicate: () => void;
   onReplace: () => void;
   onRemove: () => void;
+  onMove: (to: Place) => void;
 }) {
   const { data, sel, currency, rate, readOnly } = props;
   const line = sel ? props.estimate.lines.find((l) => l.id === sel.id) : undefined;
@@ -129,6 +130,8 @@ export function RightPanel(props: {
             <Icon name="x" size={15} />
           </button>
         </div>
+
+        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
           <h6 style={{ margin: 0 }}>Medidas</h6>
@@ -275,5 +278,121 @@ export function RightPanel(props: {
         </div>
       )}
     </aside>
+  );
+}
+
+/** Big button that repeats while held (touch or mouse), for nudging a module a few cm at a time. */
+function Nudge({ label, icon, onStep, disabled }: { label: string; icon: string; onStep: () => void; disabled?: boolean }) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const step = useRef(onStep);
+  step.current = onStep;
+  const stop = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => stop, []);
+  const start = () => {
+    stop();
+    step.current();
+    const again = (delay: number) => {
+      timer.current = setTimeout(() => {
+        step.current();
+        again(90);
+      }, delay);
+    };
+    again(400);
+  };
+  return (
+    <button
+      type="button"
+      className="btn btn-secondary"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        start();
+      }}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onStep())}
+      style={{ minWidth: 44, height: 40, padding: 0, justifyContent: 'center', touchAction: 'none' }}
+    >
+      <Icon name={icon} size={16} />
+    </button>
+  );
+}
+
+const WALLS = [
+  ['A', 'Muro A'],
+  ['B', 'Muro B'],
+  ['C', 'Muro C'],
+  ['D', 'Muro D'],
+  ['F', 'Isla (libre)'],
+] as const;
+
+/** Where the module stands: wall, distance from its corner and nudge buttons (islands: X and Y). Works with a finger. */
+function Ubicacion({ sel, room, readOnly, onMove }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void }) {
+  const at = placeOf(sel);
+  const upper = sel.type === 'upper' || sel.type === 'hood';
+  const setWall = (w: string) => {
+    if (w === at.wall) return;
+    if (w === 'F') onMove({ wall: 'F', x: Math.round((room.A - sel.w) / 2), y: Math.round((room.B - sel.d) / 2) });
+    else onMove({ wall: w as 'A', pos: at.wall === 'F' ? 0 : at.pos });
+  };
+  const by = (dx: number, dy = 0) => (at.wall === 'F' ? onMove({ wall: 'F', x: at.x + dx, y: at.y + dy }) : onMove({ wall: at.wall, pos: at.pos + dx }));
+  const lenW = at.wall === 'A' || at.wall === 'D' ? room.A : room.B;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
+      <h6 style={{ margin: 0 }}>Ubicación</h6>
+      <div className="field">
+        <label>Muro</label>
+        <select className="input" aria-label="Muro del módulo" value={at.wall} onChange={(e) => setWall(e.target.value)} disabled={readOnly}>
+          {WALLS.filter(([k]) => !(upper && k === 'F')).map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </div>
+      {at.wall !== 'F' ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>
+              Desde la esquina <span style={{ fontWeight: 400, color: MUTED }}>0–{Math.max(0, lenW - sel.w)} cm</span>
+            </label>
+            <div style={{ position: 'relative', width: 86 }}>
+              <NumberField value={at.pos} min={0} disabled={readOnly} label="Distancia desde la esquina" onCommit={(v) => onMove({ wall: at.wall, pos: v })} style={{ padding: '4px 28px 4px 8px', minHeight: 32, width: '100%' }} />
+              <span style={{ position: 'absolute', right: 8, top: 7, fontSize: 12, opacity: 0.6 }}>cm</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between' }}>
+            <Nudge label="Mover 5 cm hacia la esquina" icon="chevrons-left" onStep={() => by(-5)} disabled={readOnly} />
+            <Nudge label="Mover 1 cm hacia la esquina" icon="chevron-left" onStep={() => by(-1)} disabled={readOnly} />
+            <Nudge label="Mover 1 cm" icon="chevron-right" onStep={() => by(1)} disabled={readOnly} />
+            <Nudge label="Mover 5 cm" icon="chevrons-right" onStep={() => by(5)} disabled={readOnly} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {(['x', 'y'] as const).map((k) => (
+              <div key={k} className="field">
+                <label>{k === 'x' ? 'X (desde muro B)' : 'Y (desde muro A)'}</label>
+                <NumberField value={at[k]} min={0} disabled={readOnly} label={k === 'x' ? 'Posición X' : 'Posición Y'} onCommit={(v) => onMove({ ...at, [k]: v })} style={{ padding: '4px 8px', minHeight: 32, width: '100%' }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            <Nudge label="Mover 5 cm a la izquierda" icon="arrow-left" onStep={() => by(-5, 0)} disabled={readOnly} />
+            <Nudge label="Mover 5 cm hacia arriba" icon="arrow-up" onStep={() => by(0, -5)} disabled={readOnly} />
+            <Nudge label="Mover 5 cm hacia abajo" icon="arrow-down" onStep={() => by(0, 5)} disabled={readOnly} />
+            <Nudge label="Mover 5 cm a la derecha" icon="arrow-right" onStep={() => by(5, 0)} disabled={readOnly} />
+          </div>
+        </>
+      )}
+      <p style={{ margin: 0, fontSize: 12, color: MUTED }}>También puedes arrastrarlo en la vista Planta. Se alinea solo con las esquinas y los módulos vecinos.</p>
+    </div>
   );
 }
