@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.19.0 · 2026-09-26
+
+### Crea y convierte tus módulos dentro de Planner
+- **Crear módulo** (Bibliotecas → Módulos): nombre, montaje (bajo, alto o columna), categoría, ancho con su mínimo y máximo, alto, fondo, precio y **frentes**: puertas (1 a 4 por fila), gavetas, abierto con repisas o hueco de horno, cada uno con su alto en cm. Lo ves en una vista previa mientras lo armas, y el alto de los frentes se ajusta solo a la altura del módulo.
+- **Convertir y frentes** en cada módulo que subes desde **Polyboard** (3DS o DAE) o **SketchUp** (.skp):
+  - elige cómo se dibuja: **módulo nativo** (puertas y gavetas que abren, zócalo, jaladeras y tu material) o **modelo 3D tal cual**, con su forma y colores, útil para electrodomésticos o decoración;
+  - corrige las puertas y gavetas que Planner detectó en tus piezas, o vuelve a las del modelo con un toque;
+  - un modelo que no viene por tablas también se puede convertir a nativo, poniéndole tú sus frentes.
+- Los módulos paramétricos de la biblioteca también tienen «Editar frentes».
+- Consejo: para que Planner lea el despiece real, exporta cada tabla como pieza separada con su nombre (Puerta, Gaveta, Lateral, Suelo, Trasera…).
+
 ## 1.18.0 · 2026-09-26
 
 ### Lo que subes a la biblioteca funciona como un módulo nativo

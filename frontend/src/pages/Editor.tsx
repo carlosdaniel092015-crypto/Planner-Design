@@ -219,6 +219,11 @@ export function EditorPage() {
       const def = defs[m.code];
       let next = m;
       if (!m.panels?.length && def?.panels?.length && (m.glb || def.glb)) next = { ...next, panels: def.panels, pdim: def.pdim };
+      // How the model is drawn (native or as-is) follows the library.
+      if (m.glb && def && def.draw !== m.draw) {
+        const { draw: _d, ...rest } = next;
+        next = (def.draw ? { ...rest, draw: def.draw } : rest) as typeof m;
+      }
       // Native doors and drawers read from the boards (the module opens and is drawn like a catalogue one).
       if (next.panels?.length && !next.fr.length) {
         const fr = def?.panels?.length && def.fr.length ? def.fr : frontsFromPanels(next);

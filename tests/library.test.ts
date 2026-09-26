@@ -275,6 +275,29 @@ describe('biblioteca', () => {
     expect(again.panels).toHaveLength(8);
   });
 
+  it('se crea un módulo dentro de la app y un modelo subido se puede dejar como modelo 3D o volver a nativo', async () => {
+    const created = await t.req('POST', '/library/modules', { user: dis, body: { source: 'parametrico', name: 'Bajo gaveta y 2 puertas', type: 'base', category: 'Bajos', defW: 80, minW: 40, maxW: 120, fixedH: 76, fixedD: 60, unitPrice: 0, recipe: { fr: [{ t: 'door', n: 2, f: 0.75 }, { t: 'drawer', f: 0.25 }] } } });
+    expect(created.status, JSON.stringify(created.data)).toBe(201);
+    let cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    expect(cat.context.modules[created.data.module.code]).toMatchObject({ w: 80, rw: [40, 120], fr: [{ t: 'door', n: 2, f: 0.75 }, { t: 'drawer', f: 0.25 }] });
+
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/mb_1_puerta.3ds', import.meta.url)));
+    const f = await upload(dis, 'modelo3d', 'MB_POLY.3ds', bytes, 'application/octet-stream');
+    const mod = (await t.req('POST', '/library/modules', { user: dis, body: { name: 'MB poly', source: 'modelo3d', modelFileId: f.data.id } })).data.module;
+    const asModel = await t.req('PATCH', `/library/modules/${mod.id}`, { user: dis, body: { recipe: { ...mod.recipe, draw: 'modelo' } } });
+    expect(asModel.status, JSON.stringify(asModel.data)).toBe(200);
+    cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    expect(cat.context.modules[mod.code].draw).toBe('modelo');
+    // Back to native with two doors set by hand: the despiece switches to the standard box (fronts changed).
+    await t.req('PATCH', `/library/modules/${mod.id}`, { user: dis, body: { recipe: { ...mod.recipe, draw: 'nativo', fr: [{ t: 'door', n: 2, f: 1 }] } } });
+    cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.modules[mod.code];
+    expect(def).toMatchObject({ draw: 'nativo', fr: [{ t: 'door', n: 2, f: 1 }] });
+    const inst = { ...templateOf(def), id: 1, wall: 'A', pos: 0 } as unknown as ModuleInstance;
+    expect(inst.draw).toBe('nativo');
+    expect(parts(inst, DEFAULT_KITCHEN.mats, cat.context.materials).find((p) => p.pieza === 'Puerta')!.cant).toBe(2);
+  });
+
   it('un .3ds (suelto o en ZIP con su textura) se convierte a GLB', async () => {
     const f = await upload(dis, 'modelo3d', 'mueble.3ds', tds('roble.png'), 'application/octet-stream');
     expect(f.status, JSON.stringify(f.data)).toBe(201);
