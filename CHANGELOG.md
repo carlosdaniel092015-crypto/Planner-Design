@@ -7,6 +7,7 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 
 ### Módulos y texturas que subes
 - **Despiece real de tus muebles:** si el modelo que subes (3DS, SketchUp o GLB) está hecho por tablas, como los que exportan los programas de carpintería, Planner lee **cada pieza con su nombre y medida real** (laterales, suelo, trasera, entrepaños, divisiones, puertas…). Aparecen en **Planos de ensamblaje**, la **vista explosionada**, la **lista de corte** y el **PDF**. Las puertas y frentes toman el material de frentes y el resto el del cuerpo, incluidas las texturas que subas.
+- En la **vista 3D** esos muebles se dibujan pieza por pieza con los materiales y texturas que elijas (la puerta con el de frentes, el resto con el del cuerpo), en lugar del color fijo del archivo.
 - Si cambias el ancho, alto o fondo del módulo, las piezas se ajustan: los espesores no cambian, los laterales siguen en su lugar y las tablas que van de lado a lado crecen lo mismo que el mueble.
 - Un modelo que no está hecho por tablas se despieza como una caja estándar con sus medidas.
 - El **ancho** de un módulo subido ya se puede editar, de la mitad al doble de su ancho original, también en los que ya tenías.

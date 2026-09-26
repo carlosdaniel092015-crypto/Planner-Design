@@ -191,7 +191,13 @@ export function RightPanel(props: {
         {buildable && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
             <h6 style={{ margin: 0 }}>Materiales y herrajes</h6>
-            {sel.glb && <p style={{ margin: 0, fontSize: 12, color: MUTED }}>Módulo subido en 3D: el material elegido va a la lista de corte y al despiece; el modelo conserva sus colores en la vista 3D.</p>}
+            {sel.glb && (
+              <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
+                {sel.panels?.length
+                  ? `Módulo subido hecho por tablas (${sel.panels.length} piezas): se dibuja en 3D y se despieza con estos materiales.`
+                  : 'Módulo subido en 3D: el material elegido va a la lista de corte y al despiece; el modelo conserva sus colores en la vista 3D.'}
+              </p>
+            )}
             <div className="field">
               <label>Cuerpo</label>
               <select className="input" value={sel.cue ?? ''} onChange={(e) => props.onPatch({ cue: e.target.value || undefined })} disabled={readOnly}>

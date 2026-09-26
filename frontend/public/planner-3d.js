@@ -215,6 +215,17 @@ function buildModule(m, ctx) {
   const zr = E.zr(m, ctx.zoc), yb = zr[0] / 100, yt = zr[1] / 100;
   const bodyId = m.cue || ctx.mats.cuerpo, frId = m.fre || ctx.mats.frentes, hdMat = baseMat(ctx.mats.jaladeras);
   let seed = m.id * 97 + Math.round(m.pos || m.x || 0);
+  if (m.boards && m.boards.length) {
+    // Uploaded model built from boards: each board where it is, in the project's body / front material.
+    for (const bd of m.boards) {
+      const [x0, x1, y0, y1, z0, z1] = bd.b.map(v => v / 1000);
+      const bw = x1 - x0, bh = z1 - z0, bdp = y1 - y0;
+      const faceW = bd.thin === 0 ? bdp : bw, faceH = bd.thin === 2 ? bdp : bh;
+      const id = bd.slot === 'frentes' ? frId : bodyId;
+      bx(g, bw, bh, bdp, texMat(id, faceW, faceH, bd.slot === 'frentes' && faceW > faceH, seed++), x0, yb + z0, y0);
+    }
+    return g;
+  }
   if (m.glb) {
     const src = glbCache[m.glb + '_scene'];
     const y0 = m.type === 'upper' ? 1.5 : 0, y1 = m.type === 'upper' ? 1.5 + H : yt;
