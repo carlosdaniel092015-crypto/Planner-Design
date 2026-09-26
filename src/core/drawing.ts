@@ -1,6 +1,7 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
 import { geo, shade, wallPt, zocaloCm, zr } from './geometry';
+import { frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
 
@@ -246,7 +247,7 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
     const C = cols(m, p.mats, materials);
     const [z0, z1] = zr(m, zoc);
     if ((m.type === 'base' || m.type === 'tall') && zoc > 0) rect(m.pos!, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
-    front2D(m, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id);
+    front2D({ ...m, fr: frontsOf(m) }, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id);
     if (m.type === 'hood') rect(m.pos! + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
     if (m.type === 'base') rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
     const top = m.type === 'base' ? z1 + 4 : z1;

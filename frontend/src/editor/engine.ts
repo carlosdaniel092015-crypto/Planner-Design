@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { type CameraState, type Drawing, type DrawItem, front2D, geo, type ModuleInstance, placedPanels, type ProjectData, zocaloCm, zr } from '@core';
+import { type CameraState, type Drawing, type DrawItem, front2D, frontsOf, geo, type ModuleInstance, placedPanels, type ProjectData, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -136,7 +136,7 @@ export function colorsFor(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectD
 /** Prototype frontThumb(): the module's front elevation with some padding. */
 export function frontThumb(m: ModuleInstance, mats: ProjectData['mats'], byCode: Record<string, { color: string }>, apertura?: string): Drawing {
   const items: DrawItem[] = [];
-  front2D(m, 0, 0, m.w, m.h, colorsFor(m, mats, byCode), handleOf(apertura), items);
+  front2D({ ...m, fr: frontsOf(m) }, 0, 0, m.w, m.h, colorsFor(m, mats, byCode), handleOf(apertura), items);
   const pad = Math.max(m.w, m.h) * 0.08;
   return { items, vb: [-pad, -pad, m.w + pad * 2, m.h + pad * 2] };
 }

@@ -12,6 +12,8 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 - Un modelo que no está hecho por tablas se despieza como una caja estándar con sus medidas.
 - El **ancho** de un módulo subido ya se puede editar, de la mitad al doble de su ancho original, también en los que ya tenías.
 - Lo que subes a la biblioteca aparece en el editor **al momento**; antes podía tardar hasta un minuto.
+- Los módulos subidos se colocan **sobre el zócalo** como los demás (en 3D y en alzados), en lugar de estirarse hasta el piso.
+- Al seleccionar un módulo subido aparece **«Materiales y herrajes»** (cuerpo, frente y herrajes), como en los módulos del catálogo.
 - El precio de los módulos subidos no cambia.
 - Los módulos que ya habías subido usan la caja estándar. Para que tomen sus piezas reales, vuelve a subir el modelo.
 
