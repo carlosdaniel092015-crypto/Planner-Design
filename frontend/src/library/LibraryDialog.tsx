@@ -1,9 +1,10 @@
 // Bibliotecas: the organisation's own textures and modules (JSON, GLB and 3DS/OBJ/DAE/FBX converted to GLB), stored on the server.
-import { DEFAULT_MODULES } from '@core';
+import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
 import { Icon, MUTED } from '../ui';
 import { formatOf, MODEL_EXT, toGlb } from './convert';
+import { FrontsEditor } from './FrontsEditor';
 import { type LibModule, type LibTexture, lib, uploadFile } from './upload';
 
 type Tab = 'tex' | 'mod';
@@ -28,6 +29,19 @@ function guessTexture(name: string) {
 }
 const finishOf = (t: LibTexture & { roughness?: number | null }) => ((t.roughness ?? 0.6) < 0.3 ? 'Brillante' : (t.roughness ?? 0.6) < 0.5 ? 'Satinado' : 'Mate');
 const prettyName = (file: string) => file.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 120);
+
+type Montaje = 'base' | 'upper' | 'tall';
+/** Starting point of a module created in the app, per mounting. */
+const NEW_DEFAULTS: Record<Montaje, { defW: number; minW: number; maxW: number; fixedH: number; fixedD: number; category: string; fr: FrontSegment[] }> = {
+  base: { defW: 60, minW: 30, maxW: 120, fixedH: 76, fixedD: 60, category: 'Bajos', fr: [{ t: 'door', n: 1, f: 1 }] },
+  upper: { defW: 60, minW: 30, maxW: 120, fixedH: 70, fixedD: 35, category: 'Altos', fr: [{ t: 'door', n: 1, f: 1 }] },
+  tall: { defW: 60, minW: 40, maxW: 90, fixedH: 210, fixedD: 60, category: 'Columnas', fr: [{ t: 'door', n: 1, f: 0.6 }, { t: 'door', n: 1, f: 0.4 }] },
+};
+const fieldsOf = (m: LibModule) => {
+  const r = (m.recipe ?? {}) as { fr?: FrontSegment[]; panels?: ModelPanel[]; pdim?: [number, number, number]; draw?: 'nativo' | 'modelo' };
+  const panels = r.panels ?? [];
+  return { fr: r.fr ?? [], panels, pdim: r.pdim, draw: r.draw ?? (panels.length ? 'nativo' : 'modelo') };
+};
 
 const TEMPLATE = [
   { code: 'MB-100', name: 'Bajo 2 puertas con cajón', type: 'base', category: 'Mis módulos', minW: 60, maxW: 120, defW: 100, fixedH: 76, fixedD: 60, recipe: { fr: [{ t: 'drawer', f: 0.25 }, { t: 'door', n: 2, f: 0.75 }] }, unitPrice: 3000, priceCurrency: 'DOP' },
@@ -172,6 +186,31 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
       setMsgs([`${m.name}: ${errText(e)}`]);
       load();
     }
+  };
+
+  const [creating, setCreating] = useState<null | { name: string; type: Montaje; category: string; defW: number; minW: number; maxW: number; fixedH: number; fixedD: number; unitPrice: number; fr: FrontSegment[] }>(null);
+  const startNew = (type: Montaje = 'base') => setCreating({ name: '', type, unitPrice: 0, ...NEW_DEFAULTS[type] });
+  const createNew = async () => {
+    if (!creating) return;
+    const { name, ...rest } = creating;
+    if (!name.trim()) return setMsgs(['Ponle un nombre al módulo.']);
+    if (rest.minW > rest.defW || rest.defW > rest.maxW) return setMsgs(['El ancho debe estar entre el ancho mínimo y el máximo.']);
+    setBusy('Creando el módulo…');
+    try {
+      const r = await lib.createModule({ source: 'parametrico', name: name.trim(), type: rest.type, category: rest.category, defW: rest.defW, minW: rest.minW, maxW: rest.maxW, fixedH: rest.fixedH, fixedD: rest.fixedD, unitPrice: rest.unitPrice, priceCurrency: 'DOP', recipe: { fr: rest.fr } });
+      touch();
+      setCreating(null);
+      setMsgs([`Módulo "${r.module.name}" creado (${r.module.code}). Ya aparece en la pestaña Módulos, en «${r.module.category}».`]);
+      await load();
+    } catch (e) {
+      setMsgs([errText(e)]);
+    }
+    setBusy(null);
+  };
+  const setRecipe = (m: LibModule, patch: Record<string, unknown>) => {
+    const recipe = { ...(m.recipe ?? { fr: [] }), ...patch } as Record<string, unknown>;
+    for (const k of Object.keys(recipe)) if (recipe[k] === undefined) delete recipe[k];
+    return patchMod(m, { recipe });
   };
 
   const downloadTemplate = () => {
@@ -370,12 +409,75 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           {tab === 'mod' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: MUTED, flexWrap: 'wrap' }}>
-                <span style={{ flex: 1, minWidth: 240 }}>JSON para módulos paramétricos (frentes, rango de ancho, precio). Modelos 3D para electrodomésticos y accesorios; se colocan a su medida real.</span>
+                <span style={{ flex: 1, minWidth: 240 }}>
+                  Crea tus módulos aquí mismo, o sube los que diseñas en <b>Polyboard</b> (exporta 3DS o DAE) o <b>SketchUp</b> (.skp): si vienen por tablas con su nombre (Puerta, Gaveta, Lateral…) se convierten en módulos nativos con su despiece real.
+                </span>
+                {canWrite && !creating && (
+                  <button type="button" className="btn btn-primary" onClick={() => startNew()}>
+                    <Icon name="plus" size={15} />
+                    Crear módulo
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" onClick={downloadTemplate}>
                   <Icon name="file-json" size={15} />
                   Descargar plantilla JSON
                 </button>
               </div>
+              {creating && (
+                <div role="group" aria-label="Nuevo módulo" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, border: '2px solid var(--color-accent)', background: 'var(--color-bg)' }}>
+                  <div style={{ fontWeight: 800, fontSize: 15 }}>Nuevo módulo</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10 }}>
+                    <div className="field" style={{ gridColumn: 'span 2' }}>
+                      <label htmlFor="nm-name">Nombre</label>
+                      <input id="nm-name" className="input" value={creating.name} maxLength={120} placeholder="Bajo 2 puertas con gaveta" onChange={(e) => setCreating({ ...creating, name: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="nm-type">Montaje</label>
+                      <select id="nm-type" className="input" value={creating.type} onChange={(e) => setCreating({ name: creating.name, type: e.target.value as Montaje, unitPrice: creating.unitPrice, ...NEW_DEFAULTS[e.target.value as Montaje] })}>
+                        <option value="base">Bajo (con encimera)</option>
+                        <option value="upper">Alto (a 150 cm)</option>
+                        <option value="tall">Columna</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="nm-cat">Categoría</label>
+                      <select id="nm-cat" className="input" value={creating.category} onChange={(e) => setCreating({ ...creating, category: e.target.value })}>
+                        {CATS.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {(
+                      [
+                        ['defW', 'Ancho cm', 10, 400],
+                        ['minW', 'Ancho mín.', 10, 400],
+                        ['maxW', 'Ancho máx.', 10, 400],
+                        ['fixedH', 'Alto cm', 10, 300],
+                        ['fixedD', 'Fondo cm', 10, 120],
+                        ['unitPrice', 'Precio (RD$)', 0, 10_000_000],
+                      ] as const
+                    ).map(([k, l, lo, hi]) => (
+                      <div key={k} className="field">
+                        <label htmlFor={`nm-${k}`}>{l}</label>
+                        <input id={`nm-${k}`} className="input" type="number" min={lo} max={hi} value={creating[k]} onChange={(e) => setCreating({ ...creating, [k]: Math.max(lo, Math.min(hi, Math.round(Number(e.target.value) || 0))) })} />
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, marginBottom: 6, color: MUTED }}>Frentes</div>
+                    <FrontsEditor w={creating.defW} h={creating.fixedH} type={creating.type} fr={creating.fr} onChange={(fr) => setCreating((c) => (c ? { ...c, fr } : c))} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setCreating(null)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={createNew} disabled={!!busy}>
+                      <Icon name="check" size={15} />
+                      Crear módulo
+                    </button>
+                  </div>
+                </div>
+              )}
               {mods?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay módulos propios.</p>}
               {mods?.map((m) => (
                 <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 36px', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'start' }}>
@@ -427,10 +529,6 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                       <label>Precio ({m.priceCurrency === 'USD' ? 'US$' : 'RD$'})</label>
                       <input className="input" type="number" min={0} defaultValue={m.unitPrice} disabled={!canWrite} onBlur={(e) => Number(e.target.value) !== m.unitPrice && patchMod(m, { unitPrice: Math.max(0, Number(e.target.value) || 0) })} />
                     </div>
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: MUTED }}>
-                      <span className="tag tag-neutral">{m.source === 'modelo3d' ? 'Modelo 3D (GLB)' : 'Paramétrico'}</span>
-                      {m.source === 'modelo3d' ? 'Se dibuja con su modelo en el 3D; el ancho del catálogo solo sirve para ubicarlo.' : 'Frentes y despiece según su receta.'}
-                    </div>
                   </div>
                   {canWrite && (
                     <button
@@ -448,6 +546,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                       <Icon name="trash-2" size={16} />
                     </button>
                   )}
+                  <ModuleFronts m={m} canWrite={canWrite} onRecipe={(patch) => setRecipe(m, patch)} />
                 </div>
               ))}
             </>
@@ -460,6 +559,70 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Fronts of a library module and, for uploaded models, whether it is drawn as a native module or as-is. */
+function ModuleFronts({ m, canWrite, onRecipe }: { m: LibModule; canWrite: boolean; onRecipe: (patch: Record<string, unknown>) => void }) {
+  const [open, setOpen] = useState(false);
+  const f = fieldsOf(m);
+  const uploaded = m.source === 'modelo3d';
+  const electro = m.type === 'fridge' || m.type === 'hood';
+  const native = !uploaded || f.draw === 'nativo';
+  const detected = f.panels.length ? frontsFromPanels({ w: m.defW, h: m.fixedH, panels: f.panels, pdim: f.pdim }) : [];
+  const summary = (fr: FrontSegment[]) => {
+    if (!fr.length) return 'sin frentes';
+    const doors = fr.filter((x) => x.t === 'door').reduce((a, x) => a + (x.n ?? 1), 0);
+    const drawers = fr.filter((x) => x.t === 'drawer').length;
+    const open = fr.some((x) => x.t === 'open');
+    return [doors && `${doors} ${doors === 1 ? 'puerta' : 'puertas'}`, drawers && `${drawers} ${drawers === 1 ? 'gaveta' : 'gavetas'}`, open && 'abierto'].filter(Boolean).join(', ');
+  };
+  return (
+    <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: MUTED }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="tag tag-neutral">{!uploaded ? 'Paramétrico' : native ? 'Modelo convertido a nativo' : 'Modelo 3D (GLB)'}</span>
+        <span style={{ flex: 1, minWidth: 200 }}>
+          {!uploaded
+            ? `Frentes: ${summary(f.fr)}. Despiece según su receta.`
+            : native
+              ? `Se dibuja como módulo nativo (${summary(f.fr.length ? f.fr : detected)})${f.panels.length ? `; sus ${f.panels.length} piezas reales van al despiece` : ''}.`
+              : 'Se dibuja con su modelo en el 3D, con su forma y sus colores (o el material que elijas).'}
+        </span>
+        {!electro && (
+          <button type="button" className="btn btn-ghost" aria-expanded={open} onClick={() => setOpen(!open)} style={{ fontSize: 12, height: 30 }}>
+            <Icon name={open ? 'chevron-up' : 'sliders-horizontal'} size={14} />
+            {uploaded ? 'Convertir y frentes' : 'Editar frentes'}
+          </button>
+        )}
+      </div>
+      {open && !electro && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, background: 'var(--color-bg)', border: '1px solid var(--color-divider)', color: 'var(--color-text)' }}>
+          {uploaded && (
+            <div className="field" style={{ maxWidth: 360 }}>
+              <label htmlFor={`draw-${m.id}`}>Cómo se dibuja</label>
+              <select id={`draw-${m.id}`} className="input" value={f.draw} disabled={!canWrite} onChange={(e) => onRecipe({ draw: e.target.value, ...(e.target.value === 'nativo' && !f.fr.length ? { fr: detected.length ? detected : [{ t: 'door', n: m.defW > 60 ? 2 : 1, f: 1 }] } : {}) })}>
+                <option value="nativo">Módulo nativo (puertas y gavetas que abren, zócalo, jaladeras)</option>
+                <option value="modelo">Modelo 3D tal cual (su forma y sus colores)</option>
+              </select>
+            </div>
+          )}
+          {native && (
+            <>
+              <FrontsEditor w={m.defW} h={m.fixedH} type={m.type} fr={f.fr.length ? f.fr : detected} disabled={!canWrite} onChange={(fr) => onRecipe({ fr })} />
+              {detected.length > 0 && canWrite && (
+                <div>
+                  <button type="button" className="btn btn-ghost" onClick={() => onRecipe({ fr: detected })} style={{ fontSize: 12, height: 30 }}>
+                    <Icon name="rotate-ccw" size={13} />
+                    Volver a los frentes del modelo ({summary(detected)})
+                  </button>
+                </div>
+              )}
+              <span style={{ color: MUTED }}>Los proyectos toman estos frentes al colocar el módulo; en los ya colocados puedes ajustarlos desde sus propiedades.</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

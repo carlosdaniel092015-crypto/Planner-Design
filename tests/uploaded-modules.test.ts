@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { corte, DEFAULT_KITCHEN, frontsFromPanels, frontsOf, usesBoards, DEFAULT_MATERIALS, type MaterialDefinition, type ModuleInstance, parts, projectDataSchema, ranges, setDim, validateProject } from '../src/core';
+import { corte, DEFAULT_KITCHEN, drawsNative, frontsFromPanels, frontsOf, usesBoards, DEFAULT_MATERIALS, type MaterialDefinition, type ModuleInstance, parts, projectDataSchema, ranges, setDim, validateProject } from '../src/core';
 import { DEFAULT_HARDWARE, DEFAULT_MODULES } from '../src/core';
 
 const by = <T extends { code: string }>(a: T[]) => Object.fromEntries(a.map((x) => [x.code, x]));
@@ -82,5 +82,13 @@ describe('módulos y texturas subidos', () => {
     const two = { ...m, fr: [{ t: 'door' as const, n: 2, f: 1 }] };
     expect(usesBoards(two)).toBe(false);
     expect(parts(two, DEFAULT_KITCHEN.mats as never, materials).find((p) => p.pieza === 'Puerta')!.cant).toBe(2);
+  });
+
+  it('cómo se dibuja: por tablas es nativo salvo que se elija «modelo»; un GLB sólido solo si se convierte', () => {
+    const panels = [...body, board('Puerta (unica)', 2, 2, 596, 736)];
+    expect(drawsNative(glbModule({ panels }))).toBe(true);
+    expect(drawsNative(glbModule({ panels, draw: 'modelo' }))).toBe(false);
+    expect(drawsNative(glbModule())).toBe(false);
+    expect(drawsNative(glbModule({ draw: 'nativo' }))).toBe(true);
   });
 });

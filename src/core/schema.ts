@@ -20,6 +20,8 @@ export const panelSchema = z.object({
   s: z.tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()]),
   slot: z.enum(['cuerpo', 'frentes', 'trasera']).optional(),
 });
+/** How an uploaded model is drawn: as a native module (fronts that open) or as its own 3D model. */
+const drawField = z.enum(['nativo', 'modelo']).optional();
 const panelsFields = {
   /** Boards read from the uploaded 3D model; when present the despiece uses them instead of the standard box. */
   panels: z.array(panelSchema).max(300).optional(),
@@ -54,6 +56,7 @@ export const moduleSchema = z
     /** GLB url (library modules made from a 3D model). */
     glb: z.string().max(2000).optional(),
     ...panelsFields,
+    draw: drawField,
     /** Library module base price (base currency) and the width it refers to. */
     pBase: z.number().min(0).optional(),
     w0: z.number().positive().optional(),
@@ -176,6 +179,7 @@ export const recipeSchema = z.object({
   ...panelsFields,
   /** Set once the stored model was read for boards (models uploaded before boards were saved). */
   pscan: flag,
+  draw: drawField,
 }).refine((r) => r.fr.length === 0 || Math.abs(r.fr.reduce((a, s) => a + s.f, 0) - 1) < 0.02, {
   message: 'Las fracciones de los frentes (f) deben sumar 1.',
   path: ['fr'],

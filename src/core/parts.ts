@@ -113,6 +113,11 @@ export function placedPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'panels' 
   });
 }
 
+/** An uploaded model drawn as a native module: built from boards unless set otherwise, or converted by hand. */
+export function drawsNative(m: Pick<ModuleInstance, 'glb' | 'panels' | 'draw'>): boolean {
+  return (m.draw ?? (m.panels?.length ? 'nativo' : 'modelo')) === 'nativo';
+}
+
 /**
  * The uploaded boards are the module's despiece while its fronts are the ones the boards have. Once the doors or
  * drawers are changed in the editor it is broken down like any catalogue module.

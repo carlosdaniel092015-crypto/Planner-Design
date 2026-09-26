@@ -42,6 +42,8 @@ export interface ModuleShape {
   /** Boards read from the uploaded model (mm) and the model size they were measured at (cm). */
   panels?: import('./schema').ModelPanel[];
   pdim?: [number, number, number];
+  /** Uploaded model drawn as a native module ('nativo', default when built from boards) or as-is ('modelo'). */
+  draw?: 'nativo' | 'modelo';
 }
 
 export interface MaterialDefinition {
