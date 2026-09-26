@@ -54,9 +54,12 @@ export function panelName(raw: string): string {
   n = n.replace(/\s{2,}/g, ' ').trim();
   return (n.charAt(0).toUpperCase() + n.slice(1)).slice(0, 80) || 'Pieza';
 }
+/** Pieces of a drawer box (its sides, back, bottom) are body, not fronts, even when named after the drawer. */
+const BOX_PIECE = /lateral|costado|trasera|fondo|base|suelo|piso|\bback\b|\bside\b|\bbottom\b/i;
+const isDrawerName = (n: string) => /caj[oó]n|gaveta|drawer/i.test(n) && (/frente|front/i.test(n) || !BOX_PIECE.test(n));
 /** Material slot a board takes from its name and thickness. */
 export function panelSlot(name: string, thick: number): PartSlot {
-  if (/puerta|door|frente|front|caj[oó]n|drawer/i.test(name)) return 'frentes';
+  if (/puerta|door|frente|front/i.test(name) || isDrawerName(name)) return 'frentes';
   if (/trasera|back|fondo/i.test(name) && thick <= 10) return 'trasera';
   return 'cuerpo';
 }
@@ -105,9 +108,20 @@ export function placedPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'panels' 
       box: [pos[0]!, pos[0]! + size[0]!, pos[1]!, pos[1]! + size[1]!, pos[2]!, pos[2]! + size[2]!],
       size: size as [number, number, number],
       thin,
-      slot: panel.slot ?? panelSlot(panel.n, panel.s[thin]!),
+      slot: panelSlot(panel.n, panel.s[thin]!),
     };
   });
+}
+
+/**
+ * The uploaded boards are the module's despiece while its fronts are the ones the boards have. Once the doors or
+ * drawers are changed in the editor it is broken down like any catalogue module.
+ */
+export function usesBoards(m: Pick<ModuleInstance, 'w' | 'h' | 'fr' | 'panels' | 'pdim'>): boolean {
+  if (!m.panels?.length) return false;
+  if (!m.fr.length) return true;
+  const own = frontsFromPanels(m);
+  return own.length === m.fr.length && own.every((f, i) => f.t === m.fr[i]!.t && (f.n ?? 1) === (m.fr[i]!.n ?? 1) && Math.abs(f.f - m.fr[i]!.f) < 0.02);
 }
 
 /** Cut size of a placed board: length, width (the two long sides) and thickness, in whole mm. */
@@ -117,7 +131,7 @@ export function panelDims(pp: Pick<PlacedPanel, 'size' | 'thin'>) {
 }
 
 function panelGroup(name: string, slot: PartSlot): PartGroup {
-  if (slot === 'frentes') return /caj[oó]n|drawer/i.test(name) ? 'drawer' : 'door';
+  if (slot === 'frentes') return isDrawerName(name) ? 'drawer' : 'door';
   if (slot === 'trasera' || /trasera/i.test(name)) return 'back';
   if (/lateral/i.test(name)) return 'lat';
   if (/suelo|base|piso/i.test(name)) return 'base';
@@ -129,9 +143,64 @@ function panelGroup(name: string, slot: PartSlot): PartGroup {
  * Fronts used for the despiece. A module uploaded as a 3D model usually comes without a recipe: it is broken
  * down as a standard box with doors (one up to 60 cm wide, two above), so it still reaches the cut list.
  */
-export function frontsOf(m: Pick<ModuleInstance, 'fr' | 'glb' | 'w'>): ModuleInstance['fr'] {
-  if (m.glb && !m.fr.length) return [{ t: 'door', n: m.w > 60 ? 2 : 1, f: 1 }];
+export function frontsOf(m: Pick<ModuleInstance, 'fr' | 'glb' | 'w' | 'h' | 'panels' | 'pdim'>): ModuleInstance['fr'] {
+  if (m.fr.length) return m.fr;
+  const fromBoards = frontsFromPanels(m);
+  if (fromBoards.length) return fromBoards;
+  if (m.glb) return [{ t: 'door', n: m.w > 60 ? 2 : 1, f: 1 }];
   return m.fr;
+}
+
+
+/**
+ * Native fronts (bottom to top, like the catalogue recipes) of a model built from boards: its front-facing
+ * doors and drawers grouped in rows by height. Drawers are the boards named so, or full-width fronts that are
+ * wider than tall; side-by-side fronts are doors (n per row).
+ */
+export function frontsFromPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'panels' | 'pdim'>): ModuleInstance['fr'] {
+  const [w0, h0] = m.pdim ?? [m.w, m.h];
+  // Fronts are on the front face (the drawer box behind a drawer front is not).
+  const face = Math.max(0, ...(m.panels ?? []).map((p) => p.p[1] + p.s[1]));
+  const fronts = (m.panels ?? [])
+    .map((panel) => ({ panel, thin: panel.s.indexOf(Math.min(...panel.s)) }))
+    .filter(({ panel, thin }) => thin === 1 && panel.p[1] + panel.s[1] >= face - 40 && panelSlot(panel.n, panel.s[1]) === 'frentes' && panel.s[0] > 0 && panel.s[2] > 0)
+    .map(({ panel }) => ({ n: panel.n, x0: panel.p[0], x1: panel.p[0] + panel.s[0], z0: panel.p[2], z1: panel.p[2] + panel.s[2] }))
+    .sort((a, b) => a.z0 - b.z0);
+  if (!fronts.length) return [];
+  // Rows: fronts overlapping most of their height with the row's first front.
+  const rows: (typeof fronts)[] = [];
+  for (const f of fronts) {
+    const row = rows.find((r) => {
+      const ov = Math.min(r[0]!.z1, f.z1) - Math.max(r[0]!.z0, f.z0);
+      return ov > 0.5 * Math.min(r[0]!.z1 - r[0]!.z0, f.z1 - f.z0);
+    });
+    if (row) row.push(f);
+    else rows.push([f]);
+  }
+  const W = w0 * 10;
+  const spans = rows.map((r) => {
+    const z0 = Math.min(...r.map((f) => f.z0));
+    const z1 = Math.max(...r.map((f) => f.z1));
+    const wide = r.length === 1 && r[0]!.x1 - r[0]!.x0 > 0.8 * W && r[0]!.x1 - r[0]!.x0 > z1 - z0;
+    const drawer = r.every((f) => isDrawerName(f.n)) || (wide && !/puerta|door/i.test(r[0]!.n));
+    return { z0, z1, drawer, n: r.length };
+  });
+  // Fractions of the fronts' height, closing gaps between rows; they add up to 1.
+  const bottom = spans[0]!.z0;
+  const top = Math.max(spans[spans.length - 1]!.z1, h0 * 10 * 0.5);
+  const total = Math.max(1, top - bottom);
+  const cuts = spans.map((s, i) => (i === 0 ? bottom : (spans[i - 1]!.z1 + s.z0) / 2));
+  cuts.push(top);
+  const out: ModuleInstance['fr'] = [];
+  spans.forEach((s, i) => {
+    const f = Math.max(0.01, (cuts[i + 1]! - cuts[i]!) / total);
+    if (s.drawer) for (let k = 0; k < s.n; k++) out.push({ t: 'drawer', f: f / s.n });
+    else out.push({ t: 'door', n: Math.min(6, s.n), f });
+  });
+  const sum = out.reduce((a, x) => a + x.f, 0);
+  return out.map((x) => ({ ...x, f: Math.round((x.f / sum) * 1000) / 1000 })).map((x, i, arr) =>
+    i === arr.length - 1 ? { ...x, f: Math.round((1 - arr.slice(0, -1).reduce((a, y) => a + y.f, 0)) * 1000) / 1000 } : x,
+  );
 }
 
 export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>): Part[] {
@@ -150,7 +219,7 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     P.push({ pieza, cant, L: Math.round(L), A: Math.round(A), esp, mat, matCode, slot, veta, cantos, grp });
   };
   if (m.type === 'fridge' || m.type === 'hood') return [];
-  const placed = placedPanels(m);
+  const placed = usesBoards(m) ? placedPanels(m) : [];
   if (placed.length) {
     for (const pp of placed) {
       const { L, A, esp } = panelDims(pp);

@@ -1,7 +1,7 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
 import { geo, shade, wallPt, zocaloCm, zr } from './geometry';
-import { frontsOf, placedPanels } from './parts';
+import { frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
 
@@ -178,35 +178,6 @@ export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: n
     return;
   }
   rect(X, Y, W, H, C.b);
-  // Module uploaded as boards: its real doors and drawers where they are (front-facing boards).
-  const fronts = m.panels?.length ? placedPanels(m).filter((pp) => pp.slot === 'frentes' && pp.thin === 1) : [];
-  if (fronts.length) {
-    const kx = W / (m.w * 10);
-    const kz = H / (m.h * 10);
-    const isDrawer = (n: string) => /caj[oó]n|drawer/i.test(n);
-    const doors = fronts.filter((pp) => !isDrawer(pp.panel.n));
-    for (const pp of fronts) {
-      const [x0, x1, , , z0, z1] = pp.box;
-      const rx = X + x0 * kx;
-      const rw = (x1 - x0) * kx;
-      const ry = Y + H - z1 * kz;
-      const rh = (z1 - z0) * kz;
-      rect(rx, ry, rw, rh, C.f);
-      if (isDrawer(pp.panel.n)) {
-        if (hstyle === 'bar') ln(rx + rw * 0.36, ry + 4, rx + rw * 0.64, ry + 4, C.hd, 1.4);
-        continue;
-      }
-      const hingeLeft = doors.length > 1 ? (x0 + x1) / 2 < m.w * 5 : m.open === 'izq';
-      if (hstyle === 'bar') {
-        const up = m.type === 'upper';
-        const x = hingeLeft ? rx + rw - 4 : rx + 4;
-        ln(x, up ? ry + rh - 17 : ry + 3, x, up ? ry + rh - 3 : ry + 17, C.hd, 1.4);
-      }
-      const hx = hingeLeft ? rx : rx + rw;
-      it.push({ d: `M${P(hx, ry)}L${P(hingeLeft ? rx + rw : rx, ry + rh / 2)}L${P(hx, ry + rh)}`, stroke: shade(C.f, -0.4), sw: 0.4, dash: '3 2' });
-    }
-    return;
-  }
   let v = 0;
   for (const seg of m.fr) {
     const y1 = Y + H - v * H;

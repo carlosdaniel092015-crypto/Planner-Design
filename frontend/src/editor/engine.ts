@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { type CameraState, type Drawing, type DrawItem, front2D, frontsOf, geo, type ModuleInstance, placedPanels, type ProjectData, zocaloCm, zr } from '@core';
+import { type CameraState, type Drawing, type DrawItem, front2D, frontsOf, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -101,7 +101,7 @@ export function snapshot(cfg: unknown, o: SnapOptions): Promise<string | null> {
 
 let rendererP: Promise<Renderer> | null = null;
 export function loadRenderer(): Promise<Renderer> {
-  rendererP ??= import(/* @vite-ignore */ new URL('/planner-3d.js', window.location.origin).href) as Promise<Renderer>;
+  rendererP ??= import(/* @vite-ignore */ new URL(__RENDERER_URL__, window.location.origin).href) as Promise<Renderer>;
   return rendererP;
 }
 
@@ -111,8 +111,9 @@ export const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 
 export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: number[]; cotas: boolean; altos: boolean; dark: boolean }) {
   if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
-    // Modules uploaded as boards are drawn board by board (planner-3d.js), so they take the chosen materials.
-    mods: p.mods.map((m) => (m.panels?.length ? { ...m, boards: placedPanels(m).map((pp) => ({ b: pp.box, slot: pp.slot, thin: pp.thin, drawer: /caj[oó]n|drawer/i.test(pp.panel.n) })) } : m)),
+    // Uploaded modules built from boards are drawn as native modules (doors and drawers read from their boards):
+    // plinth, materials, handles and opening like the catalogue ones.
+    mods: p.mods.map((m) => (m.panels?.length ? { ...m, glb: undefined, fr: frontsOf(m) } : m)),
     mats: p.mats,
     room: p.room,
     ops: p.ops,

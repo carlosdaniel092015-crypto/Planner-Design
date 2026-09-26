@@ -232,6 +232,8 @@ describe('biblioteca', () => {
     expect(mod.data.module).toMatchObject({ defW: 30, fixedH: 78, fixedD: 60, minW: 15, maxW: 60 });
     const panels = mod.data.module.recipe.panels as { n: string; s: number[] }[];
     expect(panels.map((p) => p.n).sort()).toEqual(['División Libre 1', 'Entrepaño fijo', 'Entrepaño fijo', 'Lateral Derecho', 'Lateral Izquierdo', 'Puerta (unica)', 'Suelo', 'Trasera'].sort());
+    // It becomes a native module: one door read from its front board.
+    expect(mod.data.module.recipe.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
     // The project instance gets the boards; the despiece uses the real sizes (the back is 18 mm here, not HDF).
     const cat = (await t.req('GET', '/catalog', { user: dis })).data;
     const def = cat.context.modules[mod.data.module.code];
@@ -263,6 +265,14 @@ describe('biblioteca', () => {
     expect(def.rw).toEqual([15, 60]);
     const [row] = await t.db.select().from(moduleDefinitions).where(eq(moduleDefinitions.id, mod.data.module.id));
     expect((row!.recipe as { pscan?: number }).pscan).toBe(1);
+    expect(def.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
+
+    // Read before it became native (boards saved, no fronts): it gets its door on the next load.
+    const { fr: _fr, ...boards } = row!.recipe as Record<string, unknown>;
+    await t.db.update(moduleDefinitions).set({ recipe: { ...boards, fr: [] } }).where(eq(moduleDefinitions.id, mod.data.module.id));
+    const again = (await t.req('GET', '/catalog', { user: dis })).data.context.modules[mod.data.module.code];
+    expect(again.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
+    expect(again.panels).toHaveLength(8);
   });
 
   it('un .3ds (suelto o en ZIP con su textura) se convierte a GLB', async () => {
