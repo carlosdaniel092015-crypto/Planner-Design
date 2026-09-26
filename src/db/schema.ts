@@ -392,6 +392,8 @@ export const approvalLinks = pgTable(
       .references(() => projectVersions.id),
     tokenHash: text('token_hash').notNull().unique(),
     recipientEmail: text('recipient_email').notNull(),
+    /** Whether the client page shows the budget (prices, totals). */
+    showPrices: boolean('show_prices').notNull().default(true),
     expiresAt: ts('expires_at').notNull(),
     revokedAt: ts('revoked_at'),
     openedAt: ts('opened_at'),

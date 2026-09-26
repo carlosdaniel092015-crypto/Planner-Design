@@ -18,7 +18,7 @@ export const snapshotHash = (data: unknown) => sha256(canonicalJson(data));
  * Freezes a version and creates the client's link. Nothing is emailed: the designer shares the link (WhatsApp or copy).
  * `recipient` is only a label for the history (client name, phone or email).
  */
-export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipient: string, expiresInDays: number) {
+export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipient: string, expiresInDays: number, showPrices = true) {
   const { db, config } = deps;
   const out = await db.transaction(async (tx) => {
     const row = await getProject(tx, a, projectId);
@@ -36,10 +36,10 @@ export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: 
     const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000);
     const [link] = await tx
       .insert(approvalLinks)
-      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail: recipient, expiresAt, createdBy: a.user.id })
+      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail: recipient, showPrices, expiresAt, createdBy: a.user.id })
       .returning();
     await tx.update(projects).set({ status: 'enviado' }).where(eq(projects.id, row.id));
-    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipient });
+    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipient, showPrices });
     return { row, link: link!, version, token };
   });
   const url = `${config.frontendUrl}/p/${out.token}`;

@@ -23,6 +23,34 @@ const accept = { signerName: 'María Ortega', accepted: true };
 const SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('aprobación pública', () => {
+  it('se puede enviar sin presupuesto: la página del cliente no trae precios, totales ni ajustes', async () => {
+    const data = { ...APPROVABLE, priceAdj: { inst: 10, desc: 5, final: 250000, counter: null, taxRate: null }, prefs: { ...APPROVABLE.prefs, presupuesto: 500000 } };
+    const p = await create(data);
+    const s = await t.req('POST', `/projects/${p.id}/approval-links`, { user: dis, body: { recipient: 'Familia Ortega', showPrices: false } });
+    expect(s.status).toBe(201);
+    expect(s.data.link.showPrices).toBe(false);
+    const view = await t.req('GET', `/public/approvals/${s.data.token}`);
+    expect(view.status).toBe(200);
+    expect(view.data).toMatchObject({ showPrices: false, estimate: null, estimateDetail: null, pdfUrl: null });
+    expect(view.data.data.priceAdj).toBeUndefined();
+    expect(view.data.data.prefs.presupuesto).toBeUndefined();
+    expect(view.data.data.mods.length).toBe(APPROVABLE.mods.length);
+    expect(view.data.organization.terms).not.toContain('presupuesto');
+    expect(JSON.stringify(view.data)).not.toContain('250000');
+    // The client can still approve it; the approved version keeps its pricing snapshot for the shop.
+    expect((await t.req('POST', `/public/approvals/${s.data.token}`, { body: { ...accept, decision: 'aprobado' } })).status).toBe(200);
+    const after = await t.req('GET', `/projects/${p.id}`, { user: dis });
+    expect(after.data.status).toBe('aprobado');
+    expect(after.data.estimate.amount).toBeGreaterThan(0);
+    // By default the budget is included.
+    const p2 = await create();
+    const s2 = await send(p2.id);
+    expect(s2.data.link.showPrices).toBe(true);
+    const v2 = await t.req('GET', `/public/approvals/${s2.data.token}`);
+    expect(v2.data.showPrices).toBe(true);
+    expect(v2.data.estimate.amount).toBeGreaterThan(0);
+  });
+
   it('flujo completo: enviar, abrir, aprobar; correo al cliente y al dueño', async () => {
     const p = await create();
     const s = await send(p.id);

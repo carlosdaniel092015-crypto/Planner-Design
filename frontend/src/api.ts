@@ -185,7 +185,7 @@ export const api = {
   catalog: (timeoutMs?: number) => request<Catalog>('GET', '/catalog', undefined, {}, timeoutMs),
 
   approvalLinks: (id: string) => request<{ links: ApprovalLink[]; approvals: Approval[] }>('GET', `/projects/${id}/approval-links`),
-  sendToClient: (id: string, body: { recipient?: string; expiresInDays: number }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string }>('POST', `/projects/${id}/approval-links`, body),
+  sendToClient: (id: string, body: { recipient?: string; expiresInDays: number; showPrices?: boolean }) => request<{ link: ApprovalLink; url: string; token: string; versionId: string }>('POST', `/projects/${id}/approval-links`, body),
   revokeLink: (linkId: string) => request<ApprovalLink>('POST', `/approval-links/${linkId}/revoke`),
   reopenProject: (id: string, reason?: string) => request<{ status: 'diseno'; version: number }>('POST', `/projects/${id}/reopen`, { reason }),
   approveInternal: (id: string, body: { signerName: string; signature?: string }) => request<{ approval: Approval; versionId: string }>('POST', `/projects/${id}/approve-internal`, body),
@@ -201,6 +201,8 @@ export interface ApprovalLink {
   /** Who it was shared with (name, phone or email), as typed. */
   recipient?: string;
   recipientEmail: string;
+  /** false = sent without the budget. */
+  showPrices?: boolean;
   expiresAt: string;
   revokedAt: string | null;
   openedAt: string | null;
@@ -229,8 +231,10 @@ export interface PublicView {
   plan: import('@core').Drawing;
   elevations: Record<string, import('@core').Drawing>;
   materials: { code: string; name: string; type: string; color: string | null; groups: string[] }[];
-  estimate: Money;
-  estimateDetail: import('@core').Estimate;
+  /** false when the link was sent without the budget (estimate and estimateDetail are then null). */
+  showPrices?: boolean;
+  estimate: Money | null;
+  estimateDetail: import('@core').Estimate | null;
   pdfUrl: string | null;
   canApprove: boolean;
   expiresAt: string;
