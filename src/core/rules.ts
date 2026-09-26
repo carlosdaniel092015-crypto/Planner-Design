@@ -1,5 +1,6 @@
 // Design validation. The first block is the prototype's validate() ported 1:1 (same texts);
 // the second adds structural checks the server needs. Any `err` blocks approval.
+import { ranges } from './editing';
 import { geo, isFloor, wallPt, zocaloCm, zr } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { PricingContext, ValidationIssue } from './types';
@@ -126,7 +127,8 @@ function structuralIssues(s: ProjectData, ctx?: PricingContext): ValidationIssue
   for (const m of s.mods) {
     if (seen.has(m.id)) out.push({ st: 'err', code: 'ID_DUPLICADO', text: `Hay dos módulos con el número ${m.id}`, id: m.id });
     seen.add(m.id);
-    const rw = m.rw;
+    // Same range the editor allows (3D models stretch beyond their saved width).
+    const rw = m.rw ? ranges(m).w : undefined;
     if (rw && (m.w < rw[0] - 1e-9 || m.w > rw[1] + 1e-9))
       out.push({ st: 'err', code: 'ANCHO_FUERA_DE_RANGO', text: `El módulo ${m.id} (${m.name}) mide ${m.w} cm; su rango es ${rw[0]}–${rw[1]} cm`, id: m.id });
     const top = zr(m, zoc)[1] + (m.type === 'base' ? 4 : 0);

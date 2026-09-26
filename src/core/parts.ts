@@ -28,6 +28,15 @@ export interface Part {
 type Mats = ProjectData['mats'];
 type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl'>;
 
+/**
+ * Fronts used for the despiece. A module uploaded as a 3D model usually comes without a recipe: it is broken
+ * down as a standard box with doors (one up to 60 cm wide, two above), so it still reaches the cut list.
+ */
+export function frontsOf(m: Pick<ModuleInstance, 'fr' | 'glb' | 'w'>): ModuleInstance['fr'] {
+  if (m.glb && !m.fr.length) return [{ t: 'door', n: m.w > 60 ? 2 : 1, f: 1 }];
+  return m.fr;
+}
+
 export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>): Part[] {
   const W = m.w * 10;
   const H = m.h * 10;
@@ -43,7 +52,7 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     const [mat, matCode] = slot === 'cuerpo' ? [cuN, cuCode] : slot === 'frentes' ? [frN, frCode] : [backN, BACK_PANEL_MATERIAL];
     P.push({ pieza, cant, L: Math.round(L), A: Math.round(A), esp, mat, matCode, slot, veta, cantos, grp });
   };
-  if (m.type === 'fridge' || m.type === 'hood' || m.glb) return [];
+  if (m.type === 'fridge' || m.type === 'hood') return [];
   if (m.appl) {
     add('Panel frontal', 1, H - 4, W - 4, 18, 'frentes', 'Vertical', '4L', 'door');
     return P.map((p, i) => ({ ...p, ref: i + 1 }));
@@ -53,7 +62,7 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
   if (m.type === 'base') add('Travesaño', 2, W - 2 * t, 100, t, 'cuerpo', 'Horizontal', '1L', 'trav');
   else add('Techo', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'top');
   add('Trasera', 1, W - 4, H - 4, 6, 'trasera', '—', '—', 'back');
-  const fr = m.fr;
+  const fr = frontsOf(m);
   const nSh = fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
   if (nSh) add('Entrepaño', nSh, W - 2 * t - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
   for (const seg of fr) {

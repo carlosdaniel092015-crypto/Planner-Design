@@ -1,7 +1,7 @@
 // Assembly drawings per module (millimetres) — ported from the prototype's exploded()/ortho().
 import { cols, type Drawing, type DrawItem, front2D } from './drawing';
 import { shade } from './geometry';
-import { type Part, parts } from './parts';
+import { frontsOf, type Part, parts } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -45,7 +45,7 @@ export function exploded(m: ModuleInstance, mats: ProjectData['mats'], materials
   boxes.push([0, W, -6 - e, -e, 0, H, '#e8e4dc', ref('back')]);
   if (ref('shelf')) boxes.push([t, W - t, 0, D - 20, H / 2, H / 2 + t, shade(C.b, -0.04), ref('shelf')]);
   let v = 0;
-  for (const seg of m.fr) {
+  for (const seg of frontsOf(m)) {
     const z0 = v * H;
     const z1 = (v + seg.f) * H;
     v += seg.f;
@@ -152,7 +152,7 @@ export function ortho(m: ModuleInstance, mats: ProjectData['mats'], materials: R
   let w: number;
   let h: number;
   if (view === 'front') {
-    front2D({ ...m, w: W, h: H }, 0, 0, W, H, C, hstyle, it);
+    front2D({ ...m, fr: frontsOf(m), w: W, h: H }, 0, 0, W, H, C, hstyle, it);
     for (const p of it) if (p.sw) p.sw *= k * 0.8;
     w = W;
     h = H;

@@ -201,6 +201,8 @@ describe('biblioteca', () => {
     expect(mod.status, JSON.stringify(mod.data)).toBe(201);
     glbModuleCode = mod.data.module.code;
     expect(mod.data.module).toMatchObject({ source: 'modelo3d', defW: 60, fixedH: 76, fixedD: 60, materialSlots: { Frente: 'fijo', Cuerpo: 'fijo' } });
+    // The model stretches to the width you give it: half to double its own width.
+    expect(mod.data.module).toMatchObject({ minW: 30, maxW: 120 });
     expect(mod.data.module.modelFileId).not.toBe(f.data.id); // Draco-compressed copy
     const again = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: mod.data.module.modelFileId } });
     expect(again.data.materials).toEqual(['Frente', 'Cuerpo']);

@@ -8,10 +8,15 @@ const isFloor = (x: { type: string }) => x.type !== 'upper' && x.type !== 'hood'
 
 export type Dim = 'w' | 'h' | 'd';
 
-export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'>): Record<Dim, [number, number]> {
+/** Width range for a module uploaded as a 3D model: the model is stretched to fit, from half to double its width. */
+export const modelWidthRange = (w: number): [number, number] => [Math.max(10, Math.round(w / 2)), Math.min(1000, Math.max(Math.round(w * 2), 30))];
+
+export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'> & { glb?: string; w?: number }): Record<Dim, [number, number]> {
   const t = m.type;
+  // Models uploaded before 1.15.1 were saved with a single width (min = max); they can be resized too.
+  const fixedModel = m.glb && (!m.rw || m.rw[0] === m.rw[1]);
   return {
-    w: m.rw ?? [30, 120],
+    w: fixedModel ? modelWidthRange(m.rw?.[0] ?? m.w ?? 60) : (m.rw ?? [30, 120]),
     h: t === 'tall' ? [180, 240] : t === 'upper' ? [35, 100] : t === 'fridge' ? [170, 200] : t === 'hood' ? [25, 25] : [60, 80],
     d: t === 'upper' ? [25, 40] : t === 'hood' ? [50, 50] : [45, 65],
   };

@@ -3,6 +3,13 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.15.1 · 2026-09-26
+
+### Módulos y texturas que subes
+- Los **módulos subidos en 3D** ahora aparecen en **Planos de ensamblaje**, en la **lista de corte** y en el **despiece del PDF**, con la textura que les apliques (cuerpo y frente). Se despiezan como una caja estándar con sus medidas: laterales, base, travesaños o techo, trasera y puertas (una hasta 60 cm de ancho, dos si es más ancho). El precio del módulo no cambia.
+- El **ancho** de un módulo subido en 3D ya se puede editar: el modelo se estira desde la mitad hasta el doble de su ancho original. También en los que ya tenías subidos.
+- En un módulo subido puedes elegir el material del cuerpo y del frente para la lista de corte.
+
 ## 1.15.0 · 2026-09-26
 
 ### Presupuesto en una propuesta ya enviada

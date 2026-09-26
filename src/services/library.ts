@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
-import { kindOfType } from '../core';
+import { kindOfType, modelWidthRange } from '../core';
 import type { DbOrTx } from '../db/client';
 import { files, materials, type moduleDefinitions } from '../db/schema';
 import type { AuthContext } from '../lib/context';
@@ -145,8 +145,9 @@ export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
       code,
       source,
       type: input.type ?? (source === 'modelo3d' ? (h > 150 ? 'fridge' : 'base') : 'base'),
-      minW: input.minW ?? w,
-      maxW: input.maxW ?? w,
+      // 3D models stretch to the width you give them (half to double); parametric modules keep one width unless set.
+      minW: input.minW ?? (source === 'modelo3d' ? modelWidthRange(w)[0] : w),
+      maxW: input.maxW ?? (source === 'modelo3d' ? modelWidthRange(w)[1] : w),
       defW: w,
       fixedH: h,
       fixedD: input.fixedD ?? model?.bbox.d ?? 60,
