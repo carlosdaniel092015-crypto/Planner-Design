@@ -913,14 +913,34 @@ function SendDialog(props: {
         <div style={{ marginTop: 16 }}>
           <h6 style={{ margin: '0 0 6px' }}>Envíos anteriores</h6>
           {props.history.links.slice(0, 5).map((l) => (
-            <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--color-divider)', fontSize: 13 }}>
-              <span style={{ flex: 1, minWidth: 0 }}>
+            <div key={l.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--color-divider)', fontSize: 13 }}>
+              <span style={{ flex: '1 1 200px', minWidth: 0 }}>
                 <strong>{l.recipient ?? l.recipientEmail}</strong>
                 <span style={{ display: 'block', color: SOFT }}>
                   {dateEs(l.createdAt)} · {stateOf(l)}
                   {l.showPrices === false && ' · sin presupuesto'}
                 </span>
               </span>
+              {live(l) && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: 12, height: 32, padding: '0 10px' }}
+                  title={l.showPrices === false ? 'El cliente volverá a ver precios y totales en este mismo enlace' : 'El cliente dejará de ver precios y totales en este mismo enlace'}
+                  onClick={() =>
+                    api
+                      .setLinkPrices(l.id, l.showPrices === false)
+                      .then((u) => {
+                        props.flash(u.showPrices ? 'El cliente ya ve el presupuesto (al recargar la página)' : 'Presupuesto oculto para el cliente (al recargar la página)');
+                        props.onRevoked();
+                      })
+                      .catch((e) => props.flash(e instanceof ApiError ? e.message : 'No se pudo cambiar'))
+                  }
+                >
+                  <Icon name={l.showPrices === false ? 'eye' : 'eye-off'} size={14} />
+                  {l.showPrices === false ? 'Mostrar presupuesto' : 'Ocultar presupuesto'}
+                </button>
+              )}
               {live(l) && (
                 <button
                   type="button"

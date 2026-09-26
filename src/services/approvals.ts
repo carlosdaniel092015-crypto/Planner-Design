@@ -63,6 +63,20 @@ export async function revokeLink(db: Db, a: AuthContext, linkId: string) {
   });
 }
 
+/** Shows or hides the budget on a link already shared with the client (same URL, nothing to resend). */
+export async function setLinkPrices(db: Db, a: AuthContext, linkId: string, showPrices: boolean) {
+  return db.transaction(async (tx) => {
+    const [link] = await tx.select().from(approvalLinks).where(eq(approvalLinks.id, linkId)).limit(1);
+    if (!link) throw notFound('El enlace');
+    const row = await getProject(tx, a, link.projectId); // 404 for other orgs / not shared
+    if (link.usedAt) throw conflict('ENLACE_USADO', 'El cliente ya respondió a este enlace; ya no se puede cambiar.');
+    if (link.revokedAt || link.expiresAt.getTime() <= Date.now()) throw conflict('ENLACE_INACTIVO', 'Este enlace ya no está activo. Crea uno nuevo desde «Enviar al cliente».');
+    const [upd] = await tx.update(approvalLinks).set({ showPrices }).where(eq(approvalLinks.id, link.id)).returning();
+    await audit(tx, a, 'actualizar', 'approval_link', link.id, { projectId: row.id, showPrices });
+    return { row, link: upd! };
+  });
+}
+
 async function markApproved(tx: DbOrTx, row: ProjectRow, version: VersionRow) {
   await tx
     .update(projects)

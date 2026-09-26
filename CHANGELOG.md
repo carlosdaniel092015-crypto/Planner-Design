@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.15.0 · 2026-09-26
+
+### Presupuesto en una propuesta ya enviada
+- En «Enviar al cliente» → «Envíos anteriores», cada enlace activo tiene el botón **«Ocultar presupuesto» / «Mostrar presupuesto»**: cambias lo que ve el cliente en la misma propuesta, sin mandarle otro enlace. Lo ve al recargar (mientras no haya respondido).
+
 ## 1.14.0 · 2026-09-26
 
 ### Enviar al cliente con o sin presupuesto
