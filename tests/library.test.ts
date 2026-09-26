@@ -4,7 +4,9 @@ import { strToU8, zipSync } from 'fflate';
 import sharp from 'sharp';
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { DEFAULT_KITCHEN, type ModuleInstance, parts, templateOf } from '../src/core';
+import { moduleDefinitions } from '../src/db/schema';
 import { API, setup, type Ctx, type TestUser } from './helpers';
 
 let t: Ctx;
@@ -246,6 +248,21 @@ describe('biblioteca', () => {
     expect(wide.find((p) => p.pieza === 'Suelo')).toMatchObject({ L: 582, A: 564 });
     expect(wide.find((p) => p.pieza === 'Lateral Derecho')).toMatchObject({ L: 780, A: 582, esp: 18 });
     expect(wide.find((p) => p.pieza === 'Puerta (unica)')).toMatchObject({ L: 755, A: 597 });
+  });
+
+  it('un modelo subido antes (sin piezas guardadas) recibe su despiece solo al cargar el catálogo, una vez', async () => {
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/mb_1_puerta.3ds', import.meta.url)));
+    const f = await upload(dis, 'modelo3d', 'MB_VIEJO.3ds', bytes, 'application/octet-stream');
+    const mod = await t.req('POST', '/library/modules', { user: dis, body: { name: 'MB viejo', source: 'modelo3d', modelFileId: f.data.id } });
+    // As it was saved before boards were read: no panels, fixed width.
+    await t.db.update(moduleDefinitions).set({ recipe: { fr: [] }, minW: 30, maxW: 30 }).where(eq(moduleDefinitions.id, mod.data.module.id));
+    const cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.modules[mod.data.module.code];
+    expect(def.panels).toHaveLength(8);
+    expect(def.pdim).toEqual([30, 78, 60]);
+    expect(def.rw).toEqual([15, 60]);
+    const [row] = await t.db.select().from(moduleDefinitions).where(eq(moduleDefinitions.id, mod.data.module.id));
+    expect((row!.recipe as { pscan?: number }).pscan).toBe(1);
   });
 
   it('un .3ds (suelto o en ZIP con su textura) se convierte a GLB', async () => {

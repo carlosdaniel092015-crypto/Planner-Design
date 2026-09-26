@@ -174,6 +174,8 @@ export const recipeSchema = z.object({
   appl: flag,
   oven: flag,
   ...panelsFields,
+  /** Set once the stored model was read for boards (models uploaded before boards were saved). */
+  pscan: flag,
 }).refine((r) => r.fr.length === 0 || Math.abs(r.fr.reduce((a, s) => a + s.f, 0) - 1) < 0.02, {
   message: 'Las fracciones de los frentes (f) deben sumar 1.',
   path: ['fr'],

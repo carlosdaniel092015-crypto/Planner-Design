@@ -10,6 +10,12 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 - Nueva sección **«Ubicación»** en las propiedades del módulo: elige el **muro** (A, B, C, D o isla), escribe la **distancia desde la esquina** o usa los botones **‹ › « »** para moverlo 1 o 5 cm (si los mantienes presionados, sigue avanzando). En los de isla, X, Y y flechas.
 - Todo se puede deshacer con Ctrl+Z o el botón deshacer.
 
+### Módulos subidos: puertas, texturas y zócalo
+- **Las puertas y cajones de tus modelos se abren** con el botón «Abrir puertas y cajones» de la vista 3D, girando sobre su bisagra como los del catálogo, con su jaladera.
+- **La textura o el material de frente que eliges se ve en el 3D**, también en los modelos que no están hechos por tablas (antes solo cambiaba en el despiece).
+- En los **alzados** los módulos subidos dibujan sus **puertas en su posición real**, con jaladera y línea de apertura.
+- Los modelos que **ya habías subido** leen sus piezas solos la próxima vez que abres el editor, y los que ya estaban colocados en tus proyectos las toman al abrir el proyecto: **no hace falta volver a subirlos**. Su ancho deja de ser fijo.
+
 ## 1.16.0 · 2026-09-26
 
 ### Módulos y texturas que subes

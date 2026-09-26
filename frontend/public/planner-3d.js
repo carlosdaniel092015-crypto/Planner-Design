@@ -220,12 +220,31 @@ function buildModule(m, ctx) {
   if (m.boards && m.boards.length) {
     plinth();
     // Uploaded model built from boards: each board where it is, in the project's body / front material.
+    // Front boards facing the room open like the catalogue's: doors swing on their hinge, drawers slide out.
+    const fronts = m.boards.filter(bd => bd.slot === 'frentes' && bd.thin === 1);
+    const doors = fronts.filter(bd => !bd.drawer);
     for (const bd of m.boards) {
       const [x0, x1, y0, y1, z0, z1] = bd.b.map(v => v / 1000);
       const bw = x1 - x0, bh = z1 - z0, bdp = y1 - y0;
       const faceW = bd.thin === 0 ? bdp : bw, faceH = bd.thin === 2 ? bdp : bh;
-      const id = bd.slot === 'frentes' ? frId : bodyId;
-      bx(g, bw, bh, bdp, texMat(id, faceW, faceH, bd.slot === 'frentes' && faceW > faceH, seed++), x0, yb + z0, y0);
+      const mat = texMat(bd.slot === 'frentes' ? frId : bodyId, faceW, faceH, bd.slot === 'frentes' && faceW > faceH, seed++);
+      if (!fronts.includes(bd)) { bx(g, bw, bh, bdp, mat, x0, yb + z0, y0); continue; }
+      const top = yb + z1, bottom = yb + z0;
+      if (bd.drawer) {
+        const dr = new T.Group(); dr.userData.mv = { kind: 'drawer', travel: Math.min(.45, D * .7) }; g.add(dr);
+        bx(dr, bw, bh, bdp, mat, x0, bottom, y0);
+        if (ctx.handle === 'bar') hbar(dr, (x0 + x1) / 2, top - .04, Math.min(.32, bw * .5), y1, hdMat);
+        continue;
+      }
+      // Pairs open from the middle; a single door follows the module's "Apertura" (right by default).
+      const hingeLeft = doors.length > 1 ? (x0 + x1) / 2 < W / 2 : m.open === 'izq';
+      const hx = hingeLeft ? x0 : x1;
+      const pv = new T.Group(); pv.position.set(hx, 0, y0); pv.userData.mv = { kind: 'door', dir: hingeLeft ? -1 : 1 }; g.add(pv);
+      bx(pv, bw, bh, bdp, mat, x0 - hx, bottom, 0);
+      if (ctx.handle === 'bar') {
+        const L = bh > 1.2 ? .32 : .16, cy = m.type === 'upper' ? bottom + .03 + L / 2 : top - .04 - L / 2;
+        vbar(pv, (hingeLeft ? x1 - .035 : x0 + .035) - hx, cy, L, bdp, hdMat);
+      }
     }
     return g;
   }
@@ -236,6 +255,8 @@ function buildModule(m, ctx) {
     plinth();
     if (src) {
       const o = src.clone(true), bb = new T.Box3().setFromObject(o), sz = bb.getSize(new T.Vector3());
+      // A model not built from boards keeps its own colours unless a material was chosen for this module.
+      if (m.fre || m.cue) { const tm = texMat(m.fre ? frId : bodyId, W, y1 - y0, false, seed++); o.traverse(c => { if (c.isMesh) c.material = tm; }); }
       o.scale.set(W / (sz.x || 1), (y1 - y0) / (sz.y || 1), D / (sz.z || 1));
       const bb2 = new T.Box3().setFromObject(o);
       o.position.set(-bb2.min.x, y0 - bb2.min.y, -bb2.min.z); g.add(o);

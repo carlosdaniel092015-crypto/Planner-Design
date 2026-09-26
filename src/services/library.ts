@@ -177,3 +177,40 @@ export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
   }
   return { module: await updateModule(db, a, id, rest), model };
 }
+
+/**
+ * Models uploaded before the despiece read their boards have no `panels`: read them once from the stored file
+ * (marked with `pscan` so it never runs twice). Cheap when there is nothing to do: one query.
+ */
+export async function backfillModelPanels(db: DbOrTx, storage: Storage, orgId: string): Promise<number> {
+  const rows = await db
+    .select({ id: moduleDefinitions.id, recipe: moduleDefinitions.recipe, modelFileId: moduleDefinitions.modelFileId, defW: moduleDefinitions.defW, minW: moduleDefinitions.minW, maxW: moduleDefinitions.maxW })
+    .from(moduleDefinitions)
+    .where(and(eq(moduleDefinitions.organizationId, orgId), eq(moduleDefinitions.source, 'modelo3d')));
+  let done = 0;
+  for (const r of rows) {
+    const recipe = (r.recipe ?? { fr: [] }) as Record<string, unknown>;
+    if (!r.modelFileId || (Array.isArray(recipe.panels) && recipe.panels.length) || recipe.pscan) continue;
+    let next: Record<string, unknown> = { ...recipe, pscan: 1 };
+    let widths: { minW: number; maxW: number } | undefined;
+    try {
+      const [f] = await db.select({ blobUrl: files.blobUrl }).from(files).where(and(eq(files.id, r.modelFileId), eq(files.organizationId, orgId)));
+      if (f) {
+        const insp = await inspectModel(await storage.get(f.blobUrl));
+        if (insp.panels.length) {
+          next = { ...next, panels: insp.panels, pdim: [insp.bbox.w, insp.bbox.h, insp.bbox.d] };
+          // A board-built model resizes: a fixed width (older uploads) opens to the usual range.
+          if (r.minW === r.maxW) {
+            const [minW, maxW] = modelWidthRange(r.defW);
+            widths = { minW, maxW };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[modelos] no se pudieron leer las piezas', r.id, (e as Error).message);
+    }
+    await db.update(moduleDefinitions).set({ recipe: next, ...widths }).where(eq(moduleDefinitions.id, r.id));
+    done++;
+  }
+  return done;
+}
