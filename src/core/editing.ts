@@ -80,6 +80,7 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.appl ? { appl: 1 } : {}),
     ...(def.oven ? { oven: 1 } : {}),
     ...(def.glb ? { glb: def.glb } : {}),
+    ...(def.panels?.length ? { panels: clone(def.panels), pdim: def.pdim } : {}),
     moduleVersion: def.version,
   };
 }

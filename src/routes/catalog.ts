@@ -103,7 +103,8 @@ export function catalogRoutes() {
       const text = JSON.stringify(payload);
       const etag = `"${sha256(text).slice(0, 32)}"`;
       c.header('ETag', etag);
-      c.header('Cache-Control', 'private, max-age=60, must-revalidate');
+      // Always revalidated (ETag → 304): a module or texture just uploaded must show up at once, not a minute later.
+      c.header('Cache-Control', 'private, no-cache');
       c.header('Vary', 'Cookie, Authorization');
       if (c.req.header('if-none-match') === etag) return c.body(null, 304);
       return c.json(payload, 200);

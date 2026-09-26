@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
 import { kindOfType, modelWidthRange } from '../core';
 import type { DbOrTx } from '../db/client';
-import { files, materials, type moduleDefinitions } from '../db/schema';
+import { files, materials, moduleDefinitions } from '../db/schema';
 import type { AuthContext } from '../lib/context';
 import { randomToken } from '../lib/crypto';
 import { notFound, unprocessable } from '../lib/errors';
@@ -151,7 +151,8 @@ export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
       defW: w,
       fixedH: h,
       fixedD: input.fixedD ?? model?.bbox.d ?? 60,
-      recipe: input.recipe ?? { fr: [] },
+      // A model built from boards brings its own despiece (each board with its real size).
+      recipe: { ...(input.recipe ?? { fr: [] }), ...(model?.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) },
       modelFileId,
       materialSlots: input.materialSlots ?? (model ? Object.fromEntries(model.materials.map((m) => [m, 'fijo'])) : null),
       unitPrice: clean.unitPrice ?? 0,
@@ -168,5 +169,11 @@ export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
     model = await inspectModel(await storage.get(f.blobUrl));
   }
   const { compressDraco: _c, code: _code, ...rest } = noPriceUnlessAdmin(a, patch);
+  if (model) {
+    // New model file: its boards replace the old despiece (or drop it if it isn't built from boards).
+    const [cur] = await db.select({ recipe: moduleDefinitions.recipe }).from(moduleDefinitions).where(and(eq(moduleDefinitions.id, id), eq(moduleDefinitions.organizationId, a.org.id)));
+    const { panels: _p, pdim: _d, ...base } = ((rest.recipe ?? cur?.recipe ?? { fr: [] }) as Record<string, unknown>);
+    rest.recipe = { ...base, ...(model.panels.length ? { panels: model.panels, pdim: [model.bbox.w, model.bbox.h, model.bbox.d] } : {}) };
+  }
   return { module: await updateModule(db, a, id, rest), model };
 }
