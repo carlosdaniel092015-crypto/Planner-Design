@@ -111,6 +111,19 @@ export function PublicApprovalPage() {
           </Card>
         </section>
 
+        {!!v.data.cams?.views?.length && (
+          <section>
+            <h2 style={{ margin: '0 0 8px', fontSize: 22 }}>Más vistas</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 16 }}>
+              {v.data.cams.views.map((x) => (
+                <Card key={x.id} title={x.name} h={300}>
+                  {cfg && <Photo cfg={cfg} opts={{ w: 900, h: 560, cam: x.cam }} fallback={iso(v.data, matsRec, { cotas: false, altos: true })} title={x.name} />}
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 22, flex: 1 }}>Alzados</h2>

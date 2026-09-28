@@ -153,6 +153,11 @@ export const projectDataSchema = z
         persp: camSchema.optional(),
         /** Detail view: which module (id) and, optionally, a hand-made camera. */
         det: z.object({ mod: z.number().int().optional(), cam: camSchema.optional() }).optional(),
+        /** Extra views added to the gallery by hand: each one a named camera. */
+        views: z
+          .array(z.object({ id: z.string().regex(/^[a-z0-9]{1,12}$/), name: z.string().trim().min(1).max(60), cam: camSchema }))
+          .max(12)
+          .optional(),
       })
       .optional(),
     /** Distribution measurements chosen in Especificaciones (walls with furniture, depths, heights, island). */

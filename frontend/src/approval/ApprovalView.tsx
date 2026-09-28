@@ -75,7 +75,7 @@ export function ApprovalView(props: {
   const [reopening, setReopening] = useState(false);
   /** null = automatic angle (faces the most fronts). */
   /** Which gallery photo is being framed by hand. */
-  const [camEdit, setCamEdit] = useState<'persp' | 'det' | null>(null);
+  const [camEdit, setCamEdit] = useState<'persp' | 'det' | 'new' | { view: string } | null>(null);
   const [regen, setRegen] = useState(0);
   const [planMod, setPlanMod] = useState<number | null>(null);
   const [pdf, setPdf] = useState<{ pct: number; step: string } | null>(null);
@@ -126,6 +126,11 @@ export function ApprovalView(props: {
     data.mods[0];
   const detCam = cams.det?.cam && (cams.det.mod == null || cams.det.mod === detMod?.id) ? cams.det.cam : undefined;
   const setCams = (next: NonNullable<ProjectData['cams']>) => props.commit({ ...data, cams: next });
+  // Views added by hand to the gallery (named cameras); they also go to the PDF and the client page.
+  const views = cams.views ?? [];
+  const setViews = (next: typeof views) => setCams({ ...cams, views: next.length ? next : undefined });
+  const editing = camEdit && typeof camEdit === 'object' ? views.find((v) => v.id === camEdit.view) : undefined;
+  const viewPhoto = (cam: NonNullable<ProjectData['cams']>['persp'], w: number, h: number, title: string) => <Photo cfg={cfg} opts={cam ? { w, h, cam } : { w, h }} fallback={isoOf(45)} title={title} />;
   const detFocus = (m?: ModuleInstance): [number, number, number, number] | undefined => {
     if (!m) return undefined;
     const g = geo(m, data.room);
@@ -339,6 +344,50 @@ export function ApprovalView(props: {
                 {detail(1200, 480)}
               </Tile>
             )}
+            {views.map((v) => (
+              <Tile
+                key={v.id}
+                title={v.name}
+                scale="Vista agregada"
+                onRegen={() => setRegen((n) => n + 1)}
+                onAdjust={props.canManage && !approved ? () => setCamEdit({ view: v.id }) : undefined}
+                extra={
+                  props.canManage && !approved ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: 13 }}
+                        onClick={() => {
+                          const name = window.prompt('Nombre de la vista', v.name)?.trim();
+                          if (name) setViews(views.map((x) => (x.id === v.id ? { ...x, name: name.slice(0, 60) } : x)));
+                        }}
+                      >
+                        <Icon name="pencil" size={14} />
+                        Renombrar
+                      </button>
+                      <button type="button" className="btn btn-ghost" aria-label={`Quitar la vista ${v.name}`} style={{ fontSize: 13, marginLeft: 'auto' }} onClick={() => window.confirm(`¿Quitar la vista «${v.name}» de la galería?`) && setViews(views.filter((x) => x.id !== v.id))}>
+                        <Icon name="trash-2" size={14} />
+                        Quitar
+                      </button>
+                    </>
+                  ) : undefined
+                }
+              >
+                {viewPhoto(v.cam, 1100, 600, v.name)}
+              </Tile>
+            ))}
+            {props.canManage && !approved && views.length < 12 && (
+              <button
+                type="button"
+                onClick={() => setCamEdit('new')}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, border: '2px dashed var(--color-divider)', background: 'transparent', font: 'inherit', color: 'var(--color-text)', cursor: 'pointer' }}
+              >
+                <Icon name="plus" size={28} style={{ color: 'var(--color-accent)' }} />
+                <span style={{ fontWeight: 800, fontSize: 15 }}>Agregar vista</span>
+                <span style={{ fontSize: 13, color: SOFT, maxWidth: 240, textAlign: 'center' }}>Encuadra otra toma en 3D; va a la galería, al PDF y a la página del cliente.</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -439,6 +488,7 @@ export function ApprovalView(props: {
             if (k.vistas) {
               pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760) });
               if (detMod) pages.push({ label: 'Vista de detalle', title: `Detalle · ${detLabel}`, art: detail(1200, 700) });
+              for (const v of views) pages.push({ label: v.name, title: v.name, art: viewPhoto(v.cam, 1100, 760, v.name) });
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });
             if (k.alzados) for (const w of walls) pages.push({ label: `Alzado muro ${w}`, title: `Alzado muro ${w}`, art: <Svg drawing={elevD(w)} /> });
@@ -471,17 +521,27 @@ export function ApprovalView(props: {
 
       {camEdit && (
         <CameraDialog
-          title={camEdit === 'persp' ? 'Ajustar cámara · render en perspectiva' : `Ajustar cámara · detalle de ${detMod?.name ?? 'módulo'}`}
+          title={camEdit === 'persp' ? 'Ajustar cámara · render en perspectiva' : camEdit === 'det' ? `Ajustar cámara · detalle de ${detMod?.name ?? 'módulo'}` : camEdit === 'new' ? 'Agregar vista' : `Ajustar cámara · ${editing?.name ?? 'vista'}`}
           cfg={camCfg}
-          initial={camEdit === 'persp' ? cams.persp : detCam}
+          initial={camEdit === 'persp' ? cams.persp : camEdit === 'det' ? detCam : camEdit === 'new' ? cams.persp : editing?.cam}
           focusId={camEdit === 'det' ? detMod?.id : undefined}
-          onSave={(cam) => {
+          name={camEdit === 'new' ? `Vista ${views.length + 1}` : undefined}
+          onSave={(cam, name) => {
             // A camera read from a collapsed or broken viewer (NaN) must never reach the project: the server would reject every save.
             if (!camSchema.safeParse(cam).success) return flash('No se pudo leer la cámara. Agranda la ventana e inténtalo de nuevo.');
-            setCams(camEdit === 'persp' ? { ...cams, persp: cam } : { ...cams, det: { mod: detMod?.id, cam } });
+            if (camEdit === 'new') {
+              const id = Math.random().toString(36).slice(2, 10) || 'v1';
+              setViews([...views, { id, name: (name?.trim() || `Vista ${views.length + 1}`).slice(0, 60), cam }]);
+              return flash('Vista agregada a la galería, al PDF y a la página del cliente.');
+            }
+            if (typeof camEdit === 'object') setViews(views.map((x) => (x.id === camEdit.view ? { ...x, cam } : x)));
+            else setCams(camEdit === 'persp' ? { ...cams, persp: cam } : { ...cams, det: { mod: detMod?.id, cam } });
             flash('Vista guardada: se usa en la galería, el PDF y la página del cliente.');
           }}
-          onReset={() => setCams(camEdit === 'persp' ? { ...cams, persp: undefined } : { ...cams, det: { mod: cams.det?.mod } })}
+          onReset={() => {
+            if (camEdit === 'persp') setCams({ ...cams, persp: undefined });
+            else if (camEdit === 'det') setCams({ ...cams, det: { mod: cams.det?.mod } });
+          }}
           onClose={() => setCamEdit(null)}
         />
       )}

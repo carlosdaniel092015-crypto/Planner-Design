@@ -1,6 +1,6 @@
 // Hand-made camera for the gallery photos: a live 3D viewer to orbit, zoom and pan, then "Usar esta vista".
 import type { CameraState } from '@core';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Viewer } from '../editor/engine';
 import { Viewer3D } from '../editor/Viewer3D';
 import { Dialog, Icon, MUTED } from '../ui';
@@ -12,11 +12,15 @@ export function CameraDialog(props: {
   initial?: CameraState;
   /** Module to frame when there is no saved camera (detail view). */
   focusId?: number;
-  onSave: (cam: CameraState) => void;
+  /** New view: its name, edited in the dialog (no "automatic view" then). */
+  name?: string;
+  onSave: (cam: CameraState, name?: string) => void;
   onReset: () => void;
   onClose: () => void;
 }) {
   const viewer = useRef<Viewer | null>(null);
+  const [name, setName] = useState(props.name ?? '');
+  const isNew = props.name != null;
   return (
     <Dialog
       title={props.title}
@@ -24,17 +28,19 @@ export function CameraDialog(props: {
       width={1100}
       actions={
         <>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              props.onReset();
-              props.onClose();
-            }}
-          >
-            <Icon name="wand-sparkles" size={15} />
-            Vista automática
-          </button>
+          {!isNew && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                props.onReset();
+                props.onClose();
+              }}
+            >
+              <Icon name="wand-sparkles" size={15} />
+              Vista automática
+            </button>
+          )}
           <span style={{ flex: 1 }} />
           <button type="button" className="btn btn-secondary" onClick={props.onClose}>
             Cancelar
@@ -44,16 +50,22 @@ export function CameraDialog(props: {
             className="btn btn-primary"
             onClick={() => {
               const v = viewer.current;
-              if (v) props.onSave(v.getCamera());
+              if (v) props.onSave(v.getCamera(), isNew ? name : undefined);
               props.onClose();
             }}
           >
             <Icon name="camera" size={15} />
-            Usar esta vista
+            {isNew ? 'Agregar vista' : 'Usar esta vista'}
           </button>
         </>
       }
     >
+      {isNew && (
+        <div className="field" style={{ marginBottom: 10, maxWidth: 360 }}>
+          <label htmlFor="view-name">Nombre de la vista</label>
+          <input id="view-name" className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="Ej. Vista desde la entrada" />
+        </div>
+      )}
       <p style={{ margin: '0 0 10px', fontSize: 13, color: MUTED }}>Arrastra para girar · rueda o pellizco para acercar · clic derecho (o dos dedos) para mover. La foto de la galería, el PDF y la página del cliente usarán esta toma.</p>
       {/* Never let the viewer collapse: dragging on a 0 px tall canvas makes OrbitControls divide by zero (NaN camera). */}
       <div style={{ position: 'relative', height: 'min(62vh, 620px)', minHeight: 320, flex: 'none', background: 'var(--sp-canvas)' }}>

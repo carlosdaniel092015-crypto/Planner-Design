@@ -75,3 +75,14 @@ describe('optimización de corte', () => {
     for (const g of out) assertValid(g);
   });
 });
+
+describe('galería: vistas agregadas', () => {
+  const cam = { az: 0.8, polar: 1.1, dist: 6, target: [1.5, 0.8, 1.2] as [number, number, number] };
+  it('el proyecto guarda hasta 12 vistas con nombre y cámara válida', () => {
+    const p = projectDataSchema.parse({ ...DEFAULT_KITCHEN, cams: { views: [{ id: 'a1', name: ' Desde la entrada ', cam }] } });
+    expect(p.cams?.views).toEqual([{ id: 'a1', name: 'Desde la entrada', cam }]);
+    expect(projectDataSchema.safeParse({ ...DEFAULT_KITCHEN, cams: { views: [{ id: 'a1', name: '', cam }] } }).success).toBe(false);
+    expect(projectDataSchema.safeParse({ ...DEFAULT_KITCHEN, cams: { views: [{ id: 'a1', name: 'x', cam: { ...cam, dist: Number.NaN } }] } }).success).toBe(false);
+    expect(projectDataSchema.safeParse({ ...DEFAULT_KITCHEN, cams: { views: Array.from({ length: 13 }, (_, i) => ({ id: `v${i}`, name: `V${i}`, cam })) } }).success).toBe(false);
+  });
+});

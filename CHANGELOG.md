@@ -3,6 +3,24 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.22.0 · 2026-09-28
+
+### Más electrodomésticos
+- **Estufa tradicional de 4 y de 6 hornillas** (de piso): cuerpo de acero con horno, perillas y parrillas. La encimera se corta a sus lados, no lleva zócalo y se cotiza a su precio, sin despiece.
+- **Nevera de 2 puertas** (lado a lado), **Bajo fregadero de 2 bocas** (dos tinas con su hueco en la encimera) y **Estufa empotrable de 6 hornillas**.
+- Están en **Módulos → Electro** (el fregadero doble, en Bajos) y se ven en 3D, planta, alzados, vista isométrica y PDF. Llegan solos a tu catálogo al abrir el editor.
+
+### Optimización de corte
+- En **Aprobación → Corte** aparece **«Optimización de corte»**: cada tablero dibujado con sus piezas acomodadas, cuántos tableros necesitas y el aprovechamiento. Ajusta el **ancho de sierra** y el **refilado de orilla**. En maderas, las piezas con veta no se giran.
+- **Exportar → Optimización de corte**, en **PDF** (una página por tablero, con medidas y a qué módulo va cada pieza) o en **CSV** (posición X/Y de cada pieza).
+
+### Biblioteca de tableros
+- La biblioteca de texturas ahora es la **biblioteca de tableros**. En cada tablero anotas su **espesor**, el **tamaño de la plancha** (largo × ancho) y el **distribuidor**.
+- El despiece corta con el espesor de cada tablero. La lista de corte y la optimización usan su plancha y muestran el distribuidor.
+
+### Galería de vistas
+- **«Agregar vista»** en la galería: encuadra otra toma en 3D, ponle nombre y queda en la galería, en el PDF y en la página que ve el cliente. Puedes ajustarla, renombrarla o quitarla (hasta 12).
+
 ## 1.21.0 · 2026-09-28
 
 ### Ubicación predeterminada de tus módulos
