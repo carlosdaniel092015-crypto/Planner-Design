@@ -107,11 +107,15 @@ export const moduleRolesFor = (p: Pick<ProjectData, 'ptype' | 'layout'>) =>
   MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' ? 'cocina' : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
 
 /** Catalogue modules that can stand in for a standard one: same kind of project and same module type. */
+/** Bought appliances (fridges, hoods, ranges, dishwashers…), not furniture. */
+export const isAppliance = (m: Pick<ModuleDefinition, 'type' | 'appl' | 'range' | 'cat'>) => m.type === 'fridge' || m.type === 'hood' || !!m.appl || !!m.range || m.cat === 'Electro';
+
 export function moduleChoicesFor(code: string, catalog: Record<string, ModuleDefinition>): ModuleDefinition[] {
   const std = catalog[code] ?? FALLBACK[code];
   if (!std) return [];
   return Object.values(catalog)
-    .filter((m) => m.active && m.code !== code && m.type === std.type && m.projectType === std.projectType)
+    // Appliances are chosen in Especificaciones → Electrodomésticos, not as furniture; sink / cooktop bases only for their role.
+    .filter((m) => m.active && m.code !== code && m.type === std.type && m.projectType === std.projectType && !isAppliance(m) && (!m.sink || !!std.sink) && (!m.cook || !!std.cook))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 const wallLen = (w: Wall, p: ProjectData) => (w === 'A' || w === 'D' ? p.room.A : p.room.B);
@@ -266,10 +270,16 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     const agua = pt('agua');
     if (ap.freg?.on !== false && !agua && p.pts.some((x) => x.t === 'agua')) notes.push('La toma de agua está en un muro sin muebles; el fregadero quedará lejos de ella.');
     const win = p.ops.find((o) => o.t === 'ventana' && walls.includes(o.wall as Wall));
-    const sinkW = clamp(Math.ceil(((ap.freg?.w ?? 76) + 14) / 10) * 10, 60, 120);
+    const bowls = ap.freg?.opt === 2 ? 2 : 1;
+    const sinkW = clamp(Math.ceil(((ap.freg?.w ?? 76) + 14) / 10) * 10, bowls === 2 ? 80 : 60, 120);
     const sinkWall = (agua?.wall as Wall) ?? (win?.wall as Wall) ?? 'A';
     const sinkAt = agua ? agua.pos : win ? win.pos + win.w / 2 : wallLen(sinkWall, p) / 2;
-    const sink = ap.freg?.on !== false ? placeNear(sinkWall, sinkAt, sinkW, tpl('BF', sinkW)) ?? placeNear(null, null, sinkW, tpl('BF', sinkW)) : null;
+    // The module under the sink always gets its sink (with the bowls chosen), also the designer's own module.
+    const sinkTpl = () => {
+      const t = candidates('BF').list.length ? tpl('BF', sinkW) : bowls === 2 && (catalog['BF-2B']?.active || FALLBACK['BF-2B']) ? std('BF-2B') : tpl('BF', sinkW);
+      return { ...t, sink: bowls };
+    };
+    const sink = ap.freg?.on !== false ? placeNear(sinkWall, sinkAt, sinkW, sinkTpl()) ?? placeNear(null, null, sinkW, sinkTpl()) : null;
     if (ap.freg?.on !== false && !sink) notes.push('No hubo espacio para el fregadero.');
 
     // Dishwasher next to the sink.
@@ -288,7 +298,11 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     if (ap.refri?.on) {
       const w = clamp(ap.refri.w, 60, 90);
       const patch = { h: clamp(ap.refri.h, 170, Math.min(200, p.room.H - 10)), d: clamp(ap.refri.d, 45, 70), name: 'Refrigerador' };
-      fridgeAt = placeNear(tallWall, null, w, tpl('RF-75', w), patch, tallAt) ?? placeNear(null, null, w, tpl('RF-75', w), patch, 'end');
+      // Side-by-side fridge (2 doors) when chosen in Especificaciones.
+      const twoDoor = ap.refri.opt === 2 && (catalog['RF-2P']?.active || FALLBACK['RF-2P']);
+      const fr = () => (twoDoor ? { ...std('RF-2P'), rw: [60, 110] as [number, number] } : tpl('RF-75', w));
+      if (twoDoor) patch.name = 'Nevera 2 puertas';
+      fridgeAt = placeNear(tallWall, null, w, fr(), patch, tallAt) ?? placeNear(null, null, w, fr(), patch, 'end');
       if (!fridgeAt) notes.push('No hubo espacio para el refrigerador.');
     }
 
@@ -296,21 +310,31 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     const gas = pt('gas') ?? pt('campana');
     let cook: Placed | null = null;
     if (ap.estufa?.on) {
-      const w = clamp(Math.ceil((ap.estufa.w + 4) / 10) * 10, 60, 90);
-      const underOven = ap.horno?.on && ap.horno.inst === 'Bajo encimera';
+      const burners = ap.estufa.opt === 6 ? 6 : 4;
+      // Traditional (freestanding) range: the appliance itself, its own oven, the worktop stops at its sides.
+      const range = ap.estufa.inst === 'Libre' ? (burners === 6 ? 'ET-90' : 'ET-76') : null;
+      const rangeDef = range && (catalog[range]?.active ? catalog[range] : FALLBACK[range]);
+      const w = rangeDef ? rangeDef.w : clamp(Math.ceil((ap.estufa.w + 4) / 10) * 10, burners === 6 ? 90 : 60, burners === 6 ? 120 : 90);
+      const underOven = !rangeDef && ap.horno?.on && ap.horno.inst === 'Bajo encimera';
+      // The module under the cooktop always gets its burners, also the designer's own module.
+      const cookTpl = () => {
+        if (rangeDef) return templateOf(rangeDef);
+        const t = !candidates('BP-80').list.length && burners === 6 && (catalog['BP-6H']?.active || FALLBACK['BP-6H']) ? std('BP-6H') : tpl('BP-80', w);
+        return { ...t, cook: burners === 6 ? 6 : 1 };
+      };
       const patch: Partial<ModuleInstance> | undefined = underOven ? { fr: [{ t: 'oven', f: 0.62 }, { t: 'drawer', f: 0.38 }], oven: 1, name: 'Bajo parrilla con horno' } : undefined;
-      if (gas) cook = placeNear(gas.wall as Wall, gas.pos, w, tpl('BP-80', w), patch);
+      if (gas) cook = placeNear(gas.wall as Wall, gas.pos, w, cookTpl(), patch);
       if (!cook) {
         const other = walls.find((x) => x !== sink?.wall) ?? null;
         const far = sink ? (sink.pos + sink.w / 2 > wallLen(sink.wall, p) / 2 ? wallLen(sink.wall, p) * 0.2 : wallLen(sink.wall, p) * 0.8) : null;
-        cook = (other && placeNear(other, wallLen(other, p) / 2, w, tpl('BP-80', w), patch)) || placeNear(sink?.wall ?? 'A', far, w, tpl('BP-80', w), patch);
+        cook = (other && placeNear(other, wallLen(other, p) / 2, w, cookTpl(), patch)) || placeNear(sink?.wall ?? 'A', far, w, cookTpl(), patch);
       }
-      if (!cook) notes.push('No hubo espacio para la parrilla.');
+      if (!cook) notes.push(rangeDef ? 'No hubo espacio para la estufa.' : 'No hubo espacio para la parrilla.');
     }
     // Oven column next to the fridge; if it does not fit, the oven goes under the cooktop.
     if (ap.horno?.on && ap.horno.inst === 'En columna') {
       const col = placeNear(tallWall, null, 60, tpl('C-HO', 60), { h: tallH }, tallAt) ?? placeNear(null, null, 60, tpl('C-HO', 60), { h: tallH }, 'end');
-      if (!col && cook) {
+      if (!col && cook && !cook.tpl.range) {
         cook.patch = { ...cook.patch, fr: [{ t: 'oven', f: 0.62 }, { t: 'drawer', f: 0.38 }], oven: 1, name: 'Bajo parrilla con horno' };
         notes.push('La columna del horno no cupo; el horno quedó bajo la parrilla.');
       } else if (!col) notes.push('No hubo espacio para la columna del horno.');

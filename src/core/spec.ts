@@ -37,6 +37,8 @@ export interface Appliance {
   d: number;
   /** Custom items only (keys starting with "x"): the name the designer gave it. */
   name?: string;
+  /** Model option: fridge doors (1 freezer on top, 2 side by side), cooktop burners (4 or 6), sink bowls (1 or 2). */
+  opt?: number;
 }
 
 /** Installation options for custom items; the generator maps each to a kind of module. */
@@ -49,16 +51,42 @@ export interface ApplianceOption {
   icon: string;
   insts: string[];
   d: Appliance;
+  /** How each installation is shown (e.g. the cooktop "Bajo encimera" is the built-in one). */
+  instLabels?: Record<string, string>;
+  /** Model choice (see Appliance.opt); picking one also sets the usual size for it. */
+  opts?: { label: string; values: { v: number; l: string; size?: Partial<Pick<Appliance, 'w' | 'h' | 'd'>> }[] };
 }
 
 export const APPL_K: ApplianceOption[] = [
-  { k: 'refri', name: 'Refrigerador', icon: 'refrigerator', insts: ['Libre', 'Empotrado', 'En columna'], d: { on: true, inst: 'Libre', w: 75, h: 185, d: 65 } },
-  { k: 'estufa', name: 'Estufa / parrilla', icon: 'flame', insts: ['Bajo encimera', 'Libre'], d: { on: true, inst: 'Bajo encimera', w: 76, h: 5, d: 52 } },
+  {
+    k: 'refri',
+    name: 'Refrigerador',
+    icon: 'refrigerator',
+    insts: ['Libre', 'Empotrado', 'En columna'],
+    d: { on: true, inst: 'Libre', w: 75, h: 185, d: 65, opt: 1 },
+    opts: { label: 'Tipo', values: [{ v: 1, l: 'Congelador arriba', size: { w: 75, h: 185, d: 65 } }, { v: 2, l: '2 puertas (lado a lado)', size: { w: 90, h: 180, d: 70 } }] },
+  },
+  {
+    k: 'estufa',
+    name: 'Estufa / parrilla',
+    icon: 'flame',
+    insts: ['Bajo encimera', 'Libre'],
+    instLabels: { 'Bajo encimera': 'Empotrable', Libre: 'Tradicional (de piso)' },
+    d: { on: true, inst: 'Bajo encimera', w: 76, h: 5, d: 52, opt: 4 },
+    opts: { label: 'Hornillas', values: [{ v: 4, l: '4 hornillas', size: { w: 76 } }, { v: 6, l: '6 hornillas', size: { w: 90 } }] },
+  },
   { k: 'horno', name: 'Horno', icon: 'cooking-pot', insts: ['En columna', 'Bajo encimera'], d: { on: true, inst: 'En columna', w: 60, h: 60, d: 56 } },
   { k: 'campana', name: 'Campana', icon: 'wind', insts: ['Empotrado', 'Libre'], d: { on: true, inst: 'Libre', w: 80, h: 25, d: 50 } },
   { k: 'micro', name: 'Microondas', icon: 'microwave', insts: ['En columna', 'Empotrado', 'Libre'], d: { on: false, inst: 'En columna', w: 60, h: 38, d: 40 } },
   { k: 'lava', name: 'Lavavajillas', icon: 'washing-machine', insts: ['Empotrado', 'Libre'], d: { on: true, inst: 'Empotrado', w: 60, h: 82, d: 57 } },
-  { k: 'freg', name: 'Fregadero', icon: 'droplets', insts: ['Bajo encimera', 'Empotrado'], d: { on: true, inst: 'Bajo encimera', w: 76, h: 20, d: 44 } },
+  {
+    k: 'freg',
+    name: 'Fregadero',
+    icon: 'droplets',
+    insts: ['Bajo encimera', 'Empotrado'],
+    d: { on: true, inst: 'Bajo encimera', w: 76, h: 20, d: 44, opt: 1 },
+    opts: { label: 'Bocas', values: [{ v: 1, l: '1 boca', size: { w: 76 } }, { v: 2, l: '2 bocas', size: { w: 86 } }] },
+  },
   { k: 'cava', name: 'Cava de vinos', icon: 'wine', insts: ['Empotrado', 'Libre', 'En columna'], d: { on: false, inst: 'Empotrado', w: 30, h: 82, d: 57 } },
 ];
 
