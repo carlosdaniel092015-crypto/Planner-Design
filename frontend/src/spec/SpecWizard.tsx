@@ -279,8 +279,8 @@ export function SpecWizard(props: {
     set({ appl: rest });
   };
   const applCards = [
-    ...appliancesFor(s.ptype).map((a) => ({ k: a.k, name: a.name, icon: a.icon, insts: a.insts as readonly string[], custom: false })),
-    ...customKeys.map((k) => ({ k, name: appl[k]!.name ?? 'Accesorio', icon: 'package', insts: (kit ? CUSTOM_INSTS : ['Integrado', 'Libre']) as readonly string[], custom: true })),
+    ...appliancesFor(s.ptype).map((a) => ({ k: a.k, name: a.name, icon: a.icon, insts: a.insts as readonly string[], custom: false, opts: a.opts, instLabels: a.instLabels })),
+    ...customKeys.map((k) => ({ k, name: appl[k]!.name ?? 'Accesorio', icon: 'package', insts: (kit ? CUSTOM_INSTS : ['Integrado', 'Libre']) as readonly string[], custom: true, opts: undefined, instLabels: undefined })),
   ];
 
   // ---------- design preferences ----------
@@ -707,12 +707,27 @@ export function SpecWizard(props: {
                               const on = c.inst === l;
                               return (
                                 <button type="button" key={l} onClick={() => setAppl(a.k, { inst: l, on: true })} disabled={readOnly} style={{ font: 'inherit', fontSize: 12, padding: '5px 8px', cursor: 'pointer', background: on ? 'var(--color-text)' : 'transparent', color: on ? 'var(--color-bg)' : 'var(--color-text)', border: `1px solid ${on ? 'var(--color-text)' : 'var(--color-divider)'}` }}>
-                                  {l}
+                                  {a.instLabels?.[l] ?? l}
                                 </button>
                               );
                             })}
                           </div>
                         </div>
+                        {a.opts && (
+                          <div>
+                            <div style={{ fontSize: 12, marginBottom: 5, color: 'color-mix(in srgb,var(--color-text) 70%,transparent)' }}>{a.opts.label}</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {a.opts.values.map((o) => {
+                                const on = (c.opt ?? a.opts!.values[0]!.v) === o.v;
+                                return (
+                                  <button type="button" key={o.v} aria-pressed={on} onClick={() => setAppl(a.k, { opt: o.v, on: true, ...o.size })} disabled={readOnly} style={{ font: 'inherit', fontSize: 12, padding: '5px 8px', cursor: 'pointer', background: on ? 'var(--color-text)' : 'transparent', color: on ? 'var(--color-bg)' : 'var(--color-text)', border: `1px solid ${on ? 'var(--color-text)' : 'var(--color-divider)'}` }}>
+                                    {o.l}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 6 }}>
                           {(
                             [
@@ -840,7 +855,12 @@ export function SpecWizard(props: {
                         ]),
                       edit: 3,
                     },
-                    { n: 4, title: kit ? 'Electrodomésticos' : 'Accesorios', rows: applOn.map((a) => [a.name, appl[a.k]!.inst + (kit ? ` · ${appl[a.k]!.w} cm` : '')]), edit: 4 },
+                    { n: 4, title: kit ? 'Electrodomésticos' : 'Accesorios', rows: applOn.map((a) => {
+                      const o = appliancesFor(s.ptype).find((x) => x.k === a.k);
+                      const c = appl[a.k]!;
+                      const opt = o?.opts?.values.find((v) => v.v === (c.opt ?? o.opts!.values[0]!.v))?.l;
+                      return [a.name, (o?.instLabels?.[c.inst] ?? c.inst) + (opt ? ` · ${opt}` : '') + (kit ? ` · ${c.w} cm` : '')];
+                    }), edit: 4 },
                     {
                       n: 5,
                       title: 'Preferencias',

@@ -3,6 +3,18 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.25.0 · 2026-09-28
+
+### Electrodomésticos en Especificaciones
+- En **Fase 1 → Electrodomésticos** eliges el modelo de cada equipo y la distribución propuesta lo coloca:
+  - **Refrigerador:** congelador arriba o **2 puertas (lado a lado)**.
+  - **Estufa:** **empotrable** o **tradicional (de piso)**, de **4 o 6 hornillas**.
+  - **Fregadero:** de **1 o 2 bocas**.
+- En **Preferencias → Módulos de la propuesta** ya no aparecen electrodomésticos como si fueran muebles.
+
+### Tu base de fregadero lleva su fregadero
+- El módulo que elijas para **«Bajo fregadero»** recibe siempre el fregadero (con las bocas que elegiste), aunque tu módulo solo tenga el hueco. Lo mismo con **«Bajo parrilla»** y la parrilla.
+
 ## 1.24.0 · 2026-09-28
 
 ### Mueve y gira tus muebles como quieras

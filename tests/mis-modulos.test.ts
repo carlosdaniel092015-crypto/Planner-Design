@@ -114,3 +114,63 @@ describe('ubicación predeterminada de mis módulos', () => {
     expect(placedFor('B-1P', cat).map((m) => m.code)).toEqual(['MI-BAJO']);
   });
 });
+
+describe('electrodomésticos de Especificaciones en la distribución propuesta', () => {
+  const catalog: Record<string, ModuleDefinition> = {
+    ...std,
+    // The designer's sink base, made without the sink flag (only the gap for it).
+    'MI-FREG': own('MI-FREG', 'B-2P', { name: 'Mi base de fregadero', rw: [60, 120] }),
+    'MI-PARR': own('MI-PARR', 'BC-2', { name: 'Mi base de parrilla', rw: [60, 120] }),
+  };
+  const base = () => projectDataSchema.parse(newProject('cocina'));
+  const withAppl = (patch: Record<string, Record<string, unknown>>) => {
+    const p = base();
+    const ap = (p.appl ?? {}) as Record<string, Record<string, unknown>>;
+    p.appl = Object.fromEntries(Object.entries({ ...ap, ...patch }).map(([k, v]) => [k, { ...(ap[k] ?? {}), ...v }])) as never;
+    return p;
+  };
+
+  it('el módulo elegido para «Bajo fregadero» siempre lleva el fregadero, aunque no lo traiga marcado', () => {
+    const p = base();
+    p.prefs = { ...p.prefs, mods: { BF: 'MI-FREG' } };
+    const g = generateDesign(p, catalog);
+    const m = g.mods.find((x) => x.code === 'MI-FREG');
+    expect(m).toBeDefined();
+    expect(m!.sink).toBe(1);
+    // With 2 bowls chosen in Especificaciones it gets both.
+    const q = withAppl({ freg: { opt: 2, w: 86 } });
+    q.prefs = { ...q.prefs, mods: { BF: 'MI-FREG' } };
+    expect(generateDesign(q, catalog).mods.find((x) => x.code === 'MI-FREG')!.sink).toBe(2);
+    // Without a module of yours: the standard double sink base.
+    expect(generateDesign(withAppl({ freg: { opt: 2, w: 86 } }), catalog).mods.find((x) => x.sink === 2)?.code).toBe('BF-2B');
+  });
+
+  it('el módulo elegido para «Bajo parrilla» lleva la parrilla; 6 hornillas y estufa tradicional desde Especificaciones', () => {
+    const p = base();
+    p.prefs = { ...p.prefs, mods: { 'BP-80': 'MI-PARR' } };
+    expect(generateDesign(p, catalog).mods.find((x) => x.code === 'MI-PARR')?.cook).toBe(1);
+    const six = generateDesign(withAppl({ estufa: { opt: 6, w: 90 } }), catalog).mods.find((x) => x.cook);
+    expect([six?.code, six?.cook]).toEqual(['BP-6H', 6]);
+    const range = generateDesign(withAppl({ estufa: { inst: 'Libre', opt: 6 } }), catalog).mods.find((x) => x.cook);
+    expect([range?.code, range?.range, range?.cook]).toEqual(['ET-90', 1, 6]);
+    const range4 = generateDesign(withAppl({ estufa: { inst: 'Libre', opt: 4 } }), catalog).mods.find((x) => x.cook);
+    expect(range4?.code).toBe('ET-76');
+  });
+
+  it('nevera de 2 puertas desde Especificaciones', () => {
+    const g = generateDesign(withAppl({ refri: { opt: 2, w: 90, h: 180, d: 70 } }), catalog);
+    const f = g.mods.find((x) => x.type === 'fridge');
+    expect([f?.code, f?.fd]).toEqual(['RF-2P', 2]);
+  });
+
+  it('los electrodomésticos no se ofrecen como muebles en «Módulos de la propuesta»', () => {
+    const codes = (role: string) => moduleChoicesFor(role, catalog).map((m) => m.code);
+    for (const role of ['B-1P', 'B-2P', 'BF', 'BP-80', 'BC-3']) {
+      for (const c of ['ET-76', 'ET-90', 'BP-6H', 'LV-60']) expect(codes(role)).not.toContain(c);
+    }
+    // Sink / cooktop bases only for their own role.
+    expect(codes('B-2P')).not.toContain('BF-2B');
+    expect(codes('BF')).toContain('BF-2B');
+    expect(codes('BF')).toContain('MI-FREG');
+  });
+});
