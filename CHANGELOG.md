@@ -3,6 +3,13 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.21.0 · 2026-09-28
+
+### Ubicación predeterminada de tus módulos
+- En **Bibliotecas → Módulos**, cada módulo tiene **«Ubicación predeterminada»**: bajo encimera, bajo encimera esquina, bajo fregadero, bajo parrilla, cajonera, estrecho, isla, montaje alto, **montaje alto esquina**, **sobre nevera**, columnas; y en closets colgado largo o corto, cajonera, zapatero, entrepaños e isla. Las opciones dependen del montaje del módulo.
+- «Generar distribución» coloca cada módulo en su ubicación **sin tener que elegirlo en el asistente**. En «Módulos de la propuesta» aparecen como «Automático»; puedes forzar el estándar con «Estándar».
+- **Sobre nevera:** el módulo va justo encima del refrigerador, con su mismo ancho, y llega hasta la línea de las alacenas. **Montaje alto esquina:** va en la esquina donde se unen los muros.
+
 ## 1.20.0 · 2026-09-28
 
 ### Tus módulos en la distribución propuesta

@@ -12,6 +12,7 @@ import {
   ESTILOS,
   type FurnitureWall,
   moduleRolesFor,
+  placedFor,
   type ModuleDefinition,
   isCustomAppl,
   layoutsFor,
@@ -162,7 +163,8 @@ export function SpecWizard(props: {
   const ownModules = moduleRolesFor(s).filter((r) => {
     const own = (s.prefs as { mods?: Record<string, string> }).mods ?? {};
     const v = r.code in own ? own[r.code] : props.moduleDefaults[r.code];
-    return !!v && !!props.modules[v]?.active;
+    if (v === '-') return false;
+    return (!!v && !!props.modules[v]?.active) || placedFor(r.code, props.modules).length > 0;
   }).length;
   const nid = (xs: { id: number }[]) => xs.reduce((a, x) => Math.max(a, x.id), 0) + 1;
   const clampRoom = (v: number) => Math.max(100, Math.min(1200, Math.round(v)));

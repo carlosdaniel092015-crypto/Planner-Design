@@ -89,7 +89,8 @@ export function organizationRoutes() {
       if (input.moduleDefaults) {
         // Only codes that exist in this organisation's catalogue ('' = standard, dropped).
         const codes = new Set((await db.select({ code: moduleDefinitions.code }).from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, a.org.id))).map((m) => m.code));
-        const clean = Object.fromEntries(Object.entries(input.moduleDefaults).filter(([k, v]) => v && codes.has(v) && k !== v));
+        // '-' = always the standard module (even when an own module has that default location).
+        const clean = Object.fromEntries(Object.entries(input.moduleDefaults).filter(([k, v]) => v === '-' || (v && codes.has(v) && k !== v)));
         settings = { ...(settings ?? a.org.settings), modulos: clean };
       }
       const row = await db.transaction(async (tx) => {

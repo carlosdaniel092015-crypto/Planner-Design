@@ -1,6 +1,6 @@
 // Especificaciones → "Módulos de la propuesta": which of the organisation's own modules the generated layout uses
 // instead of each standard one (prefs.mods), optionally saved as the default for new projects.
-import { DEFAULT_MODULES, type ModuleDefinition, moduleChoicesFor, moduleRolesFor, type ProjectData } from '@core';
+import { DEFAULT_MODULES, type ModuleDefinition, moduleChoicesFor, moduleRolesFor, placedFor, type ProjectData } from '@core';
 import { useState } from 'react';
 import { ApiError, request } from '../api';
 import { Icon, MUTED } from '../ui';
@@ -28,11 +28,12 @@ export function ModulePicker(props: {
   const own = (data.prefs as { mods?: Record<string, string> }).mods ?? {};
   const [busy, setBusy] = useState(false);
   const roles = moduleRolesFor(data)
-    .map((r) => ({ ...r, std: modules[r.code], choices: moduleChoicesFor(r.code, modules) }))
+    .map((r) => ({ ...r, std: modules[r.code], choices: moduleChoicesFor(r.code, modules), placed: placedFor(r.code, modules) }))
     .filter((r) => r.choices.length > 0);
+  /** '' = automatic (own modules with this location, else standard) · '-' = always standard · code = that module. */
   const choiceOf = (code: string) => {
     const v = code in own ? own[code]! : (defaults[code] ?? '');
-    return v && modules[v]?.active ? v : '';
+    return v === '-' || (v && modules[v]?.active) ? v : '';
   };
   const effective = Object.fromEntries(roles.map((r) => [r.code, choiceOf(r.code)]).filter(([, v]) => v));
   const set = (code: string, v: string) => props.onChange({ ...own, [code]: v });
@@ -44,8 +45,8 @@ export function ModulePicker(props: {
         <div>
           <h6 style={{ margin: 0 }}>Módulos de la propuesta</h6>
           <p style={{ fontSize: 12, margin: '4px 0 0', color: MUTED }}>
-            Elige tus módulos para cada pieza y «Generar distribución» los usará en lugar de los estándar. Si alguno no admite el ancho de un hueco, ahí se usa el estándar y te
-            avisamos.
+            Elige tus módulos para cada pieza y «Generar distribución» los usará en lugar de los estándar. Los que tienen «Ubicación predeterminada» en Bibliotecas ya salen como
+            «Automático». Si alguno no admite el ancho de un hueco, ahí se usa el estándar.
           </p>
         </div>
         {props.canSaveDefault && roles.length > 0 && !props.readOnly && (
@@ -81,7 +82,14 @@ export function ModulePicker(props: {
             <div key={r.code} className="field">
               <label htmlFor={`mod-${r.code}`}>{r.label}</label>
               <select id={`mod-${r.code}`} className="input" value={choiceOf(r.code)} disabled={props.readOnly} onChange={(e) => set(r.code, e.target.value)}>
-                <option value="">Estándar{r.std ? ` · ${r.std.name}` : ''}</option>
+                {r.placed.length ? (
+                  <>
+                    <option value="">Automático · {r.placed.map((m) => m.name).join(', ')}</option>
+                    <option value="-">Estándar{r.std ? ` · ${r.std.name}` : ''}</option>
+                  </>
+                ) : (
+                  <option value="">Estándar{r.std ? ` · ${r.std.name}` : ''}</option>
+                )}
                 {(
                   [
                     ['Mis módulos', r.choices.filter((m) => !STANDARD.has(m.code))],

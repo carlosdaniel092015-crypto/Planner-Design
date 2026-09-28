@@ -10,6 +10,8 @@ interface Placeable {
   d: number;
   h: number;
   type: ModuleType;
+  /** Bottom height (cm) of a wall-hung unit placed off the usual 150 cm line, e.g. over the fridge. */
+  z?: number;
 }
 
 export interface RoomSize {
@@ -33,10 +35,10 @@ export function geo(m: Placeable, room?: RoomSize) {
 export const wallLength = (wall: 'A' | 'B' | 'C' | 'D', room: RoomSize) => (wall === 'A' || wall === 'D' ? room.A : room.B);
 
 /** Vertical range [z0, z1] in cm; `zoc` is the plinth height. */
-export function zr(m: Pick<Placeable, 'type' | 'h'>, zoc: number): [number, number] {
-  if (m.type === 'upper') return [150, 150 + m.h];
+export function zr(m: Pick<Placeable, 'type' | 'h' | 'z'>, zoc: number): [number, number] {
+  if (m.type === 'upper') return [m.z ?? 150, (m.z ?? 150) + m.h];
   if (m.type === 'fridge') return [0, m.h];
-  if (m.type === 'hood') return [150, 150 + m.h];
+  if (m.type === 'hood') return [m.z ?? 150, (m.z ?? 150) + m.h];
   return [zoc, zoc + m.h];
 }
 

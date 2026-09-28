@@ -94,5 +94,8 @@ export interface LibModule {
   thumbnailUrl: string | null;
   modelFileId: string | null;
   recipe: Record<string, unknown> | null;
+  /** place: default location in the generated layout (MODULE_PLACES key). */
+  anchor?: { place?: string } | null;
+  projectType?: 'cocina' | 'closet';
   active: boolean;
 }

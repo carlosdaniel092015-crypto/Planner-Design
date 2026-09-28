@@ -64,6 +64,44 @@ export const MODULE_ROLES: { code: string; label: string; ptype: 'cocina' | 'clo
   { code: 'IC-100', label: 'Isla cajonera', ptype: 'vestidor' },
 ];
 
+/**
+ * Default locations a library module can declare ("Ubicación predeterminada"). The generator uses it automatically in
+ * those roles, or in the extra spots (`roles: []`: corner upper, over the fridge) that only exist for own modules.
+ */
+export const MODULE_PLACES: { key: string; label: string; ptype: 'cocina' | 'closet'; type: ModuleShape['type']; roles: string[] }[] = [
+  { key: 'bajo', label: 'Bajo encimera', ptype: 'cocina', type: 'base', roles: ['B-1P', 'B-2P'] },
+  { key: 'esquina-baja', label: 'Bajo encimera esquina', ptype: 'cocina', type: 'base', roles: ['E-L'] },
+  { key: 'fregadero', label: 'Bajo fregadero', ptype: 'cocina', type: 'base', roles: ['BF'] },
+  { key: 'parrilla', label: 'Bajo parrilla', ptype: 'cocina', type: 'base', roles: ['BP-80'] },
+  { key: 'cajonera', label: 'Cajonera', ptype: 'cocina', type: 'base', roles: ['BC-3'] },
+  { key: 'estrecho', label: 'Estrecho / botellero', ptype: 'cocina', type: 'base', roles: ['BB-22'] },
+  { key: 'isla', label: 'Isla / península', ptype: 'cocina', type: 'base', roles: ['IS-120'] },
+  { key: 'alto', label: 'Montaje alto', ptype: 'cocina', type: 'upper', roles: ['A-1P', 'A-2P'] },
+  { key: 'esquina-alta', label: 'Montaje alto esquina', ptype: 'cocina', type: 'upper', roles: [] },
+  { key: 'sobre-nevera', label: 'Sobre nevera', ptype: 'cocina', type: 'upper', roles: [] },
+  { key: 'columna-horno', label: 'Columna horno', ptype: 'cocina', type: 'tall', roles: ['C-HO'] },
+  { key: 'despensa', label: 'Columna despensa', ptype: 'cocina', type: 'tall', roles: ['C-DE'] },
+  { key: 'colgado-largo', label: 'Colgado largo', ptype: 'closet', type: 'tall', roles: ['CL-100', 'VL-100'] },
+  { key: 'colgado-corto', label: 'Colgado corto', ptype: 'closet', type: 'tall', roles: ['CC-100', 'VC-100'] },
+  { key: 'cajonera-closet', label: 'Cajonera', ptype: 'closet', type: 'tall', roles: ['CJ-100'] },
+  { key: 'zapatero', label: 'Zapatero', ptype: 'closet', type: 'tall', roles: ['ZP-60', 'VZ-80'] },
+  { key: 'entrepanos', label: 'Entrepaños', ptype: 'closet', type: 'tall', roles: ['CL-E', 'VE-80'] },
+  { key: 'isla-closet', label: 'Isla cajonera', ptype: 'closet', type: 'base', roles: ['IC-100'] },
+];
+
+/** Locations that fit a module (same kind of project; montaje compatible). */
+export const placesFor = (m: Pick<ModuleDefinition, 'projectType' | 'type'>) => MODULE_PLACES.filter((p) => p.ptype === m.projectType && (p.type === m.type || (p.ptype === 'closet' && m.type !== 'upper' && m.type !== 'hood')));
+
+/** Own modules that declared a location covering this standard role, same type (best first: by name). */
+export function placedFor(code: string, catalog: Record<string, ModuleDefinition>): ModuleDefinition[] {
+  const std = catalog[code] ?? FALLBACK[code];
+  const keys = new Set(MODULE_PLACES.filter((p) => p.roles.includes(code)).map((p) => p.key));
+  if (!std || !keys.size) return [];
+  return Object.values(catalog)
+    .filter((m) => m.active && m.place && keys.has(m.place) && m.code !== code && m.projectType === std.projectType && m.type === std.type)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** Roles for a project (a closet laid out "abierto" uses the walk-in modules). */
 export const moduleRolesFor = (p: Pick<ProjectData, 'ptype' | 'layout'>) =>
   MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' ? 'cocina' : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
@@ -81,17 +119,36 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDefinition>, opts: { layout?: string } = {}): GeneratedDesign {
   const layout = opts.layout ?? p.layout ?? (p.ptype === 'cocina' ? 'L' : 'lineal');
+  // Per role: the project's (or organisation's) explicit choice, '-' = standard; otherwise own modules placed there.
   const chosen = ((p.prefs as { mods?: Record<string, string> }).mods ?? {}) as Record<string, string>;
   const misfit = new Map<string, Set<number>>();
+  const admits = (m: ModuleDefinition, w?: number) => {
+    const [lo, hi] = m.rw ?? [m.w, m.w];
+    return w == null || (w >= lo - 0.5 && w <= hi + 0.5);
+  };
+  const candidates = (code: string): { list: ModuleDefinition[]; explicit: boolean } => {
+    const pick = chosen[code];
+    if (pick === '-') return { list: [], explicit: false };
+    const own = pick ? catalog[pick] : undefined;
+    return own?.active ? { list: [own], explicit: true } : { list: placedFor(code, catalog), explicit: false };
+  };
+  /** Own module for a spot only own modules fill (corner upper, over the fridge). */
+  const special = (key: string) =>
+    Object.values(catalog)
+      .filter((m) => m.active && m.place === key && m.projectType === 'cocina' && m.type === 'upper')
+      .sort((a, b) => a.name.localeCompare(b.name))[0];
+  /** Placed modules that keep their own depth (the over-fridge unit is usually deeper than the uppers). */
+  const keepDepth = new Set<Placed>();
   /** Template for a role; the designer's own module when it admits width `w` (else the standard one, noted once). */
   const tpl = (code: string, w?: number) => {
-    const own = chosen[code] ? catalog[chosen[code]] : undefined;
-    if (own?.active) {
-      const [lo, hi] = own.rw ?? [own.w, own.w];
-      if (w == null || (w >= lo - 0.5 && w <= hi + 0.5)) return templateOf(own);
-      const s = misfit.get(own.name) ?? new Set<number>();
+    const { list, explicit } = candidates(code);
+    const fit = list.find((m) => admits(m, w));
+    if (fit) return templateOf(fit);
+    // A module placed by location that does not fit a gap falls back quietly; an explicit choice is reported.
+    if (explicit && w != null) {
+      const s = misfit.get(list[0]!.name) ?? new Set<number>();
       s.add(Math.round(w));
-      misfit.set(own.name, s);
+      misfit.set(list[0]!.name, s);
     }
     const def = catalog[code]?.active ? catalog[code] : FALLBACK[code];
     if (!def) throw new Error(`Falta el módulo ${code} en el catálogo`);
@@ -176,7 +233,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
   for (const o of out) {
     if (o.tpl.type === 'base') o.patch = { ...o.patch, h: o.patch?.h && o.tpl.appl ? o.patch.h : dist.baseH, d: depth };
     else if (o.tpl.type === 'tall' && isKitchen) o.patch = { ...o.patch, d: depth };
-    else if (o.tpl.type === 'upper') o.patch = { ...o.patch, d: dist.upperD };
+    else if (o.tpl.type === 'upper' && !keepDepth.has(o)) o.patch = { ...o.patch, d: dist.upperD };
   }
   for (const m of islands) if (isKitchen) m.h = dist.baseH;
 
@@ -194,6 +251,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
   function kitchen() {
     const ap = applOf('cocina', p.appl);
     const zoc = zocaloCm(p.prefs.zocalo);
+    let fridgeAt: Placed | null = null;
     const tallH = clamp(p.room.H - zoc - 15, 180, 240) >= 210 ? 210 : clamp(p.room.H - zoc - 15, 180, 240);
     const pt = (t: string) => p.pts.find((x) => x.t === t && walls.includes(x.wall as Wall));
     const custom = Object.entries(ap)
@@ -230,7 +288,8 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     if (ap.refri?.on) {
       const w = clamp(ap.refri.w, 60, 90);
       const patch = { h: clamp(ap.refri.h, 170, Math.min(200, p.room.H - 10)), d: clamp(ap.refri.d, 45, 70), name: 'Refrigerador' };
-      if (!placeNear(tallWall, null, w, tpl('RF-75', w), patch, tallAt) && !placeNear(null, null, w, tpl('RF-75', w), patch, 'end')) notes.push('No hubo espacio para el refrigerador.');
+      fridgeAt = placeNear(tallWall, null, w, tpl('RF-75', w), patch, tallAt) ?? placeNear(null, null, w, tpl('RF-75', w), patch, 'end');
+      if (!fridgeAt) notes.push('No hubo espacio para el refrigerador.');
     }
 
     // Cooktop on the gas point (or the hood outlet), otherwise away from the sink.
@@ -285,6 +344,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     // Uppers over the base runs, skipping windows, tall units and the hood.
     const upperH = Math.min(cmOf(p.prefs.alacena, 70), Math.max(35, p.room.H - 150 - 5));
     const hanging = custom.filter((c) => c.inst === 'Colgado');
+    const cornerUp = special('esquina-alta');
     for (const w of walls) {
       const floor = out.filter((o) => o.wall === w && o.tpl.type === 'base').sort((a, b) => a.pos - b.pos);
       if (!floor.length) continue;
@@ -306,6 +366,19 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       }
       if (b > cur) runs.push([cur, b]);
       for (let [r0, r1] of runs) {
+        // "Montaje alto esquina": the designer's corner upper where wall A meets B (and C).
+        if (cornerUp && w === 'A') {
+          const [lo, hi] = cornerUp.rw ?? [cornerUp.w, cornerUp.w];
+          const cw = clamp(cornerUp.w, lo, hi);
+          if (walls.includes('B') && r0 <= 0.5 && r1 - r0 >= cw) {
+            out.push({ wall: 'A', pos: 0, w: cw, tpl: templateOf(cornerUp), patch: { h: upperH } });
+            r0 += cw;
+          }
+          if (walls.includes('C') && r1 >= p.room.A - 0.5 && r1 - r0 >= cw) {
+            out.push({ wall: 'A', pos: Math.round(r1 - cw), w: cw, tpl: templateOf(cornerUp), patch: { h: upperH } });
+            r1 -= cw;
+          }
+        }
         // Custom hanging appliances (e.g. a wall microwave) take the first upper slot where they fit.
         for (const c of hanging.filter((x) => !x.done && r1 - r0 >= x.w)) {
           out.push({ wall: w, pos: Math.round(r0), w: c.w, tpl: std('A-1P'), patch: { name: c.name, appl: 1, h: clamp(c.h, 20, upperH), rw: [c.w, c.w], fr: [{ t: 'door', n: 1, f: 1 }] } });
@@ -315,6 +388,22 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
         fillUppers(w, r0, r1, upperH);
       }
       for (const c of hanging.filter((x) => !x.done)) notes.push(`No hubo espacio en las alacenas para ${c.name}.`);
+    }
+
+    // "Sobre nevera": the designer's upper over the fridge, from just above it up to the uppers' top line.
+    const overFridge = special('sobre-nevera');
+    if (overFridge && fridgeAt) {
+      const fh = fridgeAt.patch?.h ?? fridgeAt.tpl.h;
+      const z = Math.round(fh + 2);
+      const top = Math.min(p.room.H - 2, Math.max(150 + upperH, z + 20));
+      const h = Math.round(Math.min(overFridge.h, top - z));
+      if (!admits(overFridge, fridgeAt.w)) notes.push(`«${overFridge.name}» no admite ${fridgeAt.w} cm (el ancho del refrigerador); no se colocó sobre la nevera.`);
+      else if (h < 20) notes.push(`No queda altura para «${overFridge.name}» sobre la nevera (techo de ${p.room.H} cm).`);
+      else {
+        const placed: Placed = { wall: fridgeAt.wall, pos: fridgeAt.pos, w: fridgeAt.w, tpl: templateOf(overFridge), patch: { z, h } };
+        out.push(placed);
+        keepDepth.add(placed);
+      }
     }
 
     // Island / peninsula.
