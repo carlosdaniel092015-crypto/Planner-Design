@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.13.1 · 2026-09-28
+
+### Despliegue en Dokploy
+- Planner también se puede instalar en **Dokploy**: un archivo listo (`docker-compose.dokploy.yml`) levanta la app y su base de datos de una vez, y la guía explica cómo pasar los datos desde Easypanel.
+
 ## 1.13.0 · 2026-09-25
 
 ### Correos desde Gmail

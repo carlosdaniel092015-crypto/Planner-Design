@@ -20,3 +20,26 @@ jobs:
       - run: npm run build
       - name: Build de la imagen Docker
         run: docker build -t planner-api:ci .
+
+  dokploy-compose:
+    # Brings up docker-compose.dokploy.yml exactly as Dokploy would (app + Postgres) and checks the health endpoint.
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: PruebaCi123
+      AUTH_SECRET: secreto-de-ci-con-mas-de-32-caracteres
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Levantar app + Postgres
+        run: |
+          printf 'services:\n  app:\n    ports:\n      - "3000:3000"\n' > ci-ports.yml
+          docker compose -f docker-compose.dokploy.yml -f ci-ports.yml up -d --build --wait --wait-timeout 180
+      - name: Salud, migraciones y frontend
+        run: |
+          curl -fsS http://localhost:3000/api/v1/health | tee health.json
+          grep -q '"db":"ok"' health.json
+          curl -fsS http://localhost:3000/api/v1/version
+          curl -fsS http://localhost:3000/login | grep -qi '<html'
+      - name: Registros si falla
+        if: failure()
+        run: docker compose -f docker-compose.dokploy.yml logs --no-color
