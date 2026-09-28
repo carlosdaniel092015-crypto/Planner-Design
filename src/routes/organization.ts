@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
-import { auditLog, organizations, users } from '../db/schema';
+import { auditLog, moduleDefinitions, organizations, users } from '../db/schema';
+import { moduleDefaultsOf } from '../services/catalog';
 import { audit } from '../lib/audit';
 import { unprocessable } from '../lib/errors';
 import { authErrors, body, json, router, security } from '../lib/openapi';
@@ -22,6 +23,7 @@ const Org = z
     logoUrl: z.string().nullable(),
     brandColor: z.string().nullable(),
     approvalTerms: z.string().openapi({ description: 'Texto que el cliente acepta al aprobar (página pública y PDF).' }),
+    moduleDefaults: z.record(z.string(), z.string()).openapi({ description: 'Módulos propios que usa la distribución propuesta en proyectos nuevos: código estándar → código del catálogo.' }),
   })
   .openapi('Organizacion');
 
@@ -31,6 +33,9 @@ const OrgPatch = z
     brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
     logoFileId: z.uuid().nullable().openapi({ description: 'Imagen subida (kind miniatura o render); null quita el logo.' }),
     approvalTerms: z.string().trim().min(1).max(2000),
+    moduleDefaults: z
+      .record(z.string().max(60), z.string().max(60))
+      .refine((m) => Object.keys(m).length <= 60, 'Demasiados módulos.'),
   })
   .partial()
   .openapi('OrganizacionCambios', { example: { name: 'Muebles Ortega', brandColor: '#1f6f5c' } });
@@ -43,6 +48,7 @@ const orgJson = (o: OrgRow) => ({
   logoUrl: o.logoUrl,
   brandColor: o.brandColor,
   approvalTerms: ((o.settings as { aprobacion?: { terminos?: string } }).aprobacion?.terminos ?? DEFAULT_TERMS) as string,
+  moduleDefaults: moduleDefaultsOf(o),
 });
 
 export function organizationRoutes() {
@@ -78,9 +84,14 @@ export function organizationRoutes() {
         if (!f.contentType.startsWith('image/')) throw unprocessable('LOGO_INVALIDO', 'El logo debe ser una imagen JPG, PNG o WebP.');
         logoUrl = f.variants.view2k ?? f.blobUrl;
       }
-      const settings = input.approvalTerms
-        ? { ...a.org.settings, aprobacion: { ...((a.org.settings as { aprobacion?: object }).aprobacion ?? {}), terminos: input.approvalTerms } }
-        : undefined;
+      let settings: Record<string, unknown> | undefined;
+      if (input.approvalTerms) settings = { ...a.org.settings, aprobacion: { ...((a.org.settings as { aprobacion?: object }).aprobacion ?? {}), terminos: input.approvalTerms } };
+      if (input.moduleDefaults) {
+        // Only codes that exist in this organisation's catalogue ('' = standard, dropped).
+        const codes = new Set((await db.select({ code: moduleDefinitions.code }).from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, a.org.id))).map((m) => m.code));
+        const clean = Object.fromEntries(Object.entries(input.moduleDefaults).filter(([k, v]) => v && codes.has(v) && k !== v));
+        settings = { ...(settings ?? a.org.settings), modulos: clean };
+      }
       const row = await db.transaction(async (tx) => {
         const [o] = await tx
           .update(organizations)

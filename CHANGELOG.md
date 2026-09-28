@@ -3,6 +3,14 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.20.0 · 2026-09-28
+
+### Tus módulos en la distribución propuesta
+- En **Especificaciones → Preferencias** aparece **«Módulos de la propuesta»**: para cada pieza (esquinero, fregadero, bases de 1 y 2 puertas, alacenas, columnas, campana, isla; en closets colgados, cajoneras, zapatero, entrepaños) eliges **tu módulo** de la biblioteca o dejas el estándar. «Generar distribución» los usa directamente, sin tener que cambiarlos uno por uno.
+- Tus módulos aparecen primero, bajo «Mis módulos».
+- Si un módulo tuyo no admite el ancho de algún hueco (por ejemplo, un modelo de ancho fijo), en ese hueco se usa el estándar y te avisamos.
+- **«Usar siempre en proyectos nuevos»** (administradores) guarda tu selección para que cada proyecto nuevo empiece con tus módulos.
+
 ## 1.19.4 · 2026-09-28
 
 ### Inicio

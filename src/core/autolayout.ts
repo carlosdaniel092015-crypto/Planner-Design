@@ -30,12 +30,75 @@ export interface GeneratedDesign {
 }
 
 const FALLBACK = Object.fromEntries(DEFAULT_MODULES.map((d) => [d.code, d]));
+
+/**
+ * Standard modules the generator places, one per role. The designer can replace each with one of the organisation's own
+ * modules (`prefs.mods`: standard code → chosen code; '' = keep the standard one).
+ */
+export const MODULE_ROLES: { code: string; label: string; ptype: 'cocina' | 'closet' | 'vestidor' }[] = [
+  { code: 'E-L', label: 'Esquinero', ptype: 'cocina' },
+  { code: 'BF', label: 'Base fregadero', ptype: 'cocina' },
+  { code: 'LV-60', label: 'Lavavajillas y empotrados', ptype: 'cocina' },
+  { code: 'BP-80', label: 'Base parrilla', ptype: 'cocina' },
+  { code: 'BC-3', label: 'Cajonera junto a la parrilla', ptype: 'cocina' },
+  { code: 'B-1P', label: 'Base 1 puerta', ptype: 'cocina' },
+  { code: 'B-2P', label: 'Base 2 puertas', ptype: 'cocina' },
+  { code: 'BB-22', label: 'Base estrecha / botellero', ptype: 'cocina' },
+  { code: 'A-1P', label: 'Alacena 1 puerta', ptype: 'cocina' },
+  { code: 'A-2P', label: 'Alacena 2 puertas', ptype: 'cocina' },
+  { code: 'CM-80', label: 'Campana', ptype: 'cocina' },
+  { code: 'RF-75', label: 'Refrigerador', ptype: 'cocina' },
+  { code: 'C-HO', label: 'Columna horno', ptype: 'cocina' },
+  { code: 'C-DE', label: 'Columna despensa / microondas', ptype: 'cocina' },
+  { code: 'IS-120', label: 'Isla / península', ptype: 'cocina' },
+  { code: 'CL-100', label: 'Colgado largo', ptype: 'closet' },
+  { code: 'CC-100', label: 'Colgado corto', ptype: 'closet' },
+  { code: 'CJ-100', label: 'Cajonera', ptype: 'closet' },
+  { code: 'ZP-60', label: 'Zapatero', ptype: 'closet' },
+  { code: 'CL-E', label: 'Entrepaños', ptype: 'closet' },
+  { code: 'IC-100', label: 'Isla cajonera', ptype: 'closet' },
+  { code: 'VL-100', label: 'Colgado largo', ptype: 'vestidor' },
+  { code: 'VC-100', label: 'Colgado corto / cajonera', ptype: 'vestidor' },
+  { code: 'VZ-80', label: 'Zapatero', ptype: 'vestidor' },
+  { code: 'VE-80', label: 'Entrepaños', ptype: 'vestidor' },
+  { code: 'IC-100', label: 'Isla cajonera', ptype: 'vestidor' },
+];
+
+/** Roles for a project (a closet laid out "abierto" uses the walk-in modules). */
+export const moduleRolesFor = (p: Pick<ProjectData, 'ptype' | 'layout'>) =>
+  MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' ? 'cocina' : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
+
+/** Catalogue modules that can stand in for a standard one: same kind of project and same module type. */
+export function moduleChoicesFor(code: string, catalog: Record<string, ModuleDefinition>): ModuleDefinition[] {
+  const std = catalog[code] ?? FALLBACK[code];
+  if (!std) return [];
+  return Object.values(catalog)
+    .filter((m) => m.active && m.code !== code && m.type === std.type && m.projectType === std.projectType)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 const wallLen = (w: Wall, p: ProjectData) => (w === 'A' || w === 'D' ? p.room.A : p.room.B);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDefinition>, opts: { layout?: string } = {}): GeneratedDesign {
   const layout = opts.layout ?? p.layout ?? (p.ptype === 'cocina' ? 'L' : 'lineal');
-  const tpl = (code: string) => {
+  const chosen = ((p.prefs as { mods?: Record<string, string> }).mods ?? {}) as Record<string, string>;
+  const misfit = new Map<string, Set<number>>();
+  /** Template for a role; the designer's own module when it admits width `w` (else the standard one, noted once). */
+  const tpl = (code: string, w?: number) => {
+    const own = chosen[code] ? catalog[chosen[code]] : undefined;
+    if (own?.active) {
+      const [lo, hi] = own.rw ?? [own.w, own.w];
+      if (w == null || (w >= lo - 0.5 && w <= hi + 0.5)) return templateOf(own);
+      const s = misfit.get(own.name) ?? new Set<number>();
+      s.add(Math.round(w));
+      misfit.set(own.name, s);
+    }
+    const def = catalog[code]?.active ? catalog[code] : FALLBACK[code];
+    if (!def) throw new Error(`Falta el módulo ${code} en el catálogo`);
+    return templateOf(def);
+  };
+  /** Standard template only: appliance shells (custom appliances, wine rack) are not the designer's furniture. */
+  const std = (code: string) => {
     const def = catalog[code]?.active ? catalog[code] : FALLBACK[code];
     if (!def) throw new Error(`Falta el módulo ${code} en el catálogo`);
     return templateOf(def);
@@ -123,6 +186,8 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     .sort((x, y) => walls.indexOf(x.wall) - walls.indexOf(y.wall) || Number(x.tpl.type === 'upper' || x.tpl.type === 'hood') - Number(y.tpl.type === 'upper' || y.tpl.type === 'hood') || x.pos - y.pos)
     .map((x) => ({ ...structuredClone(x.tpl), ...x.patch, id: ++id, wall: x.wall, pos: x.pos, w: x.w }) as ModuleInstance);
   for (const m of islands) mods.push({ ...m, id: ++id });
+  for (const [name, ws] of misfit)
+    notes.push(`«${name}» no admite ${[...ws].sort((a, b) => a - b).join(', ')} cm; en ${ws.size === 1 ? 'ese hueco' : 'esos huecos'} se usó el módulo estándar.`);
   return { mods, mats, notes };
 
   // =====================================================================
@@ -136,8 +201,8 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       .map(([, v]) => ({ name: (v.name || 'Electrodoméstico').slice(0, 60), inst: v.inst, w: clamp(Math.round(v.w), 15, 150), h: Math.round(v.h), d: Math.round(v.d), done: false }));
 
     // Corners first: an L-shaped corner base where A meets B (and C).
-    if (walls.includes('A') && walls.includes('B')) out.push({ wall: 'A', pos: 0, w: 90, tpl: tpl('E-L') });
-    if (walls.includes('A') && walls.includes('C')) out.push({ wall: 'A', pos: p.room.A - 90, w: 90, tpl: tpl('E-L') });
+    if (walls.includes('A') && walls.includes('B')) out.push({ wall: 'A', pos: 0, w: 90, tpl: tpl('E-L', 90) });
+    if (walls.includes('A') && walls.includes('C')) out.push({ wall: 'A', pos: p.room.A - 90, w: 90, tpl: tpl('E-L', 90) });
 
     // Sink on the water point (under the window when there is none).
     const agua = pt('agua');
@@ -146,16 +211,16 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     const sinkW = clamp(Math.ceil(((ap.freg?.w ?? 76) + 14) / 10) * 10, 60, 120);
     const sinkWall = (agua?.wall as Wall) ?? (win?.wall as Wall) ?? 'A';
     const sinkAt = agua ? agua.pos : win ? win.pos + win.w / 2 : wallLen(sinkWall, p) / 2;
-    const sink = ap.freg?.on !== false ? placeNear(sinkWall, sinkAt, sinkW, tpl('BF')) ?? placeNear(null, null, sinkW, tpl('BF')) : null;
+    const sink = ap.freg?.on !== false ? placeNear(sinkWall, sinkAt, sinkW, tpl('BF', sinkW)) ?? placeNear(null, null, sinkW, tpl('BF', sinkW)) : null;
     if (ap.freg?.on !== false && !sink) notes.push('No hubo espacio para el fregadero.');
 
     // Dishwasher next to the sink.
     if (ap.lava?.on && sink) {
       const w = clamp(ap.lava.w, 45, 60);
-      const right = placeNear(sink.wall, sink.pos + sink.w + w / 2, w, tpl('LV-60'));
+      const right = placeNear(sink.wall, sink.pos + sink.w + w / 2, w, tpl('LV-60', w));
       if (!right || right.pos !== sink.pos + sink.w) {
         if (right) out.splice(out.indexOf(right), 1);
-        if (!placeNear(sink.wall, sink.pos - w / 2, w, tpl('LV-60'))) notes.push('El lavavajillas no cupo junto al fregadero.');
+        if (!placeNear(sink.wall, sink.pos - w / 2, w, tpl('LV-60', w))) notes.push('El lavavajillas no cupo junto al fregadero.');
       }
     }
 
@@ -165,7 +230,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     if (ap.refri?.on) {
       const w = clamp(ap.refri.w, 60, 90);
       const patch = { h: clamp(ap.refri.h, 170, Math.min(200, p.room.H - 10)), d: clamp(ap.refri.d, 45, 70), name: 'Refrigerador' };
-      if (!placeNear(tallWall, null, w, tpl('RF-75'), patch, tallAt) && !placeNear(null, null, w, tpl('RF-75'), patch, 'end')) notes.push('No hubo espacio para el refrigerador.');
+      if (!placeNear(tallWall, null, w, tpl('RF-75', w), patch, tallAt) && !placeNear(null, null, w, tpl('RF-75', w), patch, 'end')) notes.push('No hubo espacio para el refrigerador.');
     }
 
     // Cooktop on the gas point (or the hood outlet), otherwise away from the sink.
@@ -175,33 +240,33 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       const w = clamp(Math.ceil((ap.estufa.w + 4) / 10) * 10, 60, 90);
       const underOven = ap.horno?.on && ap.horno.inst === 'Bajo encimera';
       const patch: Partial<ModuleInstance> | undefined = underOven ? { fr: [{ t: 'oven', f: 0.62 }, { t: 'drawer', f: 0.38 }], oven: 1, name: 'Bajo parrilla con horno' } : undefined;
-      if (gas) cook = placeNear(gas.wall as Wall, gas.pos, w, tpl('BP-80'), patch);
+      if (gas) cook = placeNear(gas.wall as Wall, gas.pos, w, tpl('BP-80', w), patch);
       if (!cook) {
         const other = walls.find((x) => x !== sink?.wall) ?? null;
         const far = sink ? (sink.pos + sink.w / 2 > wallLen(sink.wall, p) / 2 ? wallLen(sink.wall, p) * 0.2 : wallLen(sink.wall, p) * 0.8) : null;
-        cook = (other && placeNear(other, wallLen(other, p) / 2, w, tpl('BP-80'), patch)) || placeNear(sink?.wall ?? 'A', far, w, tpl('BP-80'), patch);
+        cook = (other && placeNear(other, wallLen(other, p) / 2, w, tpl('BP-80', w), patch)) || placeNear(sink?.wall ?? 'A', far, w, tpl('BP-80', w), patch);
       }
       if (!cook) notes.push('No hubo espacio para la parrilla.');
     }
     // Oven column next to the fridge; if it does not fit, the oven goes under the cooktop.
     if (ap.horno?.on && ap.horno.inst === 'En columna') {
-      const col = placeNear(tallWall, null, 60, tpl('C-HO'), { h: tallH }, tallAt) ?? placeNear(null, null, 60, tpl('C-HO'), { h: tallH }, 'end');
+      const col = placeNear(tallWall, null, 60, tpl('C-HO', 60), { h: tallH }, tallAt) ?? placeNear(null, null, 60, tpl('C-HO', 60), { h: tallH }, 'end');
       if (!col && cook) {
         cook.patch = { ...cook.patch, fr: [{ t: 'oven', f: 0.62 }, { t: 'drawer', f: 0.38 }], oven: 1, name: 'Bajo parrilla con horno' };
         notes.push('La columna del horno no cupo; el horno quedó bajo la parrilla.');
       } else if (!col) notes.push('No hubo espacio para la columna del horno.');
     }
-    if (ap.micro?.on && ap.micro.inst === 'En columna' && !placeNear(tallWall, null, 60, tpl('C-DE'), { h: tallH, name: 'Columna microondas' }, tallAt)) notes.push('No hubo espacio para la columna del microondas.');
-    if (ap.cava?.on) placeNear(null, null, clamp(ap.cava.w, 15, 30), tpl('BB-22'), { name: 'Cava de vinos', appl: 1 });
+    if (ap.micro?.on && ap.micro.inst === 'En columna' && !placeNear(tallWall, null, 60, tpl('C-DE', 60), { h: tallH, name: 'Columna microondas' }, tallAt)) notes.push('No hubo espacio para la columna del microondas.');
+    if (ap.cava?.on) placeNear(null, null, clamp(ap.cava.w, 15, 30), std('BB-22'), { name: 'Cava de vinos', appl: 1 });
 
     // Custom appliances, by installation: under the counter, in a column, free-standing (hanging ones go with the uppers).
     for (const c of custom) {
       let placed: Placed | null = null;
-      if (c.inst === 'Bajo encimera' || c.inst === 'Empotrado') placed = placeNear(null, null, c.w, tpl('LV-60'), { name: c.name, rw: [c.w, c.w] });
-      else if (c.inst === 'En columna') placed = placeNear(tallWall, null, c.w, tpl('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] }, tallAt) ?? placeNear(null, null, c.w, tpl('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] });
+      if (c.inst === 'Bajo encimera' || c.inst === 'Empotrado') placed = placeNear(null, null, c.w, std('LV-60'), { name: c.name, rw: [c.w, c.w] });
+      else if (c.inst === 'En columna') placed = placeNear(tallWall, null, c.w, std('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] }, tallAt) ?? placeNear(null, null, c.w, std('C-DE'), { name: c.name, h: tallH, rw: [c.w, c.w] });
       else if (c.inst === 'Libre') {
         const patch = { name: c.name, h: clamp(c.h, 30, p.room.H - 10), d: clamp(c.d, 20, 90), rw: [c.w, c.w] as [number, number] };
-        placed = placeNear(tallWall, null, c.w, tpl('RF-75'), patch, tallAt) ?? placeNear(null, null, c.w, tpl('RF-75'), patch);
+        placed = placeNear(tallWall, null, c.w, std('RF-75'), patch, tallAt) ?? placeNear(null, null, c.w, std('RF-75'), patch);
       } else continue;
       if (!placed) notes.push(`No hubo espacio para ${c.name}.`);
     }
@@ -209,7 +274,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     // Hood centred over the cooktop.
     if (ap.campana?.on && cook) {
       const w = clamp(ap.campana.w, 60, 90);
-      out.push({ wall: cook.wall, pos: Math.round(cook.pos + cook.w / 2 - w / 2), w, tpl: tpl('CM-80') });
+      out.push({ wall: cook.wall, pos: Math.round(cook.pos + cook.w / 2 - w / 2), w, tpl: tpl('CM-80', w) });
     }
 
     // Fill the rest of every floor segment with base units.
@@ -243,7 +308,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       for (let [r0, r1] of runs) {
         // Custom hanging appliances (e.g. a wall microwave) take the first upper slot where they fit.
         for (const c of hanging.filter((x) => !x.done && r1 - r0 >= x.w)) {
-          out.push({ wall: w, pos: Math.round(r0), w: c.w, tpl: tpl('A-1P'), patch: { name: c.name, appl: 1, h: clamp(c.h, 20, upperH), rw: [c.w, c.w], fr: [{ t: 'door', n: 1, f: 1 }] } });
+          out.push({ wall: w, pos: Math.round(r0), w: c.w, tpl: std('A-1P'), patch: { name: c.name, appl: 1, h: clamp(c.h, 20, upperH), rw: [c.w, c.w], fr: [{ t: 'door', n: 1, f: 1 }] } });
           r0 += c.w;
           c.done = true;
         }
@@ -257,7 +322,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       const aisle = dist.aisle;
       const iw = dist.island.w ?? clamp(Math.round((p.room.A * (layout === 'peninsula' ? 0.4 : 0.35)) / 10) * 10, 90, 180);
       const idp = dist.island.d;
-      const t = tpl('IS-120');
+      const t = tpl('IS-120', iw);
       if (layout === 'isla') {
         // Work aisle in front of the wall runs, at least 60 cm walkway behind the island.
         // Aisle in front of every furnished wall, at least 60 cm walkway on the free sides.
@@ -283,7 +348,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     let len = g1 - g0;
     let pos = g0;
     const next = (code: string, w: number) => {
-      out.push({ wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code) });
+      out.push({ wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code, Math.round(w)) });
       pos += Math.round(w);
       len -= Math.round(w);
     };
@@ -292,7 +357,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     if (nearCook && len >= 120) {
       if (Math.abs(g1 - (cook?.pos ?? -1)) < 1) {
         const w = 60;
-        out.push({ wall, pos: Math.round(g1 - w), w, tpl: tpl('BC-3') });
+        out.push({ wall, pos: Math.round(g1 - w), w, tpl: tpl('BC-3', w) });
         len -= w;
       } else next('BC-3', 60);
     }
@@ -312,7 +377,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     let len = r1 - r0;
     let pos = r0;
     const next = (code: string, w: number) => {
-      out.push({ wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code), patch: { h } });
+      out.push({ wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code, Math.round(w)), patch: { h } });
       pos += Math.round(w);
       len -= Math.round(w);
     };
@@ -360,7 +425,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
 
     let skipped = 0;
     for (const item of want) {
-      const t = tpl(item.code);
+      const t = tpl(item.code, item.w);
       const [lo] = t.rw ?? [item.w, item.w];
       let placed = placeNear(null, null, item.w, t, { h, d: depth });
       if (!placed) {
@@ -380,7 +445,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
         let len = g1 - g0;
         while (len >= 40) {
           const w = len <= 100 ? len : Math.min(100, Math.max(40, len - 40));
-          out.push({ wall: s.wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code.ent), patch: { h, d: depth } });
+          out.push({ wall: s.wall, pos: Math.round(pos), w: Math.round(w), tpl: tpl(code.ent, Math.round(w)), patch: { h, d: depth } });
           pos += Math.round(w);
           len -= Math.round(w);
         }
@@ -392,7 +457,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
       }
 
     if (dist.island.on) {
-      const t = tpl('IC-100');
+      const t = tpl('IC-100', dist.island.w ?? 100);
       const w = dist.island.w ?? 100;
       const d = dist.island.d;
       const fits = p.room.A - 2 * (depth + 60) >= w && p.room.B - (walls.includes('A') ? depth + 60 : 60) - 60 >= d;

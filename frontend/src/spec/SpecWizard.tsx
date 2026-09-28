@@ -11,6 +11,8 @@ import {
   type Drawing,
   ESTILOS,
   type FurnitureWall,
+  moduleRolesFor,
+  type ModuleDefinition,
   isCustomAppl,
   layoutsFor,
   plan,
@@ -24,6 +26,7 @@ import {
 import { type CSSProperties, useEffect, useState } from 'react';
 import type { CatalogMaterial } from '../api';
 import { Dialog, fmtMoney, Icon, MUTED, Svg } from '../ui';
+import { ModulePicker } from './ModulePicker';
 
 type Currency = 'USD' | 'DOP';
 const SOFT = 'color-mix(in srgb,var(--color-text) 68%,transparent)';
@@ -97,6 +100,11 @@ export function SpecWizard(props: {
   flash: (m: string) => void;
   /** Catalogue materials (standard + uploaded textures) for the custom style. */
   materials: CatalogMaterial[];
+  /** Catalogue modules (standard + the organisation's own) for "Módulos de la propuesta". */
+  modules: Record<string, ModuleDefinition>;
+  moduleDefaults: Record<string, string>;
+  canSaveModuleDefaults: boolean;
+  onSavedModuleDefaults: (m: Record<string, string>) => void;
 }) {
   const { data: s, step: st, setStep, commit, readOnly } = props;
   const kit = s.ptype === 'cocina';
@@ -138,6 +146,24 @@ export function SpecWizard(props: {
   const setAppl = (k: string, patch: Partial<Appliance>) => set({ appl: { ...appl, [k]: { ...appl[k]!, ...patch } } });
   const setPrefs = (patch: Partial<ProjectData['prefs']>) => set({ prefs: { ...s.prefs, ...patch } });
   const setCloset = (patch: Partial<typeof closet>) => set({ closet: { ...closet, ...patch } });
+  const modulePicker = (
+    <ModulePicker
+      data={s}
+      modules={props.modules}
+      defaults={props.moduleDefaults}
+      readOnly={readOnly}
+      canSaveDefault={props.canSaveModuleDefaults}
+      onChange={(mods) => setPrefs({ mods } as Partial<ProjectData['prefs']>)}
+      onSavedDefault={props.onSavedModuleDefaults}
+      flash={props.flash}
+    />
+  );
+  /** Roles filled with the designer's own module (project choice over the organisation default). */
+  const ownModules = moduleRolesFor(s).filter((r) => {
+    const own = (s.prefs as { mods?: Record<string, string> }).mods ?? {};
+    const v = r.code in own ? own[r.code] : props.moduleDefaults[r.code];
+    return !!v && !!props.modules[v]?.active;
+  }).length;
   const nid = (xs: { id: number }[]) => xs.reduce((a, x) => Math.max(a, x.id), 0) + 1;
   const clampRoom = (v: number) => Math.max(100, Math.min(1200, Math.round(v)));
 
@@ -722,6 +748,7 @@ export function SpecWizard(props: {
                   {segCm('Zócalo', s.prefs.zocalo, ['10 cm', '15 cm'], 'Altura del rodapié bajo los módulos.', (v) => setPrefs({ zocalo: v }), 'zocalo', 5, 30, 10)}
                 </div>
                 <Budget value={s.prefs.presupuesto ?? 400000} currency={props.currency} onChange={(v) => setPrefs({ presupuesto: v })} disabled={readOnly} />
+                {modulePicker}
               </div>
             )}
 
@@ -776,6 +803,7 @@ export function SpecWizard(props: {
                   </div>
                 </div>
                 <Budget value={s.prefs.presupuesto ?? 400000} currency={props.currency} onChange={(v) => setPrefs({ presupuesto: v })} disabled={readOnly} />
+                {modulePicker}
               </div>
             )}
 
@@ -820,12 +848,14 @@ export function SpecWizard(props: {
                             ['Alacenas', s.prefs.alacena ?? '—'],
                             ['Apertura', s.prefs.apertura],
                             ['Zócalo', s.prefs.zocalo ?? '—'],
+                            ['Módulos propios', ownModules ? String(ownModules) : 'Estándar'],
                           ]
                         : [
                             ['Colgado largo', `${closet.largo} m`],
                             ['Colgado corto', `${closet.corto} m`],
                             ['Cajoneras', String(closet.cajoneras)],
                             ['Iluminación', closet.luz],
+                            ['Módulos propios', ownModules ? String(ownModules) : 'Estándar'],
                           ],
                       edit: 5,
                     },
