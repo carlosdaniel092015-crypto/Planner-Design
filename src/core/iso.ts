@@ -87,7 +87,8 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const g = geo(m, p.room);
     const [z0, z1] = zr(m, zoc);
     const C = { f: col(m.fre || p.mats.frentes, '#c49a6c'), b: col(m.cue || p.mats.cuerpo, '#eeebe6'), c: col(p.mats.encimera, '#e9e7e2'), hd: col(p.mats.jaladeras, '#2a2928') };
-    const isB = m.wall === 'B';
+    // Wall B and islands turned 90° show their front on the x1 face.
+    const isB = m.wall === 'B' || (m.wall === 'F' && m.rot === 90);
     const ex: Partial<DrawItem> = { mid: m.id };
     if (o.sel === m.id) selM = m;
     if (m.type !== 'upper' && m.type !== 'hood') poly([[g.x0, g.y0, 0], [g.x1 + 5, g.y0, 0], [g.x1 + 5, g.y1 + 6, 0], [g.x0, g.y1 + 6, 0]], 'rgba(70,50,30,.16)');
@@ -95,7 +96,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const R = (u0: number, u1: number, a0: number, a1: number, fill: string, st?: string, sw?: number) => poly([FP(u0, a0), FP(u1, a0), FP(u1, a1), FP(u0, a1)], fill, st || shade(fill, -0.3), sw || 0.4, ex);
     const L = (u0: number, a0: number, u1: number, a1: number, st: string, sw: number) => line([FP(u0, a0), FP(u1, a1)], st, sw, ex);
     // Walls C and D face away from this camera: draw the carcass (and countertop) as plain boxes.
-    if (m.wall === 'C' || m.wall === 'D') {
+    if (m.wall === 'C' || m.wall === 'D' || (m.wall === 'F' && (m.rot === 180 || m.rot === 270))) {
       const color = m.type === 'fridge' || m.type === 'hood' || m.range ? '#c5c8c9' : C.b;
       box(g.x0, g.x1, g.y0, g.y1, m.type === 'hood' ? z0 : m.type === 'fridge' || m.range ? 0 : z0, m.type === 'fridge' ? m.h : z1, color, ex);
       if (m.type === 'base' && !m.range) box(g.x0 - (m.wall === 'C' ? 2 : 0), g.x1, g.y0 - (m.wall === 'D' ? 2 : 0), g.y1, z1, z1 + 4, C.c);
@@ -218,7 +219,8 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     poly([[g.x0, g.y1, zb], [g.x1, g.y1, zb], [g.x1, g.y1, zt], [g.x0, g.y1, zt]], f, ACC, 1.6);
     poly([[g.x1, g.y0, zb], [g.x1, g.y1, zb], [g.x1, g.y1, zt], [g.x1, g.y0, zt]], f, ACC, 1.6);
     if (o.cotas) {
-      const isB = m.wall === 'B';
+      // Wall B and islands turned 90° show their front on the x1 face.
+    const isB = m.wall === 'B' || (m.wall === 'F' && m.rot === 90);
       const zc = zt + 16;
       const E = (u: number, z: number): V3 => (isB ? [g.x1, g.y0 + u, z] : [g.x0 + u, g.y1, z]);
       line([E(0, zc), E(m.w, zc)], ACC, 1.2);

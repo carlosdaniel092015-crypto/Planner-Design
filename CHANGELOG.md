@@ -3,6 +3,15 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.23.0 · 2026-09-28
+
+### Mover y girar muebles en la vista 3D
+- Nuevo botón **«Mover muebles»** en la barra de la vista 3D (tecla **M**). Con él activo, **arrastra un mueble con el dedo o el ratón** y se desliza por su muro (o libre si es de isla), alineándose solo con las esquinas y los muebles vecinos. Mientras lo mueves ves «Muro A · 63 cm desde la esquina». La cámara no gira mientras arrastras; tocar sin arrastrar lo sigue seleccionando.
+- Nuevo botón **«Girar mueble 90°»** en la misma barra (tecla **G**) y en las propiedades del mueble (Ubicación → «Girar 90°»):
+  - una **isla** gira sobre su centro (0°, 90°, 180°, 270°), con su encimera, su fregadero o parrilla y sus puertas;
+  - un mueble de **muro** pasa al siguiente muro de la habitación (A → C → D → B), porque los muebles de muro siempre miran hacia adentro.
+- Todo se puede deshacer con Ctrl+Z.
+
 ## 1.22.0 · 2026-09-28
 
 ### Más electrodomésticos

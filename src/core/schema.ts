@@ -58,6 +58,8 @@ export const moduleSchema = z
     oven: flag,
     ...applianceFields,
     open: z.enum(['der', 'izq']).optional(),
+    /** Islands only: turned 0, 90, 180 or 270° (clockwise seen from above). */
+    rot: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).optional(),
     /** Bottom height (cm) of an upper placed off the 150 cm line (e.g. over the fridge). */
     z: z.number().min(0).max(500).optional(),
     /** Per-module material overrides (material codes). */

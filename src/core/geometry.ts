@@ -12,7 +12,12 @@ interface Placeable {
   type: ModuleType;
   /** Bottom height (cm) of a wall-hung unit placed off the usual 150 cm line, e.g. over the fridge. */
   z?: number;
+  /** Island turned (degrees clockwise seen from above): 0 faces wall D, 90 wall C, 180 wall A, 270 wall B. */
+  rot?: number;
 }
+
+/** An island turned 90° or 270° takes its depth along x and its width along y. */
+export const turned = (m: Pick<Placeable, 'wall' | 'rot'>) => m.wall === 'F' && (m.rot === 90 || m.rot === 270);
 
 export interface RoomSize {
   A: number;
@@ -28,6 +33,7 @@ export function geo(m: Placeable, room?: RoomSize) {
   if (m.wall === 'B') return { x0: 0, x1: m.d, y0: m.pos!, y1: m.pos! + m.w };
   if (m.wall === 'C') return { x0: (room?.A ?? 0) - m.d, x1: room?.A ?? 0, y0: m.pos!, y1: m.pos! + m.w };
   if (m.wall === 'D') return { x0: m.pos!, x1: m.pos! + m.w, y0: (room?.B ?? 0) - m.d, y1: room?.B ?? 0 };
+  if (turned(m)) return { x0: m.x!, x1: m.x! + m.d, y0: m.y!, y1: m.y! + m.w };
   return { x0: m.x!, x1: m.x! + m.w, y0: m.y!, y1: m.y! + m.d };
 }
 

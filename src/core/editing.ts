@@ -1,5 +1,6 @@
 // Editor actions — ported 1:1 from the prototype (setDim, ranges, freeSpot, addFromLib, remove, applyMat, fronts).
 // Pure functions: they take the project and return a new one (the caller keeps undo history).
+import { geo, turned } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialGroup, ModuleDefinition, ModuleShape, WallId } from './types';
 
@@ -162,7 +163,7 @@ export function updateModule(p: ProjectData, id: number, patch: Partial<ModuleIn
 }
 
 // ---------- moving ----------
-export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number };
+export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number; rot?: 0 | 90 | 180 | 270 };
 
 /** Distance (cm) within which a moved module snaps to a corner or to the edge of a neighbour. */
 export const SNAP_CM = 4;
@@ -191,27 +192,48 @@ export function moveModule(p: ProjectData, id: number, to: Place, snap = SNAP_CM
   };
   let patch: Partial<ModuleInstance>;
   if (to.wall === 'F') {
-    const hiX = Math.max(0, A - m.w);
-    const hiY = Math.max(0, B - m.d);
-    patch = { wall: 'F', pos: undefined, x: snapTo(to.x, [0, hiX], 0, hiX), y: snapTo(to.y, [0, hiY], 0, hiY) };
+    const rot = to.rot ?? (m.wall === 'F' ? m.rot : undefined);
+    const side = turned({ wall: 'F', rot }) ? [m.d, m.w] : [m.w, m.d];
+    const hiX = Math.max(0, A - side[0]!);
+    const hiY = Math.max(0, B - side[1]!);
+    patch = { wall: 'F', pos: undefined, x: snapTo(to.x, [0, hiX], 0, hiX), y: snapTo(to.y, [0, hiY], 0, hiY), rot: rot || undefined };
   } else {
     const len = to.wall === 'A' || to.wall === 'D' ? A : B;
     const hi = Math.max(0, len - m.w);
     const neighbours = p.mods.filter((x) => x.id !== id && x.wall === to.wall && isFloor(x) === isFloor(m) && x.pos != null);
     const targets = [0, hi, ...neighbours.flatMap((x) => [x.pos! - m.w, x.pos! + x.w])];
-    patch = { wall: to.wall, pos: snapTo(to.pos, targets, 0, hi), x: undefined, y: undefined };
+    patch = { wall: to.wall, pos: snapTo(to.pos, targets, 0, hi), x: undefined, y: undefined, rot: undefined };
   }
   return {
     ...p,
     mods: p.mods.map((x) => {
       if (x.id !== id) return x;
       const next = { ...x, ...patch };
-      for (const k of ['pos', 'x', 'y'] as const) if (next[k] === undefined) delete next[k];
+      for (const k of ['pos', 'x', 'y', 'rot'] as const) if (next[k] === undefined) delete next[k];
       return next;
     }),
   };
 }
 
+/** Walls in turning order (clockwise seen from above): a wall module turned 90° goes to the next one. */
+const NEXT_WALL = { A: 'C', C: 'D', D: 'B', B: 'A' } as const;
+
+/**
+ * Turns a module 90° clockwise. An island turns on itself (around its centre); a module on a wall always faces the
+ * room, so it moves to the next wall round the room, keeping its distance from the corner when it fits.
+ */
+export function rotateModule(p: ProjectData, id: number, snap = SNAP_CM): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m) return p;
+  if (m.wall === 'F') {
+    const g = geo(m, p.room);
+    const rot = ((((m.rot ?? 0) + 90) % 360) as 0 | 90 | 180 | 270);
+    const [fw, fh] = turned({ wall: 'F', rot }) ? [m.d, m.w] : [m.w, m.d];
+    return moveModule(p, id, { wall: 'F', x: (g.x0 + g.x1) / 2 - fw / 2, y: (g.y0 + g.y1) / 2 - fh / 2, rot }, snap);
+  }
+  return moveModule(p, id, { wall: NEXT_WALL[m.wall], pos: m.pos ?? 0 }, snap);
+}
+
 /** Where a module stands, as a Place (islands have x/y, the rest a wall and a distance from its corner). */
-export const placeOf = (m: Pick<ModuleInstance, 'wall' | 'pos' | 'x' | 'y'>): Place =>
-  m.wall === 'F' ? { wall: 'F', x: m.x ?? 0, y: m.y ?? 0 } : { wall: m.wall, pos: m.pos ?? 0 };
+export const placeOf = (m: Pick<ModuleInstance, 'wall' | 'pos' | 'x' | 'y' | 'rot'>): Place =>
+  m.wall === 'F' ? { wall: 'F', x: m.x ?? 0, y: m.y ?? 0, ...(m.rot ? { rot: m.rot } : {}) } : { wall: m.wall, pos: m.pos ?? 0 };

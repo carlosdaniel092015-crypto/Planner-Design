@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KITCHEN, type ModuleInstance, moveModule, placeOf, projectDataSchema } from '../src/core';
+import { DEFAULT_KITCHEN, geo, iso, type ModuleInstance, moveModule, placeOf, plan, projectDataSchema, rotateModule } from '../src/core';
 
 const base = (id: number, pos: number, w = 60, patch: Partial<ModuleInstance> = {}) =>
   ({ id, code: 'B2-60', name: 'Bajo', cat: 'Bajos', type: 'base', wall: 'A', pos, w, h: 76, d: 60, fr: [], ...patch }) as ModuleInstance;
@@ -34,5 +34,45 @@ describe('mover módulos', () => {
     expect(get(back, 1)).toMatchObject({ wall: 'D', pos: 10 });
     expect(get(back, 1).x).toBeUndefined();
     expect(projectDataSchema.safeParse(back).success).toBe(true);
+  });
+});
+
+describe('girar módulos', () => {
+  const island = (patch: Partial<ModuleInstance> = {}) => base(9, 0, 120, { wall: 'F', pos: undefined, x: 120, y: 120, d: 80, ...patch });
+  it('una isla gira sobre su centro: 0 → 90 → 180 → 270 → 0, con su huella girada', () => {
+    let p = project([island()]);
+    const c0 = geo(get(p, 9), p.room);
+    const center = [(c0.x0 + c0.x1) / 2, (c0.y0 + c0.y1) / 2];
+    for (const rot of [90, 180, 270, 0]) {
+      p = rotateModule(p, 9);
+      const m = get(p, 9);
+      expect(m.rot ?? 0).toBe(rot);
+      const g = geo(m, p.room);
+      expect([g.x1 - g.x0, g.y1 - g.y0]).toEqual(rot === 90 || rot === 270 ? [80, 120] : [120, 80]);
+      expect([(g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2]).toEqual(center);
+    }
+    expect('rot' in get(p, 9)).toBe(false);
+    // Plan and iso draw the turned island without errors.
+    const q = rotateModule(project([island()]), 9);
+    expect(plan(q, { cotas: false }).items.length).toBeGreaterThan(5);
+    expect(iso(q, {} as never, { ang: 45, cotas: false, altos: true }).items.length).toBeGreaterThan(5);
+  });
+
+  it('girada, la isla no se sale de la habitación al moverla', () => {
+    const p = rotateModule(project([island()]), 9);
+    const m = get(moveModule(p, 9, { wall: 'F', x: 1000, y: 1000 }), 9);
+    expect([m.x, m.y, m.rot]).toEqual([360 - 80, 300 - 120, 90]);
+  });
+
+  it('un mueble de muro gira al siguiente muro (siempre mira a la habitación) y pierde el giro de isla', () => {
+    let p = project([base(1, 40)]);
+    for (const w of ['C', 'D', 'B', 'A']) {
+      p = rotateModule(p, 1);
+      expect(get(p, 1).wall).toBe(w);
+    }
+    expect(get(p, 1).pos).toBe(40);
+    const back = moveModule(rotateModule(project([island()]), 9), 9, { wall: 'A', pos: 0 });
+    expect(get(back, 9)).not.toHaveProperty('rot');
+    expect(placeOf(get(rotateModule(project([island()]), 9), 9))).toEqual({ wall: 'F', x: 140, y: 100, rot: 90 });
   });
 });

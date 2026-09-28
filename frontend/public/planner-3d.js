@@ -420,13 +420,25 @@ function place(g, m) {
   if (m.wall === 'B') { g.rotation.y = Math.PI / 2; g.position.set(0, 0, (m.pos + m.w) / 100); }
   else if (m.wall === 'C') { g.rotation.y = -Math.PI / 2; g.position.set(R.A, 0, m.pos / 100); }
   else if (m.wall === 'D') { g.rotation.y = Math.PI; g.position.set((m.pos + m.w) / 100, 0, R.B); }
-  else g.position.set(geo.x0 / 100, 0, geo.y0 / 100);
+  else if (m.wall === 'F' && m.rot) {
+    // Island turned clockwise seen from above; its front (local +z) then faces walls C, A or B.
+    const r = m.rot, W = m.w / 100, D = m.d / 100, x0 = geo.x0 / 100, z0 = geo.y0 / 100;
+    g.rotation.y = r === 90 ? Math.PI / 2 : r === 180 ? Math.PI : -Math.PI / 2;
+    if (r === 90) g.position.set(x0, 0, z0 + W); else if (r === 180) g.position.set(x0 + W, 0, z0 + D); else g.position.set(x0 + D, 0, z0);
+  }
+  else { g.rotation.y = 0; g.position.set(geo.x0 / 100, 0, geo.y0 / 100); }
 }
 function toWorld(m, lx, lz) {
   const E = window.SPEngine, geo = E.geo(m), R = roomSize();
   if (m.wall === 'B') return [lz, (m.pos + m.w) / 100 - lx];
   if (m.wall === 'C') return [R.A - lz, m.pos / 100 + lx];
   if (m.wall === 'D') return [(m.pos + m.w) / 100 - lx, R.B - lz];
+  if (m.wall === 'F' && m.rot) {
+    const W = m.w / 100, D = m.d / 100, x0 = geo.x0 / 100, z0 = geo.y0 / 100;
+    if (m.rot === 90) return [x0 + lz, z0 + W - lx];
+    if (m.rot === 180) return [x0 + W - lx, z0 + D - lz];
+    return [x0 + D - lz, z0 + lx];
+  }
   return [geo.x0 / 100 + lx, geo.y0 / 100 + lz];
 }
 const alongZ = wall => wall === 'B' || wall === 'C';
@@ -444,7 +456,7 @@ function slab(root, wall, a0, a1, d0, d1, y, th, holes, matId) {
   }
 }
 function counters(root, mods, ctx, groups) {
-  const th = { cuarzo: .02, granito: .03, macizo: .04 }[ctx.mats.encimera] || .03, out = [];
+  const E = window.SPEngine, th = { cuarzo: .02, granito: .03, macizo: .04 }[ctx.mats.encimera] || .03, out = [];
   // A freestanding range has its own top: the worktop stops on both sides of it.
   const bases = mods.filter(m => m.type === 'base' && !m.range);
   const by = {};
@@ -455,11 +467,11 @@ function counters(root, mods, ctx, groups) {
   Object.keys(by).forEach(k => {
     const list = by[k].sort((a, b) => (a.pos || a.x) - (b.pos || b.x)), wall = list[0].wall;
     const runs = [];
-    list.forEach(m => { const s = (m.wall === 'F' ? m.x : m.pos) / 100, e = s + m.w / 100, last = runs[runs.length - 1]; if (last && s - last.e < .011) { last.e = Math.max(last.e, e); last.ms.push(m); } else runs.push({ s, e, ms: [m] }); });
+    list.forEach(m => { const s = (m.wall === 'F' ? E.geo(m).x0 : m.pos) / 100, e = m.wall === 'F' ? E.geo(m).x1 / 100 : s + m.w / 100, last = runs[runs.length - 1]; if (last && s - last.e < .011) { last.e = Math.max(last.e, e); last.ms.push(m); } else runs.push({ s, e, ms: [m] }); });
     runs.forEach(r => {
       const top = Math.max(...r.ms.map(m => (ctx.zoc + m.h) / 100)), D = Math.max(...r.ms.map(m => m.d)) / 100;
       let a0 = r.s, a1 = r.e, d0 = 0, d1 = D + .02;
-      if (wall === 'F') { const m = r.ms[0]; d0 = m.y / 100 - .02; d1 = (m.y + m.d) / 100 + .02; a0 -= .02; a1 += .02; }
+      if (wall === 'F') { const gm = E.geo(r.ms[0]); d0 = gm.y0 / 100 - .02; d1 = gm.y1 / 100 + .02; a0 -= .02; a1 += .02; }
       if (wall === 'B' && aCorner) a0 = Math.max(a0, aCorner.d / 100 + .02);
       if (wall === 'C') { d0 = R.A - D - .02; d1 = R.A; if (aEnd) a0 = Math.max(a0, aEnd.d / 100 + .02); }
       if (wall === 'D') { d0 = R.B - D - .02; d1 = R.B; if (bEnd) a0 = Math.max(a0, bEnd.d / 100 + .02); if (cEnd) a1 = Math.min(a1, R.A - cEnd.d / 100 - .02); }
@@ -634,6 +646,37 @@ class Viewer {
     this.root = new T.Group(); this.scene.add(this.root); this.groups = {};
     this.sel = new T.Group(); this.scene.add(this.sel); this.labels = [];
     const el = r.domElement;
+    // Move mode: pressing on a module drags it over the floor (the camera stays still); the editor turns the
+    // offset (cm, x along wall A, z along wall B) into a position with its snapping and shows it via previewMove.
+    el.addEventListener('pointerdown', e => {
+      if (!this.moveMode || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const hit = this.hit(e);
+      if (!hit) return;
+      e.stopImmediatePropagation(); e.preventDefault();
+      this.pd = [e.clientX, e.clientY];
+      this.ctl.enabled = false;
+      this.drag = { id: hit.id, y: hit.point.y, x0: hit.point.x, z0: hit.point.z, pointer: e.pointerId };
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone */ }
+      el.style.cursor = 'grabbing';
+      this.opts.onDrag && this.opts.onDrag(hit.id, 0, 0, 'start');
+    }, { capture: true });
+    el.addEventListener('pointermove', e => {
+      const d = this.drag;
+      if (!d || d.pointer !== e.pointerId) return;
+      const p = this.floorPoint(e, d.y);
+      if (p) this.opts.onDrag && this.opts.onDrag(d.id, (p.x - d.x0) * 100, (p.z - d.z0) * 100, 'move');
+    });
+    const endDrag = (e, phase) => {
+      const d = this.drag;
+      if (!d || d.pointer !== e.pointerId) return;
+      this.drag = null; this.ctl.enabled = true;
+      try { el.releasePointerCapture(e.pointerId); } catch (_) { /* released */ }
+      el.style.cursor = this.moveMode ? 'move' : 'grab';
+      const p = phase === 'end' ? this.floorPoint(e, d.y) : null;
+      this.opts.onDrag && this.opts.onDrag(d.id, p ? (p.x - d.x0) * 100 : 0, p ? (p.z - d.z0) * 100 : 0, phase);
+    };
+    el.addEventListener('pointerup', e => endDrag(e, 'end'), { capture: true });
+    el.addEventListener('pointercancel', e => endDrag(e, 'cancel'), { capture: true });
     el.addEventListener('pointerdown', e => { this.pd = [e.clientX, e.clientY]; el.style.cursor = 'grabbing'; });
     el.addEventListener('pointerup', e => { el.style.cursor = 'grab'; if (!this.pd || Math.hypot(e.clientX - this.pd[0], e.clientY - this.pd[1]) > 5) return; this.pick(e); });
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(host); this.resize();
@@ -647,6 +690,29 @@ class Viewer {
     loop();
   }
   resize() { const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1; this.r.setSize(w, h, false); this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); if (this.ready) this.renderNow(); else this.dirty = true; }
+  ray(e) {
+    const rc = this.r.domElement.getBoundingClientRect(), ray = new T.Raycaster();
+    ray.setFromCamera(new T.Vector2((e.clientX - rc.left) / rc.width * 2 - 1, -(e.clientY - rc.top) / rc.height * 2 + 1), this.cam);
+    return ray;
+  }
+  /** Module under the pointer and the point hit. */
+  hit(e) {
+    const hits = this.ray(e).intersectObjects(Object.values(this.groups).filter(g => g.visible), true);
+    for (const h of hits) { let o = h.object; while (o && !(o.userData && o.userData.modId)) o = o.parent; if (o) return { id: o.userData.modId, point: h.point }; }
+    return null;
+  }
+  /** Where the pointer ray meets the horizontal plane at height y. */
+  floorPoint(e, y) { const p = new T.Vector3(); return this.ray(e).ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), -y), p) ? p : null; }
+  /** Move mode on/off (drag modules instead of orbiting when pressing on one). */
+  setMoveMode(on) { this.moveMode = !!on; if (!this.drag) this.r.domElement.style.cursor = on ? 'move' : 'grab'; }
+  /** Live position of a module being dragged (pos on its wall, or x/y on the island) until the editor commits it. */
+  previewMove(id, patch) {
+    const m = (this.cfg && this.cfg.mods || []).find(x => x.id === id), g = this.groups[id];
+    if (!m || !g) return;
+    place(g, Object.assign({}, m, patch));
+    this.sel.visible = false; this.labels.forEach(l => { l.d.style.display = 'none'; });
+    this.dirty = true;
+  }
   pick(e) {
     const rc = this.r.domElement.getBoundingClientRect(), ray = new T.Raycaster();
     ray.setFromCamera(new T.Vector2((e.clientX - rc.left) / rc.width * 2 - 1, -(e.clientY - rc.top) / rc.height * 2 + 1), this.cam);
@@ -676,7 +742,7 @@ class Viewer {
       if (!this.ready) { this.ready = true; this.opts.onReady && this.opts.onReady(); }
     }
     Object.values(this.groups).forEach(g => { g.visible = cfg.altos !== false || !(g.userData.type === 'upper' || g.userData.type === 'hood'); });
-    this.drawSel(); this.renderNow();
+    this.sel.visible = true; this.drawSel(); this.renderNow();
   }
   renderNow() { this.dirty = false; if (this.cfg) cutaway(this.root.userData.walls, this.cam, this.cfg); this.r.render(this.scene, this.cam); this.placeLabels(); }
   /** Opens (true) or closes every door and drawer with a short animation. */
