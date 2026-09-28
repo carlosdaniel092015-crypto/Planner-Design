@@ -1,6 +1,6 @@
 // Editor actions — ported 1:1 from the prototype (setDim, ranges, freeSpot, addFromLib, remove, applyMat, fronts).
 // Pure functions: they take the project and return a new one (the caller keeps undo history).
-import { geo, turned } from './geometry';
+import { footprint, geo } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialGroup, ModuleDefinition, ModuleShape, WallId } from './types';
 
@@ -163,7 +163,7 @@ export function updateModule(p: ProjectData, id: number, patch: Partial<ModuleIn
 }
 
 // ---------- moving ----------
-export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number; rot?: 0 | 90 | 180 | 270 };
+export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number; rot?: number };
 
 /** Distance (cm) within which a moved module snaps to a corner or to the edge of a neighbour. */
 export const SNAP_CM = 4;
@@ -193,7 +193,7 @@ export function moveModule(p: ProjectData, id: number, to: Place, snap = SNAP_CM
   let patch: Partial<ModuleInstance>;
   if (to.wall === 'F') {
     const rot = to.rot ?? (m.wall === 'F' ? m.rot : undefined);
-    const side = turned({ wall: 'F', rot }) ? [m.d, m.w] : [m.w, m.d];
+    const side = footprint(m.w, m.d, rot);
     const hiX = Math.max(0, A - side[0]!);
     const hiY = Math.max(0, B - side[1]!);
     patch = { wall: 'F', pos: undefined, x: snapTo(to.x, [0, hiX], 0, hiX), y: snapTo(to.y, [0, hiY], 0, hiY), rot: rot || undefined };
@@ -218,20 +218,72 @@ export function moveModule(p: ProjectData, id: number, to: Place, snap = SNAP_CM
 /** Walls in turning order (clockwise seen from above): a wall module turned 90° goes to the next one. */
 const NEXT_WALL = { A: 'C', C: 'D', D: 'B', B: 'A' } as const;
 
+/** Orientation (as a free module's rot) of a module standing on each wall: its front faces into the room. */
+const WALL_ROT = { A: 0, B: 90, D: 180, C: 270 } as const;
+/** Degrees in [0, 360), rounded to tenths. */
+export const normDeg = (deg: number) => {
+  const v = Math.round((((deg % 360) + 360) % 360) * 10) / 10;
+  return v >= 360 ? 0 : v;
+};
+
 /**
- * Turns a module 90° clockwise. An island turns on itself (around its centre); a module on a wall always faces the
- * room, so it moves to the next wall round the room, keeping its distance from the corner when it fits.
+ * Turns a module on itself, around its centre, by `deg` degrees (any angle). A floor module on a wall comes off it
+ * (free standing, like a peninsula) already turned; wall-hung units (uppers, hoods) can't stand free, so a turn
+ * sends them to the next wall.
  */
-export function rotateModule(p: ProjectData, id: number, snap = SNAP_CM): ProjectData {
+export function rotateModule(p: ProjectData, id: number, deg = 90, snap = SNAP_CM): ProjectData {
   const m = p.mods.find((x) => x.id === id);
   if (!m) return p;
+  if (m.wall !== 'F' && !isFloor(m)) return moveModule(p, id, { wall: NEXT_WALL[m.wall], pos: m.pos ?? 0 }, snap);
+  return setRotation(p, id, (m.wall === 'F' ? (m.rot ?? 0) : WALL_ROT[m.wall]) + deg, snap);
+}
+
+/** Sets a floor module's turn to `deg` (absolute), keeping its centre where it is; it becomes free standing. */
+export function setRotation(p: ProjectData, id: number, deg: number, snap = SNAP_CM): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m || (m.wall !== 'F' && !isFloor(m))) return p;
+  const g = geo(m, p.room);
+  const rot = normDeg(deg);
+  const [fw, fh] = footprint(m.w, m.d, rot);
+  return moveModule(p, id, { wall: 'F', x: (g.x0 + g.x1) / 2 - fw / 2, y: (g.y0 + g.y1) / 2 - fh / 2, rot }, snap);
+}
+
+/** How close (cm) the back of a free module must come to a wall to stand on it again. */
+export const WALL_STICK_CM = 12;
+/** How far (cm) from its wall a floor module must be dragged to come off it and stand free. */
+export const WALL_LEAVE_CM = 30;
+
+/**
+ * Where a module goes when dragged so its centre is at (cx, cy) cm in the room. Floor modules go anywhere: off their
+ * wall into the room once dragged away from it, and back onto a wall when their back comes close to it (facing the
+ * room). Wall-hung units follow the pointer along the nearest wall.
+ */
+export function placeAt(p: ProjectData, id: number, cx: number, cy: number): Place | null {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m) return null;
+  const { A, B } = p.room;
+  const free = (rot: number): Place => {
+    const [fw, fh] = footprint(m.w, m.d, rot);
+    return { wall: 'F', x: cx - fw / 2, y: cy - fh / 2, ...(rot ? { rot } : {}) };
+  };
   if (m.wall === 'F') {
-    const g = geo(m, p.room);
-    const rot = ((((m.rot ?? 0) + 90) % 360) as 0 | 90 | 180 | 270);
-    const [fw, fh] = turned({ wall: 'F', rot }) ? [m.d, m.w] : [m.w, m.d];
-    return moveModule(p, id, { wall: 'F', x: (g.x0 + g.x1) / 2 - fw / 2, y: (g.y0 + g.y1) / 2 - fh / 2, rot }, snap);
+    const rot = m.rot ?? 0;
+    const [fw, fh] = footprint(m.w, m.d, rot);
+    const x = cx - fw / 2;
+    const y = cy - fh / 2;
+    // Back against a wall (its front facing the room): it stands on that wall again.
+    if (rot === 0 && y <= WALL_STICK_CM) return { wall: 'A', pos: x };
+    if (rot === 90 && x <= WALL_STICK_CM) return { wall: 'B', pos: y };
+    if (rot === 180 && B - (y + fh) <= WALL_STICK_CM) return { wall: 'D', pos: x };
+    if (rot === 270 && A - (x + fw) <= WALL_STICK_CM) return { wall: 'C', pos: y };
+    return free(rot);
   }
-  return moveModule(p, id, { wall: NEXT_WALL[m.wall], pos: m.pos ?? 0 }, snap);
+  const dist = { A: cy, B: cx, C: A - cx, D: B - cy } as const;
+  // Another wall takes it only when clearly closer (no flicker at the corners).
+  const wall = (['A', 'B', 'C', 'D'] as const).reduce((best, w) => (dist[w] + 20 < dist[best] ? w : best), m.wall as 'A' | 'B' | 'C' | 'D');
+  // A floor module dragged away from every wall stands free, still facing the same way.
+  if (isFloor(m) && dist[wall] - m.d / 2 > WALL_LEAVE_CM) return free(WALL_ROT[m.wall as 'A']);
+  return { wall, pos: (wall === 'A' || wall === 'D' ? cx : cy) - m.w / 2 };
 }
 
 /** Where a module stands, as a Place (islands have x/y, the rest a wall and a distance from its corner). */

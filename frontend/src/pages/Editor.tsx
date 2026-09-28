@@ -5,6 +5,7 @@ import {
   type Currency,
   duplicateModule,
   elev,
+  geo,
   frontsFromPanels,
   generateDesign,
   iso,
@@ -13,7 +14,9 @@ import {
   plan,
   type ProjectData,
   moveModule,
+  placeAt,
   rotateModule,
+  setRotation,
   type Place,
   placeOf,
   removeModule,
@@ -36,7 +39,7 @@ import { uploadFile } from '../library/upload';
 import { clipboardModules, copyModules, pasteModules, removeModules } from '../editor/clipboard';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
 import { PrintSheet } from '../editor/PrintSheet';
-import { RightPanel } from '../editor/RightPanel';
+import { RightPanel, RotateControl } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
 import { ApprovalView } from '../approval/ApprovalView';
 import { LibraryDialog } from '../library/LibraryDialog';
@@ -461,7 +464,7 @@ export function EditorPage() {
         setView('3d');
         setMove3d((v) => !v);
       } else if (phase === 2 && data && !mod && !readOnly && k === 'g') {
-        turnSelected();
+        turnBy(e.shiftKey ? -15 : 15);
       } else if (e.key === 'Escape') {
         setSel(null);
         setReplaceMode(false);
@@ -473,11 +476,13 @@ export function EditorPage() {
   }, [undo, redo, doSave, data, readOnly, commit, flash, phase, selIds, setSel]);
 
   // ---------- derived drawings ----------
-  const cfg = useMemo(() => (data ? sceneCfg(data, { sel, sels: selIds, cotas, altos, dark }) : null), [data, sel, selIds, cotas, altos, dark]);
+  // While dragging in 3D the whole scene follows (worktop, neighbours), redrawn at most every 120 ms.
+  const [drag3dData, setDrag3dData] = useState<ProjectData | null>(null);
+  const cfg = useMemo(() => (data ? sceneCfg(drag3dData ?? data, { sel, sels: selIds, cotas, altos, dark }) : null), [data, drag3dData, sel, selIds, cotas, altos, dark]);
   const isoDrawing = useMemo(() => (data ? iso(data, materialsByCode as never, { sel, cotas, altos, zoom }) : null), [data, materialsByCode, sel, cotas, altos, zoom]);
   // ---------- moving modules by dragging them in the plan (mouse, finger or pen) ----------
   const [drag, setDrag] = useState<{ id: number; place: Place } | null>(null);
-  const dragStart = useRef<{ id: number; place: Place; x: number; y: number; sx: number; sy: number; moved: boolean; pointer: number } | null>(null);
+  const dragStart = useRef<{ id: number; place: Place; cx: number; cy: number; x: number; y: number; sx: number; sy: number; moved: boolean; pointer: number } | null>(null);
   const planData = useMemo(() => (data && drag ? moveModule(data, drag.id, drag.place) : data), [data, drag]);
   const planDrawing = useMemo(() => (planData && view === 'planta' ? plan(planData, { sel, sels: selIds, altos, cotas }) : null), [planData, view, sel, selIds, altos, cotas]);
   const toPlan = (e: React.PointerEvent, host: HTMLElement) => {
@@ -498,7 +503,8 @@ export function EditorPage() {
       const m = id ? data.mods.find((x) => x.id === id) : undefined;
       const pt = m && toPlan(e, e.currentTarget);
       if (!m || !pt) return;
-      dragStart.current = { id, place: placeOf(m), x: pt.x, y: pt.y, sx: e.clientX, sy: e.clientY, moved: false, pointer: e.pointerId };
+      const g = geo(m, data.room);
+      dragStart.current = { id, place: placeOf(m), cx: (g.x0 + g.x1) / 2, cy: (g.y0 + g.y1) / 2, x: pt.x, y: pt.y, sx: e.clientX, sy: e.clientY, moved: false, pointer: e.pointerId };
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const st = dragStart.current;
@@ -511,11 +517,9 @@ export function EditorPage() {
       }
       const pt = toPlan(e, e.currentTarget);
       if (!pt) return;
-      const dx = pt.x - st.x;
-      const dy = pt.y - st.y;
-      const p0 = st.place;
-      const place: Place = p0.wall === 'F' ? { wall: 'F', x: p0.x + dx, y: p0.y + dy } : { wall: p0.wall, pos: p0.pos + (p0.wall === 'A' || p0.wall === 'D' ? dx : dy) };
-      setDrag({ id: st.id, place });
+      // The module follows the pointer (onto another wall when it gets closer to it).
+      const place = data && placeAt(data, st.id, st.cx + pt.x - st.x, st.cy + pt.y - st.y);
+      if (place) setDrag({ id: st.id, place });
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const st = dragStart.current;
@@ -537,7 +541,7 @@ export function EditorPage() {
   // ---------- moving and turning modules in the 3D view (button «Mover muebles») ----------
   const [move3d, setMove3d] = useState(false);
   const [drag3dLabel, setDrag3dLabel] = useState<string | null>(null);
-  const drag3d = useRef<{ id: number; place: Place; next: ProjectData | null } | null>(null);
+  const drag3d = useRef<{ id: number; cx: number; cy: number; next: ProjectData | null; t: number } | null>(null);
   useEffect(() => {
     viewer.current?.setMoveMode(move3d && !readOnly && view === '3d');
   }, [move3d, readOnly, view]);
@@ -545,44 +549,60 @@ export function EditorPage() {
     if (!data || readOnly) return;
     if (ph === 'start') {
       const m = data.mods.find((x) => x.id === id);
-      drag3d.current = m ? { id, place: placeOf(m), next: null } : null;
+      const g = m && geo(m, data.room);
+      drag3d.current = g ? { id, cx: (g.x0 + g.x1) / 2, cy: (g.y0 + g.y1) / 2, next: null, t: 0 } : null;
       return;
     }
     const st = drag3d.current;
     if (!st || st.id !== id) return;
-    const p0 = st.place;
-    const place: Place = p0.wall === 'F' ? { ...p0, x: p0.x + dx, y: p0.y + dz } : { wall: p0.wall, pos: p0.pos + (p0.wall === 'A' || p0.wall === 'D' ? dx : dz) };
-    const next = moveModule(data, id, place);
+    const place = placeAt(data, id, st.cx + dx, st.cy + dz);
+    const next = place ? moveModule(data, id, place) : data;
     const m = next.mods.find((x) => x.id === id)!;
     if (ph === 'move') {
       st.next = next;
-      viewer.current?.previewMove(id, { pos: m.pos, x: m.x, y: m.y, rot: m.rot });
+      viewer.current?.previewMove(id, { wall: m.wall, pos: m.pos, x: m.x, y: m.y, rot: m.rot });
       setDrag3dLabel(placeLabel(placeOf(m)));
+      const now = Date.now();
+      if (now - st.t > 120) {
+        st.t = now;
+        setDrag3dData(next);
+      }
       return;
     }
     drag3d.current = null;
     setDrag3dLabel(null);
+    setDrag3dData(null);
     const moved = Math.abs(dx) + Math.abs(dz) >= 1 && st.next;
     if (ph === 'cancel' || !moved) {
       // Back where it was (a plain tap selects it).
       const o = data.mods.find((x) => x.id === id)!;
-      viewer.current?.previewMove(id, { pos: o.pos, x: o.x, y: o.y, rot: o.rot });
+      viewer.current?.previewMove(id, { wall: o.wall, pos: o.pos, x: o.x, y: o.y, rot: o.rot });
       return;
     }
     commit(next);
     setSel(id);
     flash(`Módulo ${id} movido · ${placeLabel(placeOf(m))} · Ctrl+Z para deshacer`);
   };
-  const turnSelected = () => {
+  const turnBy = (deg: number) => {
     if (!data || readOnly) return;
     if (sel == null) return flash('Selecciona un mueble para girarlo (tócalo en la vista).');
     const m0 = data.mods.find((x) => x.id === sel);
     if (!m0) return;
-    const next = rotateModule(data, sel);
+    const next = rotateModule(data, sel, deg);
     const m = next.mods.find((x) => x.id === sel)!;
+    setDrag3dData(null);
     commit(next);
-    flash(m0.wall === 'F' ? `Módulo ${sel} girado a ${m.rot ?? 0}° · Ctrl+Z para deshacer` : `Módulo ${sel} girado: ahora en el muro ${m.wall} (los muebles de muro siempre miran a la habitación) · Ctrl+Z para deshacer`);
+    flash(m.wall === 'F' ? `Módulo ${sel} girado a ${Math.round(m.rot ?? 0)}° · Ctrl+Z para deshacer` : `Módulo ${sel} pasado al muro ${m.wall}: los altos van siempre en un muro · Ctrl+Z para deshacer`);
   };
+  const setRot = (deg: number, preview?: boolean) => {
+    if (!data || readOnly || sel == null) return;
+    const next = setRotation(data, sel, deg);
+    if (preview) return setDrag3dData(next);
+    setDrag3dData(null);
+    commit(next);
+  };
+  const turnSelected = () => turnBy(90);
+
   const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, sels: selIds, altos, cotas }) : null), [data, view, wall, materialsByCode, sel, selIds, altos, cotas]);
 
   if (loadError)
@@ -695,7 +715,7 @@ export function EditorPage() {
       ? []
       : [
           { k: 'move', icon: 'move', tip: move3d ? 'Terminar de mover' : 'Mover muebles (arrastra en 3D)', key: 'M', on: move3d, act: () => (setView('3d'), setMove3d(!move3d), !move3d && flash('Mover muebles: arrastra un mueble en la vista 3D. Se alinea solo con las esquinas y los vecinos.')) },
-          { k: 'turn', icon: 'rotate-cw-square', tip: 'Girar mueble 90°', key: 'G', act: turnSelected },
+          { k: 'turn', icon: 'rotate-cw-square', tip: 'Girar mueble 90° (G: 15°)', key: 'G', act: turnSelected },
         ]),
     { k: 'open', icon: 'door-open', tip: open ? 'Cerrar puertas y cajones' : 'Abrir puertas y cajones', key: 'P', on: open, act: () => (setView('3d'), setOpen(!open), viewer.current?.setOpen(!open)) },
   ];
@@ -912,6 +932,12 @@ export function EditorPage() {
                 <Svg drawing={flatView} onPick={(i, add) => (pickModule(i, add), i && setRightOpen(true))} />
               </div>
             )}
+            {view === '3d' && move3d && !readOnly && sel != null && data.mods.some((x) => x.id === sel) && !drag3dLabel && (
+              <div role="group" aria-label="Girar el mueble seleccionado" style={{ position: 'absolute', left: '50%', bottom: 76, transform: 'translateX(-50%)', width: 'min(360px, calc(100% - 140px))', background: 'var(--color-bg)', border: '1px solid var(--color-divider)', boxShadow: 'var(--shadow-sm)', padding: '8px 10px', zIndex: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>Girar · módulo {sel}</div>
+                <RotateControl compact sel={data.mods.find((x) => x.id === sel)!} onTurn={turnBy} onRot={setRot} />
+              </div>
+            )}
             {view === '3d' && drag3dLabel && (
               <div role="status" style={{ position: 'absolute', left: '50%', bottom: 16, transform: 'translateX(-50%)', background: 'var(--color-text)', color: 'var(--color-bg)', padding: '8px 14px', fontSize: 13, fontWeight: 700, zIndex: 4, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
                 {drag3dLabel}
@@ -1046,7 +1072,8 @@ export function EditorPage() {
                 setLeftOpen(true);
                 setLeftTab('modulos');
               }}
-              onTurn={turnSelected}
+              onTurn={turnBy}
+              onRot={setRot}
               onMove={(to) => {
                 if (!sel) return;
                 const next = moveModule(data, sel, to);

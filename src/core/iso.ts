@@ -96,7 +96,8 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const R = (u0: number, u1: number, a0: number, a1: number, fill: string, st?: string, sw?: number) => poly([FP(u0, a0), FP(u1, a0), FP(u1, a1), FP(u0, a1)], fill, st || shade(fill, -0.3), sw || 0.4, ex);
     const L = (u0: number, a0: number, u1: number, a1: number, st: string, sw: number) => line([FP(u0, a0), FP(u1, a1)], st, sw, ex);
     // Walls C and D face away from this camera: draw the carcass (and countertop) as plain boxes.
-    if (m.wall === 'C' || m.wall === 'D' || (m.wall === 'F' && (m.rot === 180 || m.rot === 270))) {
+    // Walls C and D, and free modules turned other than 0° or 90°, face away or askew: drawn as plain boxes.
+    if (m.wall === 'C' || m.wall === 'D' || (m.wall === 'F' && !!m.rot && m.rot !== 90)) {
       const color = m.type === 'fridge' || m.type === 'hood' || m.range ? '#c5c8c9' : C.b;
       box(g.x0, g.x1, g.y0, g.y1, m.type === 'hood' ? z0 : m.type === 'fridge' || m.range ? 0 : z0, m.type === 'fridge' ? m.h : z1, color, ex);
       if (m.type === 'base' && !m.range) box(g.x0 - (m.wall === 'C' ? 2 : 0), g.x1, g.y0 - (m.wall === 'D' ? 2 : 0), g.y1, z1, z1 + 4, C.c);

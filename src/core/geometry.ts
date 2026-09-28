@@ -12,7 +12,7 @@ interface Placeable {
   type: ModuleType;
   /** Bottom height (cm) of a wall-hung unit placed off the usual 150 cm line, e.g. over the fridge. */
   z?: number;
-  /** Island turned (degrees clockwise seen from above): 0 faces wall D, 90 wall C, 180 wall A, 270 wall B. */
+  /** Free module turned (degrees, any angle): 0 faces wall D, 90 wall C, 180 wall A, 270 wall B. x/y = corner of the box it takes. */
   rot?: number;
 }
 
@@ -24,16 +24,37 @@ export interface RoomSize {
   B: number;
 }
 
-/**
- * Footprint in plan coordinates (cm): wall A runs along x at y=0, wall B along y at x=0,
- * wall C along y at x=A, wall D along x at y=B (C and D need the room size); F is free-standing.
- */
+/** Size [along x, along y] of the box a free module takes on the floor, turned any angle (degrees). */
+export function footprint(w: number, d: number, rot = 0): [number, number] {
+  const r = (rot * Math.PI) / 180;
+  const c = Math.abs(Math.cos(r));
+  const s = Math.abs(Math.sin(r));
+  const k = (v: number) => Math.round(v * 100) / 100;
+  return [k(w * c + d * s), k(w * s + d * c)];
+}
+
+/** Corners (plan cm) of a free module turned any angle: its front edge first (left, right), then the back. */
+export function corners(m: Pick<Placeable, 'x' | 'y' | 'w' | 'd' | 'rot'>): [number, number][] {
+  const [bw, bh] = footprint(m.w, m.d, m.rot);
+  const cx = m.x! + bw / 2;
+  const cy = m.y! + bh / 2;
+  const r = ((m.rot ?? 0) * Math.PI) / 180;
+  // Same turn as the 3D view: the front (local +y, towards wall D at 0°) turns towards wall C at 90°.
+  const P = (lx: number, ly: number): [number, number] => [cx + lx * Math.cos(r) + ly * Math.sin(r), cy - lx * Math.sin(r) + ly * Math.cos(r)];
+  const hw = m.w / 2;
+  const hd = m.d / 2;
+  return [P(-hw, hd), P(hw, hd), P(hw, -hd), P(-hw, -hd)];
+}
+
 export function geo(m: Placeable, room?: RoomSize) {
   if (m.wall === 'A') return { x0: m.pos!, x1: m.pos! + m.w, y0: 0, y1: m.d };
   if (m.wall === 'B') return { x0: 0, x1: m.d, y0: m.pos!, y1: m.pos! + m.w };
   if (m.wall === 'C') return { x0: (room?.A ?? 0) - m.d, x1: room?.A ?? 0, y0: m.pos!, y1: m.pos! + m.w };
   if (m.wall === 'D') return { x0: m.pos!, x1: m.pos! + m.w, y0: (room?.B ?? 0) - m.d, y1: room?.B ?? 0 };
-  if (turned(m)) return { x0: m.x!, x1: m.x! + m.d, y0: m.y!, y1: m.y! + m.w };
+  if (m.rot) {
+    const [bw, bh] = footprint(m.w, m.d, m.rot);
+    return { x0: m.x!, x1: m.x! + bw, y0: m.y!, y1: m.y! + bh };
+  }
   return { x0: m.x!, x1: m.x! + m.w, y0: m.y!, y1: m.y! + m.d };
 }
 

@@ -3,6 +3,15 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.24.0 · 2026-09-28
+
+### Mueve y gira tus muebles como quieras
+- Con **«Mover muebles»** activo llevas un mueble **a donde quieras**: a lo largo de su muro, a otro muro (se pasa solo al que queda más cerca del dedo) o **al centro de la cocina**, donde queda libre (como isla o península). Arrímalo de espaldas a un muro, derecho, y se pega otra vez.
+- Mientras arrastras en 3D se mueve todo con él: la encimera, el fregadero y la parrilla.
+- **Gíralo a los grados que quieras**, a mano: con la barra de giro (0 a 359°), los botones **−15°, +15° y +90°**, o escribiendo los grados en Ubicación → Giro. Con «Mover muebles» activo aparece un control de giro sobre la vista 3D para el mueble seleccionado. Tecla **G** gira 15° (Mayús+G, −15°).
+- Un mueble girado se ve girado en 3D, en la planta (con su frente marcado) y con su encimera, fregadero o parrilla girados con él.
+- Los altos y campanas siguen siempre en un muro; al girarlos pasan al siguiente.
+
 ## 1.23.0 · 2026-09-28
 
 ### Mover y girar muebles en la vista 3D
