@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.19.4 · 2026-09-28
+
+### Inicio
+- Se quitó el botón «Prototipo» de la pantalla principal.
+
 ## 1.19.3 · 2026-09-28
 
 ### Instalación
