@@ -129,7 +129,7 @@ export function HomePage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <SyncBadge />
           <InstallButton />
-          <button type="button" className="btn btn-secondary home-lib" onClick={() => setLibOpen(true)} title="Bibliotecas de texturas y módulos" style={{ height: 38 }}>
+          <button type="button" className="btn btn-secondary home-lib" onClick={() => setLibOpen(true)} title="Bibliotecas de tableros y módulos" style={{ height: 38 }}>
             <Icon name="library" size={16} />
             <span className="install-label">Bibliotecas</span>
           </button>

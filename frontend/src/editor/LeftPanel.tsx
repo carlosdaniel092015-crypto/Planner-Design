@@ -136,7 +136,7 @@ export function LeftPanel(props: {
             {props.onLibrary && (
               <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('tex')} style={{ justifyContent: 'flex-start', height: 36 }}>
                 <Icon name="upload" size={15} />
-                Subir texturas (JPG / PNG)
+                Subir tableros (JPG / PNG)
               </button>
             )}
           <div>

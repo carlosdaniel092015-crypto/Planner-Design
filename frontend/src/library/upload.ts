@@ -73,6 +73,11 @@ export interface LibTexture {
   uses: string[];
   sizeWcm: number | null;
   finish?: string;
+  /** Board thickness in cm (the API field), sheet size in mm and distributor. */
+  thickness?: number;
+  sheetLmm?: number | null;
+  sheetAmm?: number | null;
+  supplier?: string | null;
   maps: { baseColor: { url: string; thumb: string | null } | null };
   active: boolean;
 }

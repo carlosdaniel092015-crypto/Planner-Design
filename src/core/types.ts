@@ -60,6 +60,12 @@ export interface MaterialDefinition {
   /** Real size of the texture sample (cm). */
   tileCm?: number | null;
   roughness?: number | null;
+  /** Board thickness (mm); the despiece uses it for the pieces cut from this material. */
+  thick?: number;
+  /** Board (sheet) size in mm [length, width]; the cut optimisation lays the pieces out on it. */
+  sheet?: [number, number];
+  /** Distributor the board is bought from. */
+  supplier?: string | null;
   version: number;
   active: boolean;
 }

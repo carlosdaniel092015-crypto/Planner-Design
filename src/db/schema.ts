@@ -355,6 +355,11 @@ export const materials = pgTable(
     priceM2: money('price_m2').notNull().default(0),
     priceCurrency: currencyEnum('price_currency').notNull().default('USD'),
     supplierCode: text('supplier_code'),
+    /** Board (sheet) the material is sold in, in mm; null = the standard 2440 × 1830. */
+    sheetLmm: integer('sheet_l_mm'),
+    sheetAmm: integer('sheet_a_mm'),
+    /** Distributor the board is bought from. */
+    supplier: text('supplier'),
     source: materialSourceEnum('source').notNull().default('estandar'),
     version: integer('version').notNull().default(1),
     active: boolean('active').notNull().default(true),

@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { DEFAULT_KITCHEN, type ModuleInstance, parts, templateOf } from '../src/core';
+import { corte, DEFAULT_KITCHEN, type ModuleInstance, parts, templateOf } from '../src/core';
 import { moduleDefinitions } from '../src/db/schema';
 import { API, setup, type Ctx, type TestUser } from './helpers';
 
@@ -193,6 +193,26 @@ describe('biblioteca', () => {
     expect(await sharp(view).metadata()).toMatchObject({ width: 2048, height: 1024, format: 'webp' });
     const cat = await t.req('GET', '/catalog', { user: dis });
     expect(cat.data.materials.find((m: any) => m.code === textureCode)).toMatchObject({ name: 'Roble ahumado', uses: ['frentes'] });
+  });
+
+  it('biblioteca de tableros: espesor, plancha y distribuidor llegan al despiece y a la lista de corte', async () => {
+    const f = await upload(dis, 'textura', 'pino zermatt.png', await png(64, 64, [200, 170, 120]), 'image/png');
+    const tex = await t.req('POST', '/library/textures', { user: dis, body: { name: 'Pino Zermatt 15', type: 'Melamina', uses: ['cuerpo', 'frentes'], tileCm: 60, baseColorFileId: f.data.id, thicknessMm: 15, sheetLmm: 2750, sheetAmm: 1830, supplier: 'Maderas del Caribe' } });
+    expect(tex.status, JSON.stringify(tex.data)).toBe(201);
+    expect(tex.data).toMatchObject({ thickness: 1.5, sheetLmm: 2750, sheetAmm: 1830, supplier: 'Maderas del Caribe' });
+    const upd = await t.req('PATCH', `/library/textures/${tex.data.id}`, { user: dis, body: { thicknessMm: 16, supplier: ' Tableros RD ' } });
+    expect(upd.status, JSON.stringify(upd.data)).toBe(200);
+    const cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.materials[tex.data.code];
+    expect(def).toMatchObject({ thick: 16, sheet: [2750, 1830], supplier: 'Tableros RD' });
+    const mats = { ...DEFAULT_KITCHEN.mats, cuerpo: tex.data.code, frentes: tex.data.code };
+    const inst = { id: 1, code: 'X', name: 'Bajo', cat: 'Bajos', type: 'base', wall: 'A', pos: 0, w: 60, h: 76, d: 60, fr: [{ t: 'door', n: 1, f: 1 }], rw: [30, 120] } as unknown as ModuleInstance;
+    const list = parts(inst, mats, cat.context.materials);
+    expect(list.find((p) => p.pieza === 'Lateral')).toMatchObject({ esp: 16 });
+    expect(list.find((p) => p.pieza === 'Base')).toMatchObject({ L: 600 - 32, esp: 16 });
+    expect(list.find((p) => p.pieza === 'Puerta')).toMatchObject({ esp: 16 });
+    const groups = corte({ ...DEFAULT_KITCHEN, mats, mods: [inst] }, cat.context.materials);
+    expect(groups.find((g) => g.matCode === tex.data.code)).toMatchObject({ esp: 16, sheet: [2750, 1830], supplier: 'Tableros RD' });
   });
 
   it('un GLB devuelve bounding box y nombres de materiales', async () => {

@@ -705,7 +705,7 @@ export function EditorPage() {
           <button type="button" className="btn btn-icon ed-hide-xs" title="Versiones del proyecto" aria-label="Versiones" onClick={() => setVersionsOpen(true)}>
             <Icon name="history" size={17} />
           </button>
-          <button type="button" className="btn btn-icon ed-hide-xs" title="Bibliotecas de texturas y módulos" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
+          <button type="button" className="btn btn-icon ed-hide-xs" title="Bibliotecas de tableros y módulos" aria-label="Bibliotecas" onClick={() => setLibTab('tex')}>
             <Icon name="library" size={17} />
           </button>
           <button type="button" className="btn btn-icon ed-hide-xs" title="Modo oscuro del editor" aria-label="Modo oscuro" onClick={() => setDark(!dark)}>

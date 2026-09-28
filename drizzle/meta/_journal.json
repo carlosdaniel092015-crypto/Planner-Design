@@ -71,6 +71,13 @@
       "when": 1790381717381,
       "tag": "0009_enlace_sin_presupuesto",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790622809715,
+      "tag": "0010_tableros_plancha",
+      "breakpoints": true
     }
   ]
 }
