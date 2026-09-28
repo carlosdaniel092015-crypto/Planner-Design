@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Imagen para Easypanel (o cualquier host con Docker). Ver README → "Despliegue en Easypanel".
+# Imagen para Easypanel, Dokploy o cualquier host con Docker. Ver README → "Despliegue en Easypanel" / "Despliegue en Dokploy".
 
 # A dropped connection to the npm registry (ECONNRESET) must not fail the deploy: npm retries each download
 # with growing waits, the whole install is retried twice more, and the download cache survives between builds.

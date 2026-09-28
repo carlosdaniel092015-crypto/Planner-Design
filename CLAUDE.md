@@ -72,4 +72,4 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
 
 ## Despliegue
 
-Docker (`Dockerfile`) en Easypanel: Postgres como servicio, volumen en `/data` (archivos), `RUN_MIGRATIONS=true` aplica migraciones al arrancar. Detalle en README → "Despliegue en Easypanel".
+Docker (`Dockerfile`) en Easypanel o Dokploy (`docker-compose.dokploy.yml`: app + Postgres): Postgres como servicio, volumen en `/data` (archivos), `RUN_MIGRATIONS=true` aplica migraciones al arrancar. Detalle en README → "Despliegue en Easypanel".

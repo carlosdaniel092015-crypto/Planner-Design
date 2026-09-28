@@ -15,7 +15,7 @@ const startedAt = new Date().toISOString();
 
 export const appVersion = () => ({
   version: pkg.version ?? '0.0.0',
-  // Easypanel / CI can pass the deployed commit; locally it stays unknown.
+  // Easypanel / Dokploy / CI can pass the deployed commit; locally it stays unknown.
   commit: (process.env.GIT_SHA ?? process.env.SOURCE_COMMIT ?? process.env.GITHUB_SHA ?? '').slice(0, 7) || null,
   startedAt,
 });

@@ -3,7 +3,7 @@
 Backend del planeador de muebles (Planner). Guarda proyectos, clientes y versiones. Administra el catálogo de módulos, materiales y precios, y las bibliotecas de texturas y modelos 3D de cada empresa. También almacena renders y PDF, y gestiona el enlace de aprobación que se envía al cliente final.
 
 - **Stack:** Node 20+ · TypeScript strict · Hono · Drizzle ORM · PostgreSQL 16 · zod + OpenAPI · sharp · gltf-transform
-- **Despliegue:** Docker en **Easypanel**, con Postgres como servicio y archivos en un volumen.
+- **Despliegue:** Docker en **Easypanel** o **Dokploy**, con Postgres como servicio y archivos en un volumen.
 - **Documentación interactiva:** `GET /api/v1/docs` (Scalar) y `GET /api/v1/openapi.json`
 
 ---
@@ -187,6 +187,52 @@ Son 60 pruebas de integración en `tests/`. Cada archivo levanta la app con un P
 7. **Verifica** con `https://tudominio.com/api/v1/health`, que debe responder `{"status":"ok","db":"ok"}`, y con `https://tudominio.com/api/v1/docs`.
 
 La imagen incluye `HEALTHCHECK` contra `/api/v1/health`. El proceso cierra con `SIGTERM` de forma ordenada.
+
+## Despliegue en Dokploy
+
+La misma imagen (`Dockerfile`) funciona en [Dokploy](https://dokploy.com). Hay dos formas; elige una.
+
+### Opción A: Compose (app + Postgres de una vez, recomendada)
+
+1. En tu proyecto de Dokploy: *Create Service → Compose*.
+   - **Provider:** GitHub → `carlosdaniel092015-crypto/Planner-Design`, rama `main`.
+   - **Compose Path:** `./docker-compose.dokploy.yml`.
+2. **Environment:** pega esto y ajusta los valores.
+   ```
+   APP_URL=https://planear.tudominio.com
+   POSTGRES_PASSWORD=<solo letras y números, largo>
+   AUTH_SECRET=<32+ caracteres aleatorios>
+   PLATFORM_ADMIN_EMAILS=tu@correo.com
+   SMTP_USER=tu-cuenta@gmail.com
+   SMTP_PASS=<contraseña de aplicación de Gmail>
+   MAIL_FROM=Planner <tu-cuenta@gmail.com>
+   ```
+   Agrega aquí también las opcionales (`GOOGLE_CLIENT_ID`, `MICROSOFT_CLIENT_ID`, `STRIPE_*`, …). La contraseña de Postgres va
+   dentro de la URL de conexión, por eso sin `@ : / ? #`.
+3. **Domains:** *Add Domain* → servicio **app**, host `planear.tudominio.com`, puerto **3000**, *HTTPS* con *Let's Encrypt*.
+   Apunta antes un registro DNS **A** de ese host a la IP del servidor de Dokploy.
+4. **Deploy.** El primer arranque aplica las migraciones. Los datos quedan en los volúmenes `planner-pg` (base) y `planner-data`
+   (`/data`: archivos y respaldos), que sobreviven a cada despliegue.
+5. **Verifica** `https://planear.tudominio.com/api/v1/health` → `{"status":"ok","db":"ok"}`.
+6. **Despliegue automático:** en *General → Autodeploy* activa el webhook de GitHub para desplegar cada push a `main`.
+
+### Opción B: Application + base de datos de Dokploy (igual que en Easypanel)
+
+1. *Create Service → Database → PostgreSQL* (versión 16). Copia su **Internal Connection URL**.
+2. *Create Service → Application* → GitHub, rama `main`, **Build Type: Dockerfile** (ruta `Dockerfile`).
+3. **Environment:** `DATABASE_URL` (la URL interna), `AUTH_SECRET`, `API_URL` y `FRONTEND_URL` (tu dominio con `https://`),
+   y el resto como en la opción A.
+4. **Advanced → Volumes:** *Volume Mount* con destino `/data`.
+5. **Domains:** tu dominio, puerto **3000**, HTTPS con Let's Encrypt. **Deploy.**
+
+### Pasar de Easypanel a Dokploy
+
+1. En Easypanel, abre la *Console* de la app y corre `node dist/backup.js`; descarga `/data/backups/planner-….json.gz` y la carpeta
+   `/data/uploads`.
+2. Despliega en Dokploy (opción A o B) **sin** usar la app todavía: la base nueva queda vacía, solo con las migraciones.
+3. Sube el respaldo al volumen `/data` de Dokploy (*Advanced → Volumes* o `docker cp`) y copia `uploads` a `/data/uploads`.
+4. En la terminal del contenedor de la app en Dokploy: `node dist/restore.js /data/backups/planner-….json.gz`.
+5. Cambia el DNS del dominio al servidor de Dokploy. Si el dominio cambia, actualiza también las URL de regreso de Google y Microsoft.
 
 ### Inicio de sesión con Google y Microsoft
 

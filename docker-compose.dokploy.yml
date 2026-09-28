@@ -1,0 +1,45 @@
+# Despliegue en Dokploy como servicio "Compose" (app + Postgres en un solo paso). Ver README → "Despliegue en Dokploy".
+#
+# - Las variables se ponen en Dokploy → Environment (Dokploy las guarda en .env junto a este archivo).
+#   Obligatorias: POSTGRES_PASSWORD, AUTH_SECRET, APP_URL (p. ej. https://planear.acentosdeco.lat).
+# - El dominio se agrega en Dokploy → Domains: servicio "app", puerto 3000, HTTPS con Let's Encrypt.
+# - No publica puertos: Traefik (de Dokploy) llega al contenedor por la red interna.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://planner:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}@db:5432/planner
+      AUTH_SECRET: ${AUTH_SECRET:?Falta AUTH_SECRET (32+ caracteres)}
+      API_URL: ${APP_URL:?Falta APP_URL, p. ej. https://planear.tudominio.com}
+      FRONTEND_URL: ${APP_URL}
+      RUN_MIGRATIONS: "true"
+    expose:
+      - "3000"
+    volumes:
+      - planner-data:/data
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: planner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}
+      POSTGRES_DB: planner
+    volumes:
+      - planner-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planner -d planner"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  planner-data:
+  planner-pg:
