@@ -37,3 +37,17 @@ describe('módulos propios por defecto de la organización', () => {
     expect((await t.req('GET', `/projects/${p.data.id}`, { user: dis })).data.data.prefs.mods).toEqual({ 'B-2P': 'MI-B2', 'A-2P': '' });
   });
 });
+
+describe('ubicación predeterminada del módulo', () => {
+  it('se guarda en anchor.place, solo con valores conocidos, y llega al catálogo del editor', async () => {
+    const base = { code: 'MI-NEV', name: 'Alto sobre nevera', type: 'upper', category: 'Altos', minW: 60, maxW: 90, defW: 75, fixedH: 40, fixedD: 60, recipe: { fr: [{ t: 'door', n: 2, f: 1 }] }, unitPrice: 50 };
+    expect((await t.req('POST', '/admin/modules', { user: t.adminA, body: { ...base, anchor: { place: 'en-el-techo' } } })).status).toBe(400);
+    const ok = await t.req('POST', '/admin/modules', { user: t.adminA, body: { ...base, anchor: { place: 'sobre-nevera' } } });
+    expect(ok.status).toBe(201);
+    const ctx = (await t.req('GET', '/catalog', { user: dis })).data.context;
+    expect(ctx.modules['MI-NEV'].place).toBe('sobre-nevera');
+    // Quitarla desde la biblioteca.
+    expect((await t.req('PATCH', `/library/modules/${ok.data.id}`, { user: t.adminA, body: { anchor: null } })).status).toBe(200);
+    expect((await t.req('GET', '/catalog', { user: dis })).data.context.modules['MI-NEV'].place).toBeUndefined();
+  });
+});

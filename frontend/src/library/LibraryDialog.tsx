@@ -1,5 +1,5 @@
 // Bibliotecas: the organisation's own textures and modules (JSON, GLB and 3DS/OBJ/DAE/FBX converted to GLB), stored on the server.
-import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel } from '@core';
+import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel, placesFor } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
 import { Icon, MUTED } from '../ui';
@@ -503,12 +503,38 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                     </div>
                     <div className="field">
                       <label>Montaje</label>
-                      <select className="input" value={m.type} disabled={!canWrite} onChange={(e) => patchMod(m, { type: e.target.value })}>
+                      <select
+                        className="input"
+                        value={m.type}
+                        disabled={!canWrite}
+                        onChange={(e) => {
+                          const type = e.target.value as LibModule['type'];
+                          // A location that no longer fits the new montaje is dropped.
+                          const keep = placesFor({ projectType: m.projectType ?? 'cocina', type }).some((p) => p.key === m.anchor?.place);
+                          patchMod(m, { type, ...(m.anchor?.place && !keep ? { anchor: null } : {}) });
+                        }}
+                      >
                         <option value="base">Bajo (con encimera)</option>
                         <option value="upper">Alto (a 150 cm)</option>
                         <option value="tall">Columna</option>
                         <option value="fridge">Libre / de piso</option>
                         <option value="hood">Campana</option>
+                      </select>
+                    </div>
+                    <div className="field" style={{ gridColumn: 'span 2' }}>
+                      <label title="Dónde lo coloca «Generar distribución» sin tener que elegirlo en el asistente">Ubicación predeterminada</label>
+                      <select
+                        className="input"
+                        value={placesFor({ projectType: m.projectType ?? 'cocina', type: m.type }).some((p) => p.key === m.anchor?.place) ? m.anchor!.place : ''}
+                        disabled={!canWrite}
+                        onChange={(e) => patchMod(m, { anchor: e.target.value ? { ...(m.anchor ?? {}), place: e.target.value } : null })}
+                      >
+                        <option value="">Ninguna (elígelo en el asistente)</option>
+                        {placesFor({ projectType: m.projectType ?? 'cocina', type: m.type }).map((p) => (
+                          <option key={p.key} value={p.key}>
+                            {p.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     {(

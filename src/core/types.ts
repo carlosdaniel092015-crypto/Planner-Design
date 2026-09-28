@@ -80,6 +80,8 @@ export interface ModuleDefinition extends ModuleShape {
   priceCurrency: Currency;
   version: number;
   active: boolean;
+  /** Default location in the generated layout (MODULE_PLACES key), set in Bibliotecas → Módulos. */
+  place?: string;
 }
 
 export interface PricingSettings {

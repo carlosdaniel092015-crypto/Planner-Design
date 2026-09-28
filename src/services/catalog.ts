@@ -54,6 +54,8 @@ export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDe
     ...(recipe.draw ? { draw: recipe.draw } : {}),
     projectType: r.projectType,
     source: r.source,
+    // Placed automatically by the generator unless the module is excluded from it.
+    ...(r.useInAutolayout && typeof (r.anchor as { place?: unknown } | null)?.place === 'string' ? { place: (r.anchor as { place: string }).place } : {}),
     unitPrice: r.unitPrice,
     priceCurrency: r.priceCurrency,
     version: r.version,

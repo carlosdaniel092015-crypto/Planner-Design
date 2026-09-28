@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { and, eq, sql } from 'drizzle-orm';
-import { recipeSchema } from '../core';
+import { MODULE_PLACES, recipeSchema } from '../core';
 import type { DbOrTx } from '../db/client';
 import { files, hardwarePrices, materials, moduleDefinitions } from '../db/schema';
 import { audit } from '../lib/audit';
@@ -27,7 +27,12 @@ export const ModuleInput = z
     recipe: z.record(z.string(), z.unknown()).default({ fr: [] }).openapi({ example: { fr: [{ t: 'door', n: 2, f: 1 }], sink: 1 } }),
     modelFileId: z.uuid().nullable().optional(),
     footprint: z.record(z.string(), z.unknown()).nullable().optional(),
-    anchor: z.record(z.string(), z.unknown()).nullable().optional(),
+    anchor: z
+      .object({ place: z.enum(MODULE_PLACES.map((p) => p.key) as [string, ...string[]]).optional() })
+      .loose()
+      .nullable()
+      .optional()
+      .openapi({ description: 'place: ubicación predeterminada en la distribución propuesta (bajo, esquina-baja, alto, esquina-alta, sobre-nevera, …).' }),
     materialSlots: z.record(z.string(), z.string()).nullable().optional().openapi({ description: 'Nombre del material del GLB → "fijo", "frente", "cuerpo" o código de material.' }),
     unitPrice: z.number().min(0).default(0),
     priceCurrency: Currency.default('USD'),

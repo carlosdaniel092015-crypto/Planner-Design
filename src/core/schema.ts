@@ -50,6 +50,8 @@ export const moduleSchema = z
     appl: flag,
     oven: flag,
     open: z.enum(['der', 'izq']).optional(),
+    /** Bottom height (cm) of an upper placed off the 150 cm line (e.g. over the fridge). */
+    z: z.number().min(0).max(500).optional(),
     /** Per-module material overrides (material codes). */
     cue: z.string().max(60).optional(),
     fre: z.string().max(60).optional(),
