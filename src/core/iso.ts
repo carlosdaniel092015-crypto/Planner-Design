@@ -1,6 +1,6 @@
 // Isometric scene as a JSON draw list — ported 1:1 from the prototype's iso() (planner-engine.js).
 // Used for thumbnails and as a lightweight fallback when WebGL is not available.
-import type { DrawItem, Drawing } from './drawing';
+import { burnerSpots, type DrawItem, type Drawing } from './drawing';
 import { geo, shade, zocaloCm, zr } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
@@ -96,9 +96,9 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const L = (u0: number, a0: number, u1: number, a1: number, st: string, sw: number) => line([FP(u0, a0), FP(u1, a1)], st, sw, ex);
     // Walls C and D face away from this camera: draw the carcass (and countertop) as plain boxes.
     if (m.wall === 'C' || m.wall === 'D') {
-      const color = m.type === 'fridge' || m.type === 'hood' ? '#c5c8c9' : C.b;
-      box(g.x0, g.x1, g.y0, g.y1, m.type === 'hood' ? z0 : m.type === 'fridge' ? 0 : z0, m.type === 'fridge' ? m.h : z1, color, ex);
-      if (m.type === 'base') box(g.x0 - (m.wall === 'C' ? 2 : 0), g.x1, g.y0 - (m.wall === 'D' ? 2 : 0), g.y1, z1, z1 + 4, C.c);
+      const color = m.type === 'fridge' || m.type === 'hood' || m.range ? '#c5c8c9' : C.b;
+      box(g.x0, g.x1, g.y0, g.y1, m.type === 'hood' ? z0 : m.type === 'fridge' || m.range ? 0 : z0, m.type === 'fridge' ? m.h : z1, color, ex);
+      if (m.type === 'base' && !m.range) box(g.x0 - (m.wall === 'C' ? 2 : 0), g.x1, g.y0 - (m.wall === 'D' ? 2 : 0), g.y1, z1, z1 + 4, C.c);
       continue;
     }
     if (m.type === 'hood') {
@@ -110,6 +110,26 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
         box(g.x0, g.x1, 0, 50, z0, z0 + 14, '#b9bcbd', ex);
         box(cx - 15, cx + 15, 0, 28, z0 + 14, H, '#c6c9ca', ex);
       }
+      continue;
+    }
+    if (m.type === 'fridge' && m.fd === 2) {
+      box(g.x0, g.x1, g.y0, g.y1, 0, m.h, '#c5c8c9', ex);
+      R(0.01, 0.445, 0.005, 0.995, '#c5c8c9', '#8f9394');
+      R(0.455, 0.99, 0.005, 0.995, '#c5c8c9', '#8f9394');
+      L(0.42, 0.3, 0.42, 0.62, '#6f7374', 2.2);
+      L(0.48, 0.3, 0.48, 0.62, '#6f7374', 2.2);
+      continue;
+    }
+    if (m.range) {
+      // Freestanding range from the floor: steel body, oven door, knobs strip and its burners on top.
+      box(g.x0, g.x1, g.y0, g.y1, 0, z1, '#c5c8c9', ex);
+      const f = (z: number) => (z - z0) / (z1 - z0);
+      R(0.02, 0.98, f(8), f(z1 - 12), '#2d2c2b', '#1d1c1b');
+      R(0.14, 0.86, f(18), f(z1 - 30), '#4a4f52', '#1d1c1b');
+      L(0.2, f(z1 - 18), 0.8, f(z1 - 18), '#d7dadb', 1.8);
+      const TPr = (u: number, w: number): V3 => (isB ? [g.x0 + w * m.d, g.y0 + u * m.w, z1 + 0.1] : [g.x0 + u * m.w, g.y0 + w * m.d, z1 + 0.1]);
+      poly([TPr(0.02, 0.04), TPr(0.98, 0.04), TPr(0.98, 0.96), TPr(0.02, 0.96)], '#232221', '#111', 0.5, ex);
+      for (const q of burnerSpots(m.cook)) poly([TPr(q[0] - 0.08, q[1] - 0.09), TPr(q[0] + 0.08, q[1] - 0.09), TPr(q[0] + 0.08, q[1] + 0.09), TPr(q[0] - 0.08, q[1] + 0.09)], 'none', '#5d5e5f', 0.5, ex);
       continue;
     }
     if (m.type === 'fridge') {
@@ -171,15 +191,19 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
       const TP = (u: number, w: number): V3 => (isB ? [g.x0 + w * m.d, g.y0 + u * m.w, zt + 0.1] : [g.x0 + u * m.w, g.y0 + w * m.d, zt + 0.1]);
       const TR = (u0: number, u1: number, w0: number, w1: number, fill: string, st: string) => poly([TP(u0, w0), TP(u1, w0), TP(u1, w1), TP(u0, w1)], fill, st, 0.5, ex);
       if (m.sink) {
-        TR(0.14, 0.86, 0.14, 0.8, '#c9cccd', '#8f9394');
-        TR(0.19, 0.81, 0.2, 0.74, '#a7abac', '#8f9394');
+        TR(0.1, 0.9, 0.14, 0.8, '#c9cccd', '#8f9394');
+        if (m.sink === 2) {
+          TR(0.14, 0.47, 0.2, 0.74, '#a7abac', '#8f9394');
+          TR(0.53, 0.86, 0.2, 0.74, '#a7abac', '#8f9394');
+        } else TR(0.19, 0.81, 0.2, 0.74, '#a7abac', '#8f9394');
         const f0 = TP(0.5, 0.06);
         const f1 = TP(0.5, 0.3);
         line([f0, [f0[0], f0[1], zt + 28], [f1[0], f1[1], zt + 28], [f1[0], f1[1], zt + 22]], '#7f8384', 2);
       }
       if (m.cook) {
         TR(0.08, 0.92, 0.15, 0.85, '#232221', '#111');
-        for (const q of [[0.28, 0.32], [0.72, 0.32], [0.28, 0.68], [0.72, 0.68]] as const) TR(q[0] - 0.1, q[0] + 0.1, q[1] - 0.1, q[1] + 0.1, 'none', '#5d5e5f');
+        const k = m.cook === 6 ? 0.07 : 0.1;
+        for (const q of burnerSpots(m.cook)) TR(q[0] - k, q[0] + k, q[1] - 0.1, q[1] + 0.1, 'none', '#5d5e5f');
       }
     }
   }

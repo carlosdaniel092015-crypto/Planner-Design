@@ -22,7 +22,7 @@ import {
   updateMaterial,
   updateModule,
 } from '../services/catalog-admin';
-import { loadPricingContext, moduleDefaultsOf, settingsOf } from '../services/catalog';
+import { ensureDefaultModules, loadPricingContext, moduleDefaultsOf, settingsOf } from '../services/catalog';
 import { backfillModelPanels } from '../services/library';
 import type { Db } from '../db/client';
 import { requireFeature } from '../lib/plans';
@@ -88,6 +88,8 @@ export function catalogRoutes() {
       const cur = c.req.valid('query').currency;
       // Models uploaded before boards were read get their despiece now (once each).
       await backfillModelPanels(db, storage, a.org.id);
+      // New standard modules (appliances…) for organisations created before they existed.
+      await ensureDefaultModules(db, a.org);
       const [mods, mats, hw, context] = await Promise.all([
         db.select().from(moduleDefinitions).where(and(eq(moduleDefinitions.organizationId, a.org.id), eq(moduleDefinitions.active, true))).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.name)),
         materialsWithMaps(db, a.org.id, true),

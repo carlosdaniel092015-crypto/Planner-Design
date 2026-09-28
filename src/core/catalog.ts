@@ -79,6 +79,12 @@ const LIB: ModuleShape[] = [
   { code: 'C-DE', name: 'Columna despensa', cat: 'Columnas', rw: [40, 60], w: 50, h: 210, d: 60, type: 'tall', fr: [{ t: 'door', n: 1, f: 0.45 }, { t: 'door', n: 1, f: 0.55 }] },
   { code: 'E-L', name: 'Esquinero en L', cat: 'Esquinas', rw: [80, 110], w: 90, h: 76, d: 60, type: 'base', fr: D1 },
   { code: 'E-AL', name: 'Alacena esquinera', cat: 'Esquinas', rw: [60, 80], w: 65, h: 70, d: 35, type: 'upper', fr: D1 },
+  // Appliances: freestanding ranges, side-by-side fridge, double sink and a 6-burner built-in cooktop.
+  { code: 'ET-76', name: 'Estufa tradicional 4 hornillas', cat: 'Electro', rw: [76, 76], w: 76, h: 76, d: 65, type: 'base', fr: [], cook: 4, range: 1, appl: 1 },
+  { code: 'ET-90', name: 'Estufa tradicional 6 hornillas', cat: 'Electro', rw: [90, 90], w: 90, h: 76, d: 65, type: 'base', fr: [], cook: 6, range: 1, appl: 1 },
+  { code: 'RF-2P', name: 'Nevera 2 puertas', cat: 'Electro', rw: [80, 100], w: 90, h: 180, d: 70, type: 'fridge', fr: [], appl: 1, fd: 2 },
+  { code: 'BF-2B', name: 'Bajo fregadero 2 bocas', cat: 'Bajos', rw: [80, 120], w: 100, h: 76, d: 60, type: 'base', fr: D2, sink: 2 },
+  { code: 'BP-6H', name: 'Estufa empotrable 6 hornillas', cat: 'Electro', rw: [90, 120], w: 90, h: 76, d: 60, type: 'base', fr: DR2, cook: 6 },
   { code: 'CL-L', name: 'Colgado largo', cat: 'Closet', rw: [60, 120], w: 90, h: 230, d: 55, type: 'tall', fr: OPEN_ROD },
   { code: 'CL-E', name: 'Entrepaños abiertos', cat: 'Closet', rw: [40, 100], w: 60, h: 230, d: 55, type: 'tall', fr: OPEN_SH },
   { code: 'CL-Z', name: 'Zapatera extraíble', cat: 'Closet', rw: [40, 80], w: 60, h: 230, d: 55, type: 'tall', fr: D1 },
@@ -86,8 +92,8 @@ const LIB: ModuleShape[] = [
 
 /** Labour/assembly price (USD) by module type; appliances carry their full price. */
 const LABOR: Record<ModuleType, number> = { base: 45, upper: 32, tall: 80, fridge: 0, hood: 0 };
-const APPLIANCE_PRICE: Record<string, number> = { 'RF-75': 1828, 'RF-70': 1780, 'CM-80': 656, 'LV-60': 870 };
-const EXTRA: (m: ModuleShape) => number = (m) => (m.sink ? 60 : 0) + (m.cook ? 40 : 0) + (m.oven ? 70 : 0);
+const APPLIANCE_PRICE: Record<string, number> = { 'RF-75': 1828, 'RF-70': 1780, 'CM-80': 656, 'LV-60': 870, 'ET-76': 690, 'ET-90': 980, 'RF-2P': 2450 };
+const EXTRA: (m: ModuleShape) => number = (m) => (m.sink ? (m.sink === 2 ? 90 : 60) : 0) + (m.cook ? (m.cook === 6 ? 60 : 40) : 0) + (m.oven ? 70 : 0);
 
 function toDefinition(m: ModuleShape): ModuleDefinition {
   const unitPrice = APPLIANCE_PRICE[m.code] ?? LABOR[m.type] + EXTRA(m);
@@ -110,7 +116,7 @@ export const DEFAULT_MODULES: ModuleDefinition[] = (() => {
   for (const m of [...KITCHEN_T, ...ISLAND_EXTRA, ...LINEAL_T, ...CLOSET_T, ...VESTIDOR_T]) {
     if (byCode.has(m.code)) continue;
     const shape: ModuleShape = { code: m.code, name: m.name, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, fr: m.fr, rw: m.rw };
-    for (const k of ['sink', 'cook', 'appl', 'oven'] as const) if (m[k]) shape[k] = 1;
+    for (const k of ['sink', 'cook', 'appl', 'oven', 'range', 'fd'] as const) if (m[k]) shape[k] = m[k];
     byCode.set(m.code, shape);
   }
   return [...byCode.values()].map(toDefinition);

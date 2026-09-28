@@ -37,6 +37,10 @@ export interface ModuleShape {
   cook?: number;
   appl?: number;
   oven?: number;
+  /** Freestanding range: steel body with its own top (the worktop stops at its sides); priced as an appliance. */
+  range?: number;
+  /** Fridge doors: 2 = side by side. */
+  fd?: number;
   /** URL of the GLB model for modelo3d modules (drawn instead of the parametric box). */
   glb?: string;
   /** Boards read from the uploaded model (mm) and the model size they were measured at (cm). */

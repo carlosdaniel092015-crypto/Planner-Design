@@ -107,10 +107,14 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
         ln(g.x0, g.y0, g.x1, g.y1, '#9b9797', 0.6);
         ln(g.x1, g.y0, g.x0, g.y1, '#9b9797', 0.6);
       }
-      if (m.sink) rect(g.x0 + w * 0.15, g.y0 + h * 0.15, w * 0.7, h * 0.6, 'none', INK, 0.7);
+      if (m.type === 'fridge' && m.fd === 2) ln((g.x0 + g.x1) / 2, g.y0, (g.x0 + g.x1) / 2, g.y1, '#9b9797', 0.6);
+      if (m.sink === 2) {
+        rect(g.x0 + w * 0.1, g.y0 + h * 0.15, w * 0.37, h * 0.6, 'none', INK, 0.7);
+        rect(g.x0 + w * 0.53, g.y0 + h * 0.15, w * 0.37, h * 0.6, 'none', INK, 0.7);
+      } else if (m.sink) rect(g.x0 + w * 0.15, g.y0 + h * 0.15, w * 0.7, h * 0.6, 'none', INK, 0.7);
       if (m.cook)
-        for (const q of [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]] as const)
-          it.push({ t: 'c', cx: g.x0 + w * q[0], cy: g.y0 + h * q[1], r: Math.min(w, h) * 0.12, fill: 'none', stroke: INK, sw: 0.7 });
+        for (const q of burnerSpots(m.cook))
+          it.push({ t: 'c', cx: g.x0 + w * q[0], cy: g.y0 + h * q[1], r: Math.min(w, h) * (m.cook === 6 ? 0.1 : 0.12), fill: 'none', stroke: INK, sw: 0.7 });
     }
     if (opts.nums !== false && !up) {
       const cx = (g.x0 + g.x1) / 2;
@@ -161,11 +165,35 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
   return { items: it, vb: ext };
 }
 
+/** Burner positions (fractions of the module width and depth): 2 × 2, or 3 × 2 for six. */
+export const burnerSpots = (n?: number | boolean): (readonly [number, number])[] =>
+  n === 6
+    ? [[0.2, 0.3], [0.5, 0.3], [0.8, 0.3], [0.2, 0.7], [0.5, 0.7], [0.8, 0.7]]
+    : [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
+
 export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, C: Colors, hstyle: string, it: DrawItem[], mid?: number) {
   const rect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, sw?: number) =>
     it.push({ d: `M${P(x, y)}L${P(x + w, y)}L${P(x + w, y + h)}L${P(x, y + h)}Z`, fill, stroke: stroke || shade(fill, -0.35), sw: sw == null ? 0.6 : sw, mid });
   const ln = (x1: number, y1: number, x2: number, y2: number, stroke: string, sw: number) => it.push({ d: `M${P(x1, y1)}L${P(x2, y2)}`, stroke, sw });
   const g = 0.3;
+  if (m.type === 'fridge' && m.fd === 2) {
+    rect(X, Y, W, H, '#c5c8c9', '#8f9394');
+    ln(X + W * 0.45, Y, X + W * 0.45, Y + H, '#8f9394', 0.8);
+    ln(X + W * 0.45 - 3, Y + H * 0.25, X + W * 0.45 - 3, Y + H * 0.6, '#6f7374', 1.6);
+    ln(X + W * 0.45 + 3, Y + H * 0.25, X + W * 0.45 + 3, Y + H * 0.6, '#6f7374', 1.6);
+    return;
+  }
+  if (m.range) {
+    // Freestanding range: steel body, control strip with knobs, oven door with window and handle.
+    const n = m.cook === 6 ? 6 : 4;
+    rect(X, Y, W, H, '#c5c8c9', '#8f9394');
+    rect(X, Y, W, H * 0.13, '#b3b6b7', '#8f9394');
+    for (let i = 0; i < n; i++) it.push({ t: 'c', cx: X + 6 + ((W - 12) * (i + 0.5)) / n, cy: Y + H * 0.065, r: Math.min(2.4, H * 0.04), fill: '#3a3a3a', stroke: 'none', sw: 0 });
+    rect(X + 2, Y + H * 0.17, W - 4, H * 0.7, '#2d2c2b', '#1d1c1b');
+    rect(X + W * 0.14, Y + H * 0.34, W * 0.72, H * 0.42, '#4a4f52', '#1d1c1b');
+    ln(X + W * 0.2, Y + H * 0.23, X + W * 0.8, Y + H * 0.23, '#d7dadb', 1.6);
+    return;
+  }
   if (m.type === 'fridge') {
     rect(X, Y, W, H, '#c5c8c9', '#8f9394');
     ln(X, Y + H * 0.38, X + W, Y + H * 0.38, '#8f9394', 0.8);
@@ -245,12 +273,15 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
   const ms = p.mods.filter((m) => m.wall === wall && (opts.altos !== false || (m.type !== 'upper' && m.type !== 'hood')));
   for (const m of ms) {
     const C = cols(m, p.mats, materials);
-    const [z0, z1] = zr(m, zoc);
-    if ((m.type === 'base' || m.type === 'tall') && zoc > 0) rect(m.pos!, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
+    const [z0r, z1] = zr(m, zoc);
+    // A freestanding range stands on the floor (no plinth) up to the worktop, with its own top.
+    const z0 = m.range ? 0 : z0r;
+    if ((m.type === 'base' || m.type === 'tall') && zoc > 0 && !m.range) rect(m.pos!, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
     front2D({ ...m, fr: frontsOf(m) }, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id);
     if (m.type === 'hood') rect(m.pos! + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
-    if (m.type === 'base') rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
-    const top = m.type === 'base' ? z1 + 4 : z1;
+    if (m.type === 'base' && !m.range) rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
+    if (m.range) rect(m.pos!, Y(z1 + 2), m.w, 2, '#2a2928', '#1d1c1b', 0.4);
+    const top = m.type === 'base' ? z1 + (m.range ? 2 : 4) : z1;
     const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
     if (isSel(m.id)) rect(m.pos!, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {

@@ -28,7 +28,7 @@ export interface HardwareUse {
 
 /** Hardware a placed module consumes. */
 export function hardwareFor(m: ModuleInstance, project: ProjectData): HardwareUse[] {
-  if (m.type === 'fridge' || m.type === 'hood' || m.glb) return [];
+  if (m.type === 'fridge' || m.type === 'hood' || m.range || m.glb) return [];
   const { doors, tallDoors, drawers, rods } = frontCounts(m);
   const out: HardwareUse[] = [];
   const add = (code: string, qty: number) => qty > 0 && out.push({ code, qty: Math.round(qty * 100) / 100 });
@@ -101,7 +101,7 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
       const total = manualAmount(m.pBase * (m.w / (m.w0 || m.w)));
       return { ...base, basis: 'precio_base', materials: 0, hardware: 0, labor: total, total };
     }
-    if (m.type === 'fridge' || m.type === 'hood' || m.glb) {
+    if (m.type === 'fridge' || m.type === 'hood' || m.range || m.glb) {
       if (!def) missing.add(m.code);
       const labor = def ? conv(def.unitPrice, def.priceCurrency) * (def.source === 'modelo3d' ? m.w / def.w : 1) : 0;
       return { ...base, basis: def ? 'catalogo' : 'sin_precio', materials: 0, hardware: 0, labor, total: labor };

@@ -26,7 +26,7 @@ export interface Part {
 }
 
 type Mats = ProjectData['mats'];
-type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'panels' | 'pdim'>;
+type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim'>;
 
 // ---------- boards read from an uploaded 3D model ----------
 /** Thickest a mesh can be to count as a board (mm); both other sides must be at least BOARD_MIN_SIDE. */
@@ -228,7 +228,8 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     const [mat, matCode] = slot === 'cuerpo' ? [cuN, cuCode] : slot === 'frentes' ? [frN, frCode] : [backN, BACK_PANEL_MATERIAL];
     P.push({ pieza, cant, L: Math.round(L), A: Math.round(A), esp, mat, matCode, slot, veta, cantos, grp });
   };
-  if (m.type === 'fridge' || m.type === 'hood') return [];
+  // Appliances (fridge, hood, freestanding range) are bought, not cut.
+  if (m.type === 'fridge' || m.type === 'hood' || m.range) return [];
   const placed = usesBoards(m) ? placedPanels(m) : [];
   if (placed.length) {
     for (const pp of placed) {

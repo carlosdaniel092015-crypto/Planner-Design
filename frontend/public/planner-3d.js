@@ -263,6 +263,33 @@ function buildModule(m, ctx) {
     } else bx(g, W, y1 - y0, D, texMat(bodyId, W, y1 - y0, false, seed), 0, y0, 0);
     return g;
   }
+  if (m.type === 'fridge' && m.fd === 2) {
+    // Side-by-side fridge: freezer on the left (narrower), fridge on the right, long handles in the middle.
+    const st = mats.steel(), sp = W * .45;
+    bx(g, W, H, D - .03, st, 0, 0, 0);
+    bx(g, sp - .004, H - .006, .03, st, .003, .003, D - .03, { round: 1 });
+    bx(g, W - sp - .005, H - .006, .03, st, sp + .002, .003, D - .03, { round: 1 });
+    vbar(g, sp - .04, H * .55, Math.min(1, H * .55), D, mats.chrome()); vbar(g, sp + .04, H * .55, Math.min(1, H * .55), D, mats.chrome());
+    return g;
+  }
+  if (m.range) {
+    // Freestanding range: steel body to the worktop height, oven with glass door, control strip with knobs, burners on top.
+    const st = mats.steel(), top = yt, n = m.cook === 6 ? 6 : 4;
+    bx(g, W, top, D - .03, st, 0, 0, 0);
+    bx(g, W - .02, .012, D - .05, st, .01, top - .012, .01);
+    const ph = .09, oy0 = .1, oy1 = top - ph - .02;
+    bx(g, W - .006, oy1 - oy0, .03, mats.blackGlass(), .003, oy0, D - .03, { round: 1 });
+    bx(g, W - .12, (oy1 - oy0) * .55, .004, std('ovenwin', { color: 0x222426, roughness: .15, metalness: .2 }), .06, oy0 + (oy1 - oy0) * .2, D + .001);
+    hbar(g, W / 2, oy1 - .04, W * .7, D, mats.chrome());
+    bx(g, W - .006, oy0 - .015, .03, st, .003, .01, D - .03);
+    bx(g, W - .006, ph, .03, st, .003, top - ph - .01, D - .03);
+    for (let i = 0; i < n; i++) {
+      const k = new T.Mesh(new T.CylinderGeometry(.018, .018, .02, 20), mats.frame()); k.rotation.x = Math.PI / 2;
+      k.position.set(.08 + (W - .16) * (i + .5) / n, top - ph / 2 - .01, D + .01); k.castShadow = true; g.add(k);
+    }
+    addCooktop(g, W, D, top, n, true);
+    return g;
+  }
   if (m.type === 'fridge') {
     const st = mats.steel();
     bx(g, W, H, D - .03, st, 0, 0, 0);
@@ -349,25 +376,41 @@ function buildModule(m, ctx) {
   });
   return g;
 }
-function addSink(g, W, D, top) {
-  const hw = Math.min(W - .14, .74), hx = (W - hw) / 2, hz0 = D - .08 - .42, st = mats.steel(), dep = .19;
-  bx(g, hw, .004, .42, st, hx, top - dep, hz0);
-  bx(g, .004, dep, .42, st, hx, top - dep, hz0); bx(g, .004, dep, .42, st, hx + hw - .004, top - dep, hz0);
-  bx(g, hw, dep, .004, st, hx, top - dep, hz0); bx(g, hw, dep, .004, st, hx, top - dep, hz0 + .416);
-  const dr = new T.Mesh(new T.CylinderGeometry(.03, .03, .004, 24), mats.frame()); dr.position.set(W / 2, top - dep + .005, hz0 + .21); g.add(dr);
+/** Bowls of a sink across the module: one, or two side by side with a 6 cm bridge. */
+function sinkBowls(W, bowls) {
+  if (bowls === 2) { const tw = Math.min(W - .14, .86), bw = (tw - .06) / 2, x0 = (W - tw) / 2; return [{ hx: x0, hw: bw }, { hx: x0 + bw + .06, hw: bw }]; }
+  const hw = Math.min(W - .14, .74); return [{ hx: (W - hw) / 2, hw }];
+}
+function addSink(g, W, D, top, bowls) {
+  const hz0 = D - .08 - .42, st = mats.steel(), dep = .19;
+  sinkBowls(W, bowls).forEach(({ hx, hw }) => {
+    bx(g, hw, .004, .42, st, hx, top - dep, hz0);
+    bx(g, .004, dep, .42, st, hx, top - dep, hz0); bx(g, .004, dep, .42, st, hx + hw - .004, top - dep, hz0);
+    bx(g, hw, dep, .004, st, hx, top - dep, hz0); bx(g, hw, dep, .004, st, hx, top - dep, hz0 + .416);
+    const dr = new T.Mesh(new T.CylinderGeometry(.03, .03, .004, 24), mats.frame()); dr.position.set(hx + hw / 2, top - dep + .005, hz0 + .21); g.add(dr);
+  });
   const fx = W / 2, fz = hz0 - .05;
   const base = new T.Mesh(new T.CylinderGeometry(.024, .026, .05, 24), mats.chrome()); base.position.set(fx, top + .025, fz); base.castShadow = true; g.add(base);
   const curve = new T.CatmullRomCurve3([[0, .04, 0], [0, .26, 0], [0, .33, .06], [0, .31, .17], [0, .25, .2]].map(p => new T.Vector3(fx + p[0], top + p[1], fz + p[2])));
   const tube = new T.Mesh(new T.TubeGeometry(curve, 48, .012, 14), mats.chrome()); tube.castShadow = true; g.add(tube);
   const lever = new T.Mesh(new T.CylinderGeometry(.006, .006, .08, 10), mats.chrome()); lever.rotation.z = 1.2; lever.position.set(fx + .05, top + .08, fz); g.add(lever);
 }
-function addCooktop(g, W, D, top) {
-  const cw = Math.min(W - .08, .62), cz = D - .06 - .5;
-  bx(g, cw, .006, .5, mats.blackGlass(), (W - cw) / 2, top, cz);
+/** Cooktop with 4 (2 × 2) or 6 (3 × 2) burners; a range gets cast-iron grates over them. */
+function addCooktop(g, W, D, top, n, grates) {
+  const six = n === 6, cw = Math.min(W - (grates ? .03 : .08), six ? .86 : .62), dz = grates ? D - .06 : .5, cz = grates ? .02 : D - .06 - .5;
+  bx(g, cw, .006, dz, mats.blackGlass(), (W - cw) / 2, top, cz);
   const ring = std('ring', { color: 0x4a4a4a, roughness: .5 });
-  [[.27, .3, .09], [.73, .3, .07], [.27, .72, .07], [.73, .72, .1]].forEach(([u, w, r]) => {
+  const spots = six
+    ? [[.18, .3, .08], [.5, .3, .1], [.82, .3, .07], [.18, .72, .07], [.5, .72, .08], [.82, .72, .1]]
+    : [[.27, .3, .09], [.73, .3, .07], [.27, .72, .07], [.73, .72, .1]];
+  spots.forEach(([u, w, r]) => {
+    const x = (W - cw) / 2 + cw * u, z = cz + dz * w;
     const me = new T.Mesh(new T.RingGeometry(r - .006, r, 48), ring); me.rotation.x = -Math.PI / 2;
-    me.position.set((W - cw) / 2 + cw * u, top + .0065, cz + .5 * w); g.add(me);
+    me.position.set(x, top + .0065, z); g.add(me);
+    if (grates) {
+      const gm = mats.frame();
+      bx(g, r * 2.2, .012, .008, gm, x - r * 1.1, top + .006, z - .004); bx(g, .008, .012, r * 2.2, gm, x - .004, top + .006, z - r * 1.1);
+    }
   });
 }
 // Walls C (x = A) and D (y = B) added for U-shaped and galley layouts: fronts face into the room.
@@ -402,7 +445,8 @@ function slab(root, wall, a0, a1, d0, d1, y, th, holes, matId) {
 }
 function counters(root, mods, ctx, groups) {
   const th = { cuarzo: .02, granito: .03, macizo: .04 }[ctx.mats.encimera] || .03, out = [];
-  const bases = mods.filter(m => m.type === 'base');
+  // A freestanding range has its own top: the worktop stops on both sides of it.
+  const bases = mods.filter(m => m.type === 'base' && !m.range);
   const by = {};
   bases.forEach(m => { const k = m.wall === 'F' ? 'F' + m.id : m.wall; (by[k] = by[k] || []).push(m); });
   const aCorner = bases.find(m => m.wall === 'A' && m.pos === 0);
@@ -420,14 +464,14 @@ function counters(root, mods, ctx, groups) {
       if (wall === 'C') { d0 = R.A - D - .02; d1 = R.A; if (aEnd) a0 = Math.max(a0, aEnd.d / 100 + .02); }
       if (wall === 'D') { d0 = R.B - D - .02; d1 = R.B; if (bEnd) a0 = Math.max(a0, bEnd.d / 100 + .02); if (cEnd) a1 = Math.min(a1, R.A - cEnd.d / 100 - .02); }
       const holes = [];
-      r.ms.filter(m => m.sink).forEach(m => {
-        const W = m.w / 100, Dm = m.d / 100, hw = Math.min(W - .14, .74), hx = (W - hw) / 2, hz0 = Dm - .08 - .42;
+      r.ms.filter(m => m.sink).forEach(m => sinkBowls(m.w / 100, m.sink).forEach(({ hx, hw }) => {
+        const Dm = m.d / 100, hz0 = Dm - .08 - .42;
         const p1 = toWorld(m, hx, hz0), p2 = toWorld(m, hx + hw, hz0 + .42);
         if (alongZ(wall)) holes.push({ a0: Math.min(p1[1], p2[1]), a1: Math.max(p1[1], p2[1]), d0: Math.min(p1[0], p2[0]), d1: Math.max(p1[0], p2[0]) });
         else holes.push({ a0: Math.min(p1[0], p2[0]), a1: Math.max(p1[0], p2[0]), d0: Math.min(p1[1], p2[1]), d1: Math.max(p1[1], p2[1]) });
-      });
+      }));
       slab(root, wall, a0, a1, d0, d1, top, th, holes, ctx.mats.encimera);
-      r.ms.forEach(m => { const g = groups[m.id]; if (!g) return; if (m.sink) addSink(g, m.w / 100, m.d / 100, top + th); if (m.cook) addCooktop(g, m.w / 100, m.d / 100, top + th); });
+      r.ms.forEach(m => { const g = groups[m.id]; if (!g) return; if (m.sink) addSink(g, m.w / 100, m.d / 100, top + th, m.sink); if (m.cook) addCooktop(g, m.w / 100, m.d / 100, top + th, m.cook); });
       if (wall !== 'F') out.push({ wall, a0, a1, top: top + th });
     });
   });
