@@ -244,7 +244,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
         <div style={{ display: 'flex', alignItems: 'start', gap: 12, padding: '20px 20px 0' }}>
           <div style={{ flex: 1 }}>
             <div className="dialog-title">Bibliotecas</div>
-            <div className="dialog-body">Sube tus propias texturas y módulos. Se guardan en el servidor de tu organización y quedan disponibles en todos los proyectos.</div>
+            <div className="dialog-body">Sube tus tableros (con su imagen y los datos de la plancha) y tus módulos. Se guardan en el servidor de tu organización y quedan disponibles en todos los proyectos.</div>
           </div>
           <button type="button" className="btn btn-icon" onClick={close} aria-label="Cerrar">
             <Icon name="x" size={18} />
@@ -253,7 +253,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
         <div style={{ display: 'flex', padding: '0 20px', borderBottom: '2px solid var(--color-divider)', marginTop: 12, alignItems: 'center' }}>
           {(
             [
-              ['tex', 'Texturas', 'palette', tex?.length ?? 0],
+              ['tex', 'Tableros', 'palette', tex?.length ?? 0],
               ['mod', 'Módulos', 'package', mods?.length ?? 0],
             ] as const
           ).map(([k, label, icon, n]) => (
@@ -301,10 +301,10 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
               style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
               <Icon name="upload" size={28} style={{ color: 'var(--color-accent)' }} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{tab === 'tex' ? 'Arrastra tus texturas aquí' : 'Arrastra tus módulos aquí'}</div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{tab === 'tex' ? 'Arrastra las imágenes de tus tableros aquí' : 'Arrastra tus módulos aquí'}</div>
                 <div style={{ fontSize: 13, color: MUTED }}>
                   {tab === 'tex'
-                    ? 'JPG, PNG o WebP. Detectamos madera, piedra y metal por el nombre del archivo; puedes ajustarlo después.'
+                    ? 'JPG, PNG o WebP de la textura del tablero. Detectamos madera, piedra y metal por el nombre del archivo; después completas espesor, plancha y distribuidor.'
                     : 'JSON con módulos paramétricos, o modelos 3D: GLB/glTF, 3DS, OBJ, COLLADA (.dae) y FBX (se convierten a GLB). SketchUp (.skp) se convierte en el servidor.'}
                 </div>
               </div>
@@ -332,7 +332,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
 
           {tab === 'tex' && (
             <>
-              {tex?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay texturas propias. Recomendado: imágenes sin costuras (seamless) de 1024 px o más, con la medida real de la muestra.</p>}
+              {tex?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay tableros propios. Sube la imagen de cada tablero (sin costuras, de 1024 px o más) y completa su espesor, el tamaño de la plancha y el distribuidor.</p>}
               {tex?.map((t) => (
                 <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 36px', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'start' }}>
                   <div style={{ width: 88, height: 88, background: t.maps.baseColor ? `url(${t.maps.baseColor.thumb ?? t.maps.baseColor.url}) center/cover` : t.color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.12)' }} />
@@ -364,6 +364,31 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                         ))}
                       </select>
                     </div>
+                    <div className="field">
+                      <label htmlFor={`esp-${t.id}`}>Espesor</label>
+                      <div style={{ position: 'relative' }}>
+                        <input id={`esp-${t.id}`} className="input" type="number" min={2} max={100} step={0.5} defaultValue={Math.round((t.thickness ?? 1.8) * 100) / 10} disabled={!canWrite} onBlur={(e) => { const v = Math.max(2, Math.min(100, Number(e.target.value) || 18)); if (v !== Math.round((t.thickness ?? 1.8) * 100) / 10) patchTex(t, { thicknessMm: v, thickness: v / 10 }); }} style={{ paddingRight: 36, width: '100%' }} />
+                        <span style={{ position: 'absolute', right: 10, top: 9, fontSize: 12, opacity: 0.6 }}>mm</span>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`pl-${t.id}`}>Plancha: largo</label>
+                      <div style={{ position: 'relative' }}>
+                        <input id={`pl-${t.id}`} className="input" type="number" min={300} max={6000} placeholder="2440" defaultValue={t.sheetLmm ?? ''} disabled={!canWrite} onBlur={(e) => { const v = e.target.value ? Math.max(300, Math.min(6000, Math.round(Number(e.target.value)))) : null; if (v !== (t.sheetLmm ?? null)) patchTex(t, { sheetLmm: v, ...(v && !t.sheetAmm ? { sheetAmm: 1830 } : {}) }); }} style={{ paddingRight: 36, width: '100%' }} />
+                        <span style={{ position: 'absolute', right: 10, top: 9, fontSize: 12, opacity: 0.6 }}>mm</span>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`pa-${t.id}`}>Plancha: ancho</label>
+                      <div style={{ position: 'relative' }}>
+                        <input id={`pa-${t.id}`} className="input" type="number" min={300} max={3000} placeholder="1830" defaultValue={t.sheetAmm ?? ''} disabled={!canWrite} onBlur={(e) => { const v = e.target.value ? Math.max(300, Math.min(3000, Math.round(Number(e.target.value)))) : null; if (v !== (t.sheetAmm ?? null)) patchTex(t, { sheetAmm: v, ...(v && !t.sheetLmm ? { sheetLmm: 2440 } : {}) }); }} style={{ paddingRight: 36, width: '100%' }} />
+                        <span style={{ position: 'absolute', right: 10, top: 9, fontSize: 12, opacity: 0.6 }}>mm</span>
+                      </div>
+                    </div>
+                    <div className="field" style={{ gridColumn: 'span 2' }}>
+                      <label htmlFor={`dist-${t.id}`}>Distribuidor</label>
+                      <input id={`dist-${t.id}`} className="input" maxLength={80} placeholder="Ej. Maderas del Caribe" defaultValue={t.supplier ?? ''} disabled={!canWrite} onBlur={(e) => e.target.value.trim() !== (t.supplier ?? '') && patchTex(t, { supplier: e.target.value.trim() || null })} />
+                    </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <div style={{ fontSize: 12, marginBottom: 5, color: MUTED }}>Usar en</div>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -389,7 +414,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                     <button
                       type="button"
                       className="btn btn-icon"
-                      aria-label="Descontinuar textura"
+                      aria-label="Descontinuar tablero"
                       title="Descontinuar (los proyectos que ya la usan la conservan)"
                       onClick={() =>
                         lib
@@ -579,7 +604,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderTop: '2px solid var(--color-divider)' }}>
-          <span style={{ flex: 1, fontSize: 13, color: MUTED }}>{tab === 'tex' ? 'Las texturas aparecen en la pestaña Materiales según su uso.' : 'Los módulos aparecen en la pestaña Módulos, en su categoría.'}</span>
+          <span style={{ flex: 1, fontSize: 13, color: MUTED }}>{tab === 'tex' ? 'Los tableros aparecen en la pestaña Materiales según su uso; su plancha y espesor se usan en la lista de corte y su optimización.' : 'Los módulos aparecen en la pestaña Módulos, en su categoría.'}</span>
           <button type="button" className="btn btn-primary" onClick={close}>
             Listo
           </button>

@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
   BACK_PANEL_MATERIAL,
+  DEFAULT_MODULES,
   frontCounts,
   type HardwareDefinition,
   type MaterialDefinition,
@@ -35,6 +36,7 @@ export function settingsOf(org: Organization): PricingSettings {
 export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDefinition {
   const recipe = (r.recipe ?? { fr: [] }) as Recipe;
   const flag = (v: unknown) => (v ? 1 : undefined);
+  const amount = (v: unknown) => (typeof v === 'number' && v > 1 ? v : v ? 1 : undefined);
   return {
     code: r.code,
     name: r.name,
@@ -45,8 +47,10 @@ export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDe
     d: r.fixedD,
     rw: [r.minW, r.maxW],
     fr: recipe.fr ?? [],
-    sink: flag(recipe.sink),
-    cook: flag(recipe.cook),
+    sink: amount(recipe.sink),
+    cook: amount(recipe.cook),
+    range: flag(recipe.range),
+    fd: recipe.fd === 2 ? 2 : undefined,
     appl: flag(recipe.appl),
     oven: flag(recipe.oven),
     ...(modelUrl ? { glb: modelUrl } : {}),
@@ -65,7 +69,7 @@ export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDe
 
 export function moduleDefToRow(d: ModuleDefinition) {
   const counts = frontCounts({ fr: d.fr, h: d.h });
-  const kind = d.type === 'fridge' || d.type === 'hood' || d.appl ? 'electro' : counts.drawers && !counts.doors ? 'cajones' : d.fr.some((f) => f.t === 'open') ? 'abierto' : 'puertas';
+  const kind = d.type === 'fridge' || d.type === 'hood' || d.appl || d.range ? 'electro' : counts.drawers && !counts.doors ? 'cajones' : d.fr.some((f) => f.t === 'open') ? 'abierto' : 'puertas';
   return {
     code: d.code,
     name: d.name,
@@ -81,7 +85,7 @@ export function moduleDefToRow(d: ModuleDefinition) {
     fixedD: d.d,
     doors: counts.doors,
     drawers: counts.drawers,
-    recipe: { fr: d.fr, ...(d.sink ? { sink: 1 } : {}), ...(d.cook ? { cook: 1 } : {}), ...(d.appl ? { appl: 1 } : {}), ...(d.oven ? { oven: 1 } : {}), ...(d.panels?.length ? { panels: d.panels, pdim: d.pdim } : {}), ...(d.draw ? { draw: d.draw } : {}) },
+    recipe: { fr: d.fr, ...(d.sink ? { sink: d.sink } : {}), ...(d.cook ? { cook: d.cook } : {}), ...(d.range ? { range: 1 } : {}), ...(d.fd ? { fd: d.fd } : {}), ...(d.appl ? { appl: 1 } : {}), ...(d.oven ? { oven: 1 } : {}), ...(d.panels?.length ? { panels: d.panels, pdim: d.pdim } : {}), ...(d.draw ? { draw: d.draw } : {}) },
     unitPrice: d.unitPrice,
     priceCurrency: d.priceCurrency,
     version: d.version,
@@ -102,6 +106,9 @@ export function materialRowToDef(r: MaterialRow): MaterialDefinition {
     priceCurrency: r.priceCurrency,
     tileCm: r.sizeWcm,
     roughness: r.roughness,
+    thick: Math.round(r.thickness * 10 * 10) / 10,
+    ...(r.sheetLmm && r.sheetAmm ? { sheet: [r.sheetLmm, r.sheetAmm] as [number, number] } : {}),
+    supplier: r.supplier,
     version: r.version,
     active: r.active,
   };
@@ -120,7 +127,10 @@ export function materialDefToRow(d: MaterialDefinition) {
     sizeWcm: d.tileCm ?? null,
     sizeHcm: d.tileCm ?? null,
     roughness: d.roughness ?? null,
-    thickness: /6 mm/.test(d.name) ? 0.6 : 1.8,
+    thickness: d.thick ? d.thick / 10 : /6 mm/.test(d.name) ? 0.6 : 1.8,
+    sheetLmm: d.sheet?.[0] ?? null,
+    sheetAmm: d.sheet?.[1] ?? null,
+    supplier: d.supplier ?? null,
     priceM2: d.priceM2,
     priceCurrency: d.priceCurrency,
     version: d.version,
@@ -184,4 +194,20 @@ export function moduleDefaultsOf(o: { settings: unknown }): Record<string, strin
   const m = (o.settings as { modulos?: unknown } | null)?.modulos;
   if (!m || typeof m !== 'object') return {};
   return Object.fromEntries(Object.entries(m as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+}
+
+/**
+ * Modules added to the standard catalogue after an organisation was created (new appliances…) reach it on its next
+ * catalogue load, priced in its currency. Discontinued modules stay discontinued: their rows are never touched.
+ */
+export async function ensureDefaultModules(db: DbOrTx, org: Organization): Promise<number> {
+  const have = new Set((await db.select({ code: moduleDefinitions.code }).from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, org.id))).map((r) => r.code));
+  const missing = DEFAULT_MODULES.map((d, i) => ({ d, i })).filter(({ d }) => !have.has(d.code));
+  if (!missing.length) return 0;
+  const price = (usd: number) => (org.baseCurrency === 'DOP' ? Math.round(usd * org.exchangeRateDopPerUsd * 100) / 100 : usd);
+  await db
+    .insert(moduleDefinitions)
+    .values(missing.map(({ d, i }) => ({ ...moduleDefToRow(d), unitPrice: price(d.unitPrice), priceCurrency: org.baseCurrency, organizationId: org.id, sort: i })))
+    .onConflictDoNothing();
+  return missing.length;
 }

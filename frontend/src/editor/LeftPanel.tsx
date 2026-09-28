@@ -136,7 +136,7 @@ export function LeftPanel(props: {
             {props.onLibrary && (
               <button type="button" className="btn btn-secondary" onClick={() => props.onLibrary!('tex')} style={{ justifyContent: 'flex-start', height: 36 }}>
                 <Icon name="upload" size={15} />
-                Subir texturas (JPG / PNG)
+                Subir tableros (JPG / PNG)
               </button>
             )}
           <div>
@@ -198,12 +198,12 @@ export function LeftPanel(props: {
             >
               <span style={{ width: 26, height: 26, display: 'grid', placeItems: 'center', background: 'var(--color-text)', color: 'var(--color-bg)', fontSize: 12, fontWeight: 800, flex: 'none' }}>{m.id}</span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{m.oven ? `Horno (en ${m.name.toLowerCase()})` : m.sink ? `Fregadero (en ${m.name.toLowerCase()})` : m.cook ? `Parrilla (en ${m.name.toLowerCase()})` : m.name}</span>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{m.range ? m.name : m.oven ? `Horno (en ${m.name.toLowerCase()})` : m.sink ? `Fregadero${m.sink === 2 ? ' de 2 bocas' : ''} (en ${m.name.toLowerCase()})` : m.cook ? `Parrilla de ${m.cook === 6 ? 6 : 4} hornillas (en ${m.name.toLowerCase()})` : m.name}</span>
                 <span style={{ display: 'block', fontSize: 12, color: MUTED }}>
                   {m.w} × {m.h} × {m.d} cm · Muro {m.wall === 'F' ? 'isla' : m.wall}
                 </span>
               </span>
-              <span className="tag tag-neutral">{m.type === 'fridge' ? 'Libre' : m.oven ? 'En columna' : m.sink || m.cook ? 'Bajo encimera' : 'Empotrado'}</span>
+              <span className="tag tag-neutral">{m.type === 'fridge' || m.range ? 'Libre' : m.oven ? 'En columna' : m.sink ? 'Bajo encimera' : m.cook ? 'Empotrada' : 'Empotrado'}</span>
             </button>
           ))}
         </div>

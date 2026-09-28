@@ -1,6 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { computeEstimate, corte, cutlistCsv, elev, hasErrors, plan, validateProject } from '../core';
+import { computeEstimate, corte, cutlistCsv, elev, hasErrors, nestingCsv, optimizeCut, plan, validateProject } from '../core';
 import { approvalLinks, approvals, files, organizations } from '../db/schema';
 import { MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
@@ -276,6 +276,50 @@ export function approvalRoutes() {
     const dxf = cutlistDxf(corte(parseProjectData(row.data), ctx.materials), row.name);
     return c.body(dxf, 200, { 'Content-Type': 'application/dxf', 'Content-Disposition': `attachment; filename="piezas-${slug(row.name)}.dxf"` });
   });
+
+  // ---------- cut optimisation (layout of the pieces on the boards) ----------
+  const NestQuery = z.object({
+    kerf: z.coerce.number().min(0).max(10).default(4).openapi({ description: 'Ancho de la sierra (mm).' }),
+    trim: z.coerce.number().min(0).max(50).default(10).openapi({ description: 'Refilado en cada orilla del tablero (mm).' }),
+  });
+  const nestingOf = async (deps: { db: Parameters<typeof getProject>[0] & Parameters<typeof pricingFor>[0]; config: Parameters<typeof requireFeature>[0] }, a: ReturnType<typeof requireAuth>, id: string, q: z.infer<typeof NestQuery>) => {
+    const row = await getProject(deps.db, a, id);
+    assertCan(a.user, 'project:export', { access: row.access, status: row.status });
+    requireFeature(deps.config, a, 'exports');
+    const { ctx } = await pricingFor(deps.db, a, row);
+    return { row, groups: optimizeCut(corte(parseProjectData(row.data), ctx.materials), ctx.materials, q) };
+  };
+  r.openapi(
+    createRoute({
+      method: 'get',
+      path: '/projects/{id}/optimizacion',
+      tags: ['Exportaciones'],
+      summary: 'Optimización de corte: piezas acomodadas en los tableros',
+      description: 'Por material: plancha, distribuidor, tableros con la posición (mm) de cada pieza, aprovechamiento y piezas que no caben. Requiere el plan con exportaciones.',
+      security,
+      request: { params: IdParam, query: NestQuery },
+      responses: { 200: json(z.object({ groups: z.array(z.record(z.string(), z.unknown())) })), ...authErrors },
+    }),
+    async (c) => {
+      const { groups } = await nestingOf(c.var.deps, requireAuth(c), c.req.valid('param').id, c.req.valid('query'));
+      return c.json({ groups: groups as unknown as Record<string, unknown>[] }, 200);
+    },
+  );
+  r.openapi(
+    createRoute({
+      method: 'get',
+      path: '/projects/{id}/optimizacion.csv',
+      tags: ['Exportaciones'],
+      summary: 'Optimización de corte en CSV (tablero, posición y medida de cada pieza)',
+      security,
+      request: { params: IdParam, query: NestQuery },
+      responses: { 200: { description: 'CSV', content: { 'text/csv': { schema: z.string() } } }, ...authErrors },
+    }),
+    async (c) => {
+      const { row, groups } = await nestingOf(c.var.deps, requireAuth(c), c.req.valid('param').id, c.req.valid('query'));
+      return c.body(nestingCsv(groups), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="optimizacion-de-corte-${slug(row.name)}.csv"` });
+    },
+  );
 
   return r;
 }

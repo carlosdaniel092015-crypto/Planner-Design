@@ -57,6 +57,8 @@ describe('planes y pagos', () => {
     expect((await req('POST', `/projects/${ids[0]}/duplicate`, dis)).status).toBe(402);
     expect((await req('POST', `/projects/${ids[0]}/approval-links`, dis, { recipientEmail: 'c@x.com' })).status).toBe(402);
     expect((await req('GET', `/projects/${ids[0]}/cutlist.csv`, dis)).status).toBe(402);
+    expect((await req('GET', `/projects/${ids[0]}/optimizacion`, dis)).status).toBe(402);
+    expect((await req('GET', `/projects/${ids[0]}/optimizacion.csv`, dis)).status).toBe(402);
     expect((await req('PATCH', '/organization', t.adminA, { brandColor: '#112233' })).status).toBe(402);
     expect((await req('PATCH', '/organization', t.adminA, { name: 'Sigue pudiendo' })).status).toBe(200);
     expect((await req('GET', '/audit', t.adminA)).status).toBe(402);

@@ -26,7 +26,7 @@ export interface Part {
 }
 
 type Mats = ProjectData['mats'];
-type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'panels' | 'pdim'>;
+type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim'>;
 
 // ---------- boards read from an uploaded 3D model ----------
 /** Thickest a mesh can be to count as a board (mm); both other sides must be at least BOARD_MIN_SIDE. */
@@ -208,13 +208,18 @@ export function frontsFromPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'panels' | 
   );
 }
 
+/** Thickness (mm) of the pieces cut from a material: the board's own, else the usual 18 mm. */
+export const boardThick = (mat?: Pick<MaterialDefinition, 'thick'>) => (mat?.thick && mat.thick >= 3 && mat.thick <= 60 ? mat.thick : 18);
+
 export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>): Part[] {
   const W = m.w * 10;
   const H = m.h * 10;
   const D = m.d * 10;
-  const t = 18;
   const cuCode = m.cue || mats.cuerpo;
   const frCode = m.fre || mats.frentes;
+  // Thickness of the boards in the library (18 mm unless the board says otherwise).
+  const t = boardThick(materials[cuCode]);
+  const tf = boardThick(materials[frCode]);
   const cuN = materialLabel(materials[cuCode], cuCode);
   const frN = materialLabel(materials[frCode], frCode);
   const backN = materialLabel(materials[BACK_PANEL_MATERIAL], 'HDF Blanco 6 mm');
@@ -223,7 +228,8 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     const [mat, matCode] = slot === 'cuerpo' ? [cuN, cuCode] : slot === 'frentes' ? [frN, frCode] : [backN, BACK_PANEL_MATERIAL];
     P.push({ pieza, cant, L: Math.round(L), A: Math.round(A), esp, mat, matCode, slot, veta, cantos, grp });
   };
-  if (m.type === 'fridge' || m.type === 'hood') return [];
+  // Appliances (fridge, hood, freestanding range) are bought, not cut.
+  if (m.type === 'fridge' || m.type === 'hood' || m.range) return [];
   const placed = usesBoards(m) ? placedPanels(m) : [];
   if (placed.length) {
     for (const pp of placed) {
@@ -236,7 +242,7 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     return mergeParts(P);
   }
   if (m.appl) {
-    add('Panel frontal', 1, H - 4, W - 4, 18, 'frentes', 'Vertical', '4L', 'door');
+    add('Panel frontal', 1, H - 4, W - 4, tf, 'frentes', 'Vertical', '4L', 'door');
     return P.map((p, i) => ({ ...p, ref: i + 1 }));
   }
   add('Lateral', 2, H, D, t, 'cuerpo', 'Vertical', '1L', 'lat');
@@ -249,9 +255,9 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
   if (nSh) add('Entrepaño', nSh, W - 2 * t - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
   for (const seg of fr) {
     const sh = seg.f * H;
-    if (seg.t === 'door') add('Puerta', seg.n || 1, sh - 4, W / (seg.n || 1) - 4, 18, 'frentes', 'Vertical', '4L', 'door');
-    if (seg.t === 'drawer') add('Frente de cajón', 1, W - 4, sh - 4, 18, 'frentes', 'Horizontal', '4L', 'drawer');
-    if (seg.t === 'oven') add('Remate de horno', 1, W - 4, 60, 18, 'frentes', 'Horizontal', '4L', 'drawer');
+    if (seg.t === 'door') add('Puerta', seg.n || 1, sh - 4, W / (seg.n || 1) - 4, tf, 'frentes', 'Vertical', '4L', 'door');
+    if (seg.t === 'drawer') add('Frente de cajón', 1, W - 4, sh - 4, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+    if (seg.t === 'oven') add('Remate de horno', 1, W - 4, 60, tf, 'frentes', 'Horizontal', '4L', 'drawer');
   }
   return mergeParts(P);
 }

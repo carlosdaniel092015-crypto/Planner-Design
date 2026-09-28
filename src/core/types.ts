@@ -37,6 +37,10 @@ export interface ModuleShape {
   cook?: number;
   appl?: number;
   oven?: number;
+  /** Freestanding range: steel body with its own top (the worktop stops at its sides); priced as an appliance. */
+  range?: number;
+  /** Fridge doors: 2 = side by side. */
+  fd?: number;
   /** URL of the GLB model for modelo3d modules (drawn instead of the parametric box). */
   glb?: string;
   /** Boards read from the uploaded model (mm) and the model size they were measured at (cm). */
@@ -60,6 +64,12 @@ export interface MaterialDefinition {
   /** Real size of the texture sample (cm). */
   tileCm?: number | null;
   roughness?: number | null;
+  /** Board thickness (mm); the despiece uses it for the pieces cut from this material. */
+  thick?: number;
+  /** Board (sheet) size in mm [length, width]; the cut optimisation lays the pieces out on it. */
+  sheet?: [number, number];
+  /** Distributor the board is bought from. */
+  supplier?: string | null;
   version: number;
   active: boolean;
 }

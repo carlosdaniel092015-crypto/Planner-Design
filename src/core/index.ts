@@ -7,6 +7,7 @@ export * from './geometry';
 export * from './parts';
 export * from './rules';
 export * from './cutlist';
+export * from './nesting';
 export * from './budget';
 export * from './drawing';
 export * from './iso';

@@ -71,6 +71,9 @@ export const MaterialInput = z
     priceM2: z.number().min(0).default(0),
     priceCurrency: Currency.default('USD'),
     supplierCode: z.string().max(60).nullable().optional(),
+    sheetLmm: z.number().int().min(300).max(6000).nullable().optional().openapi({ description: 'Largo de la plancha (mm).' }),
+    sheetAmm: z.number().int().min(300).max(3000).nullable().optional().openapi({ description: 'Ancho de la plancha (mm).' }),
+    supplier: z.string().max(80).nullable().optional().openapi({ description: 'Distribuidor.' }),
     active: z.boolean().default(true),
     sort: z.number().int().default(0),
   })

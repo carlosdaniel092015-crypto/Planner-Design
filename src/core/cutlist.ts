@@ -21,11 +21,16 @@ export interface CutGroup {
   pieces: number;
   /** m² */
   area: number;
-  /** Boards of 2440 × 1830 mm (4.47 m²) with 15 % waste. */
+  /** Boards needed (sheet area with 15 % waste). */
   boards: number;
+  /** Sheet the material is sold in (mm) and its distributor. */
+  sheet: [number, number];
+  supplier: string | null;
 }
 
 export const BOARD = { L: 2440, A: 1830, areaM2: 4.47, waste: 0.15 } as const;
+/** Sheet of a material (mm): the one set in the board library, else the standard 2440 × 1830. */
+export const sheetOf = (mat?: Pick<MaterialDefinition, 'sheet'>): [number, number] => (mat?.sheet && mat.sheet[0] >= 300 && mat.sheet[1] >= 300 ? mat.sheet : [BOARD.L, BOARD.A]);
 
 export function allParts(project: ProjectData, materials: Record<string, MaterialDefinition>) {
   return project.mods.flatMap((m) => parts(m, project.mats, materials).map((p) => ({ mod: m.id, ...p })));
@@ -46,15 +51,20 @@ export function corte(project: ProjectData, materials: Record<string, MaterialDe
     g.area += (p.cant * p.L * p.A) / 1e6;
   }
   return [...groups.values()]
-    .map((g) => ({
-      mat: g.mat,
-      matCode: g.matCode,
-      esp: g.esp,
-      rows: [...g.rows.values()],
-      pieces: g.pieces,
-      area: g.area,
-      boards: Math.ceil((g.area * (1 + BOARD.waste)) / BOARD.areaM2),
-    }))
+    .map((g) => {
+      const sheet = sheetOf(materials[g.matCode]);
+      return {
+        mat: g.mat,
+        matCode: g.matCode,
+        esp: g.esp,
+        rows: [...g.rows.values()],
+        pieces: g.pieces,
+        area: g.area,
+        boards: Math.ceil((g.area * (1 + BOARD.waste)) / ((sheet[0] * sheet[1]) / 1e6)),
+        sheet,
+        supplier: materials[g.matCode]?.supplier ?? null,
+      };
+    })
     .sort((a, b) => b.area - a.area);
 }
 

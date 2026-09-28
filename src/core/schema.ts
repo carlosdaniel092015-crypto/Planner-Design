@@ -9,6 +9,13 @@ const frontSegmentSchema = z.object({
 });
 
 const flag = z.union([z.literal(0), z.literal(1), z.boolean()]).optional();
+/** Sink bowls (1 or 2) and cooktop burners (1 = the usual 4; 4 or 6). */
+const count = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(4), z.literal(6), z.boolean()]).optional();
+/** Appliance variants: a freestanding range (its own top, no worktop) and fridge doors (2 = side by side). */
+const applianceFields = {
+  range: flag,
+  fd: z.union([z.literal(1), z.literal(2)]).optional(),
+};
 
 /**
  * One board of a module uploaded as a 3D model (read from its meshes): name, lowest corner and size in mm
@@ -45,10 +52,11 @@ export const moduleSchema = z
     type: z.enum(['base', 'upper', 'tall', 'fridge', 'hood']),
     fr: z.array(frontSegmentSchema).max(12).default([]),
     rw: z.tuple([z.number().positive(), z.number().positive()]).optional(),
-    sink: flag,
-    cook: flag,
+    sink: count,
+    cook: count,
     appl: flag,
     oven: flag,
+    ...applianceFields,
     open: z.enum(['der', 'izq']).optional(),
     /** Bottom height (cm) of an upper placed off the 150 cm line (e.g. over the fridge). */
     z: z.number().min(0).max(500).optional(),
@@ -145,6 +153,11 @@ export const projectDataSchema = z
         persp: camSchema.optional(),
         /** Detail view: which module (id) and, optionally, a hand-made camera. */
         det: z.object({ mod: z.number().int().optional(), cam: camSchema.optional() }).optional(),
+        /** Extra views added to the gallery by hand: each one a named camera. */
+        views: z
+          .array(z.object({ id: z.string().regex(/^[a-z0-9]{1,12}$/), name: z.string().trim().min(1).max(60), cam: camSchema }))
+          .max(12)
+          .optional(),
       })
       .optional(),
     /** Distribution measurements chosen in Especificaciones (walls with furniture, depths, heights, island). */
@@ -176,10 +189,11 @@ export const projectDataSchema = z
 /** Recipe stored in module_definitions.recipe: fronts layout + feature flags consumed by parts(). */
 export const recipeSchema = z.object({
   fr: z.array(frontSegmentSchema).max(12),
-  sink: flag,
-  cook: flag,
+  sink: count,
+  cook: count,
   appl: flag,
   oven: flag,
+  ...applianceFields,
   ...panelsFields,
   /** Set once the stored model was read for boards (models uploaded before boards were saved). */
   pscan: flag,

@@ -32,6 +32,10 @@ export const TextureInput = z
     metalnessFileId: z.uuid().nullable().optional(),
     priceM2: z.number().min(0).optional().openapi({ description: 'Solo admin; para otros roles se ignora.' }),
     priceCurrency: z.enum(['USD', 'DOP']).optional(),
+    thicknessMm: z.number().min(2).max(100).optional().openapi({ description: 'Espesor del tablero (mm). 18 si no se envía.' }),
+    sheetLmm: z.number().int().min(300).max(6000).nullable().optional().openapi({ description: 'Largo de la plancha (mm). 2440 si no se envía.' }),
+    sheetAmm: z.number().int().min(300).max(3000).nullable().optional().openapi({ description: 'Ancho de la plancha (mm). 1830 si no se envía.' }),
+    supplier: z.string().max(80).nullable().optional().openapi({ description: 'Distribuidor.' }),
     active: z.boolean().optional(),
   })
   .openapi('TexturaEntrada', { example: { name: 'Roble ahumado', type: 'Chapa natural', uses: ['frentes'], tileCm: 60, finish: 'Mate', baseColorFileId: '6c1f…' } });
@@ -89,7 +93,10 @@ export async function createTexture(db: DbOrTx, storage: Storage, a: AuthContext
       sizeHcm: input.tileCm,
       grain: input.grain ?? (/madera|chapa|roble|nogal|fresno|encino/i.test(`${input.type} ${input.name}`) ? 'v' : 'ninguna'),
       rotation: input.rotation ?? 0,
-      thickness: 1.8,
+      thickness: (input.thicknessMm ?? 18) / 10,
+      sheetLmm: input.sheetLmm ?? null,
+      sheetAmm: input.sheetAmm ?? null,
+      supplier: input.supplier?.trim() || null,
       roughness: ROUGH[input.finish],
       priceM2: clean.priceM2 ?? 0,
       priceCurrency: clean.priceCurrency ?? 'USD',
@@ -105,9 +112,11 @@ export async function updateTexture(db: DbOrTx, storage: Storage, a: AuthContext
   if (!cur || cur.source !== 'subido') throw notFound('La textura');
   let thumbnailUrl: string | undefined;
   if (patch.baseColorFileId) thumbnailUrl = (await ensureImageVariants(db, storage, a, await getFile(db, a.org.id, patch.baseColorFileId))).variants.thumb;
-  const { tileCm, finish, code: _code, ...rest } = noPriceUnlessAdmin(a, patch);
+  const { tileCm, finish, code: _code, thicknessMm, supplier, ...rest } = noPriceUnlessAdmin(a, patch);
   return updateMaterial(db, a, id, {
     ...rest,
+    ...(thicknessMm ? { thickness: thicknessMm / 10 } : {}),
+    ...(supplier !== undefined ? { supplier: supplier?.trim() || null } : {}),
     ...(tileCm ? { sizeWcm: tileCm, sizeHcm: tileCm } : {}),
     ...(finish ? { roughness: ROUGH[finish] } : {}),
     ...(thumbnailUrl ? { thumbnailUrl } : {}),

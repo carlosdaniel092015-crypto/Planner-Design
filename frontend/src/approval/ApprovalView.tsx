@@ -9,6 +9,7 @@ import {
   geo,
   iso,
   type ModuleInstance,
+  optimizeCut,
   ortho,
   type Part,
   parts,
@@ -22,6 +23,7 @@ import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type Cat
 import { handleOf, sceneCfg } from '../editor/engine';
 import { Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg } from '../ui';
 import { CameraDialog } from './CameraDialog';
+import { exportNestingPdf, fetchNesting, NestingSection } from './Nesting';
 import { downloadApi, exportPdf, Photo, SignaturePad } from './shared';
 
 type Tab = 'galeria' | 'planos' | 'corte' | 'pdf';
@@ -73,7 +75,7 @@ export function ApprovalView(props: {
   const [reopening, setReopening] = useState(false);
   /** null = automatic angle (faces the most fronts). */
   /** Which gallery photo is being framed by hand. */
-  const [camEdit, setCamEdit] = useState<'persp' | 'det' | null>(null);
+  const [camEdit, setCamEdit] = useState<'persp' | 'det' | 'new' | { view: string } | null>(null);
   const [regen, setRegen] = useState(0);
   const [planMod, setPlanMod] = useState<number | null>(null);
   const [pdf, setPdf] = useState<{ pct: number; step: string } | null>(null);
@@ -97,6 +99,25 @@ export function ApprovalView(props: {
   const walls: Wall[] = ['A', 'B', ...(['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w))];
   const buildable = useMemo(() => data.mods.filter((m) => parts(m, data.mats, mats).length), [data, mats]);
   const cut = useMemo(() => (tab === 'corte' || tab === 'pdf' ? corte(data, mats) : []), [tab, data, mats]);
+  // Saw settings of the cut optimisation, remembered on this device.
+  const [nestOpts, setNestOpts] = useState<{ kerf: number; trim: number }>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('planner.nest') ?? 'null');
+      if (v && Number.isFinite(v.kerf) && Number.isFinite(v.trim)) return { kerf: v.kerf, trim: v.trim };
+    } catch {
+      // private mode: defaults
+    }
+    return { kerf: 4, trim: 10 };
+  });
+  const saveNestOpts = (o: { kerf: number; trim: number }) => {
+    setNestOpts(o);
+    try {
+      localStorage.setItem('planner.nest', JSON.stringify(o));
+    } catch {
+      // not remembered
+    }
+  };
+  const nest = useMemo(() => (tab === 'corte' ? optimizeCut(cut, mats, nestOpts) : []), [tab, cut, mats, nestOpts]);
   // Detail view: the module chosen in the gallery, else the sink/cooktop (kitchens) or the long hanging (closets).
   const cams = data.cams ?? {};
   const detMod =
@@ -105,6 +126,11 @@ export function ApprovalView(props: {
     data.mods[0];
   const detCam = cams.det?.cam && (cams.det.mod == null || cams.det.mod === detMod?.id) ? cams.det.cam : undefined;
   const setCams = (next: NonNullable<ProjectData['cams']>) => props.commit({ ...data, cams: next });
+  // Views added by hand to the gallery (named cameras); they also go to the PDF and the client page.
+  const views = cams.views ?? [];
+  const setViews = (next: typeof views) => setCams({ ...cams, views: next.length ? next : undefined });
+  const editing = camEdit && typeof camEdit === 'object' ? views.find((v) => v.id === camEdit.view) : undefined;
+  const viewPhoto = (cam: NonNullable<ProjectData['cams']>['persp'], w: number, h: number, title: string) => <Photo cfg={cfg} opts={cam ? { w, h, cam } : { w, h }} fallback={isoOf(45)} title={title} />;
   const detFocus = (m?: ModuleInstance): [number, number, number, number] | undefined => {
     if (!m) return undefined;
     const g = geo(m, data.room);
@@ -126,7 +152,7 @@ export function ApprovalView(props: {
     }
     return true;
   };
-  const doExport = async (kind: 'pdf' | 'csv' | 'dxf') => {
+  const doExport = async (kind: 'pdf' | 'csv' | 'dxf' | 'opt' | 'optcsv') => {
     setExpOpen(false);
     try {
       if (kind === 'pdf') {
@@ -136,6 +162,18 @@ export function ApprovalView(props: {
         setPdf({ pct: 3, step: 'Preparando páginas…' });
         const name = await exportPdf(pdfRoot.current, project.name, (pct, step) => setPdf({ pct, step }));
         flash(`PDF descargado: ${name}`);
+      } else if (kind === 'opt' || kind === 'optcsv') {
+        if (!(await guard())) return;
+        if (kind === 'optcsv') {
+          const name = await downloadApi(`/projects/${project.id}/optimizacion.csv?kerf=${nestOpts.kerf}&trim=${nestOpts.trim}`, 'optimizacion-de-corte.csv');
+          flash(`Optimización de corte descargada (${name}, compatible con Excel)`);
+        } else {
+          setPdf({ pct: 20, step: 'Acomodando las piezas en los tableros…' });
+          const groups = await fetchNesting(project.id, nestOpts);
+          setPdf({ pct: 70, step: 'Dibujando los tableros…' });
+          const name = await exportNestingPdf(groups, mats, project.name, nestOpts);
+          flash(`Optimización de corte descargada: ${name}`);
+        }
       } else {
         if (!(await guard())) return;
         const name = kind === 'csv' ? await downloadApi(`/projects/${project.id}/cutlist.csv`, 'lista-de-corte.csv') : await downloadApi(`/projects/${project.id}/pieces.dxf`, 'piezas.dxf');
@@ -183,6 +221,8 @@ export function ApprovalView(props: {
                       ['file-text', 'Exportar PDF', 'PDF', 'pdf'],
                       ['file-spreadsheet', 'Lista de corte', 'CSV / Excel', 'csv'],
                       ['pen-tool', 'Piezas para CNC', 'DXF', 'dxf'],
+                      ['layout-grid', 'Optimización de corte', 'PDF', 'opt'],
+                      ['table', 'Optimización de corte', 'CSV', 'optcsv'],
                     ] as const
                   ).map(([icon, l, ext, k]) => (
                     <button type="button" role="menuitem" key={k} className="val-btn" onClick={() => doExport(k)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 0, borderBottom: '1px solid var(--color-divider)', font: 'inherit', fontSize: 14, color: 'var(--color-text)', cursor: 'pointer', textAlign: 'left' }}>
@@ -304,6 +344,50 @@ export function ApprovalView(props: {
                 {detail(1200, 480)}
               </Tile>
             )}
+            {views.map((v) => (
+              <Tile
+                key={v.id}
+                title={v.name}
+                scale="Vista agregada"
+                onRegen={() => setRegen((n) => n + 1)}
+                onAdjust={props.canManage && !approved ? () => setCamEdit({ view: v.id }) : undefined}
+                extra={
+                  props.canManage && !approved ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: 13 }}
+                        onClick={() => {
+                          const name = window.prompt('Nombre de la vista', v.name)?.trim();
+                          if (name) setViews(views.map((x) => (x.id === v.id ? { ...x, name: name.slice(0, 60) } : x)));
+                        }}
+                      >
+                        <Icon name="pencil" size={14} />
+                        Renombrar
+                      </button>
+                      <button type="button" className="btn btn-ghost" aria-label={`Quitar la vista ${v.name}`} style={{ fontSize: 13, marginLeft: 'auto' }} onClick={() => window.confirm(`¿Quitar la vista «${v.name}» de la galería?`) && setViews(views.filter((x) => x.id !== v.id))}>
+                        <Icon name="trash-2" size={14} />
+                        Quitar
+                      </button>
+                    </>
+                  ) : undefined
+                }
+              >
+                {viewPhoto(v.cam, 1100, 600, v.name)}
+              </Tile>
+            ))}
+            {props.canManage && !approved && views.length < 12 && (
+              <button
+                type="button"
+                onClick={() => setCamEdit('new')}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, border: '2px dashed var(--color-divider)', background: 'transparent', font: 'inherit', color: 'var(--color-text)', cursor: 'pointer' }}
+              >
+                <Icon name="plus" size={28} style={{ color: 'var(--color-accent)' }} />
+                <span style={{ fontWeight: 800, fontSize: 15 }}>Agregar vista</span>
+                <span style={{ fontSize: 13, color: SOFT, maxWidth: 240, textAlign: 'center' }}>Encuadra otra toma en 3D; va a la galería, al PDF y a la página del cliente.</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -357,7 +441,9 @@ export function ApprovalView(props: {
                 <h4 style={{ margin: 0 }}>
                   {g.mat} · {g.esp} mm
                 </h4>
-                <span style={{ fontSize: 13, color: SOFT }}>{g.pieces} piezas · tablero 2440 × 1830 mm</span>
+                <span style={{ fontSize: 13, color: SOFT }}>
+                  {g.pieces} piezas · plancha {g.sheet[0]} × {g.sheet[1]} mm{g.supplier ? ` · ${g.supplier}` : ''}
+                </span>
               </div>
               <div className="cut-row" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: SOFT, padding: '8px 0', borderBottom: '2px solid var(--color-divider)' }}>
                 <span>Pieza</span>
@@ -383,6 +469,7 @@ export function ApprovalView(props: {
                 ))}
             </div>
           ))}
+          <NestingSection groups={nest} mats={mats} opts={nestOpts} onOpts={saveNestOpts} onPdf={() => doExport('opt')} onCsv={() => doExport('optcsv')} />
         </div>
       )}
 
@@ -401,6 +488,7 @@ export function ApprovalView(props: {
             if (k.vistas) {
               pages.push({ label: 'Render perspectiva', title: 'Vista en perspectiva', art: persp(1100, 760) });
               if (detMod) pages.push({ label: 'Vista de detalle', title: `Detalle · ${detLabel}`, art: detail(1200, 700) });
+              for (const v of views) pages.push({ label: v.name, title: v.name, art: viewPhoto(v.cam, 1100, 760, v.name) });
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });
             if (k.alzados) for (const w of walls) pages.push({ label: `Alzado muro ${w}`, title: `Alzado muro ${w}`, art: <Svg drawing={elevD(w)} /> });
@@ -433,17 +521,27 @@ export function ApprovalView(props: {
 
       {camEdit && (
         <CameraDialog
-          title={camEdit === 'persp' ? 'Ajustar cámara · render en perspectiva' : `Ajustar cámara · detalle de ${detMod?.name ?? 'módulo'}`}
+          title={camEdit === 'persp' ? 'Ajustar cámara · render en perspectiva' : camEdit === 'det' ? `Ajustar cámara · detalle de ${detMod?.name ?? 'módulo'}` : camEdit === 'new' ? 'Agregar vista' : `Ajustar cámara · ${editing?.name ?? 'vista'}`}
           cfg={camCfg}
-          initial={camEdit === 'persp' ? cams.persp : detCam}
+          initial={camEdit === 'persp' ? cams.persp : camEdit === 'det' ? detCam : camEdit === 'new' ? cams.persp : editing?.cam}
           focusId={camEdit === 'det' ? detMod?.id : undefined}
-          onSave={(cam) => {
+          name={camEdit === 'new' ? `Vista ${views.length + 1}` : undefined}
+          onSave={(cam, name) => {
             // A camera read from a collapsed or broken viewer (NaN) must never reach the project: the server would reject every save.
             if (!camSchema.safeParse(cam).success) return flash('No se pudo leer la cámara. Agranda la ventana e inténtalo de nuevo.');
-            setCams(camEdit === 'persp' ? { ...cams, persp: cam } : { ...cams, det: { mod: detMod?.id, cam } });
+            if (camEdit === 'new') {
+              const id = Math.random().toString(36).slice(2, 10) || 'v1';
+              setViews([...views, { id, name: (name?.trim() || `Vista ${views.length + 1}`).slice(0, 60), cam }]);
+              return flash('Vista agregada a la galería, al PDF y a la página del cliente.');
+            }
+            if (typeof camEdit === 'object') setViews(views.map((x) => (x.id === camEdit.view ? { ...x, cam } : x)));
+            else setCams(camEdit === 'persp' ? { ...cams, persp: cam } : { ...cams, det: { mod: detMod?.id, cam } });
             flash('Vista guardada: se usa en la galería, el PDF y la página del cliente.');
           }}
-          onReset={() => setCams(camEdit === 'persp' ? { ...cams, persp: undefined } : { ...cams, det: { mod: cams.det?.mod } })}
+          onReset={() => {
+            if (camEdit === 'persp') setCams({ ...cams, persp: undefined });
+            else if (camEdit === 'det') setCams({ ...cams, det: { mod: cams.det?.mod } });
+          }}
           onClose={() => setCamEdit(null)}
         />
       )}
