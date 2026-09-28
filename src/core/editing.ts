@@ -8,10 +8,15 @@ const isFloor = (x: { type: string }) => x.type !== 'upper' && x.type !== 'hood'
 
 export type Dim = 'w' | 'h' | 'd';
 
-export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'>): Record<Dim, [number, number]> {
+/** Width range for a module uploaded as a 3D model: the model is stretched to fit, from half to double its width. */
+export const modelWidthRange = (w: number): [number, number] => [Math.max(10, Math.round(w / 2)), Math.min(1000, Math.max(Math.round(w * 2), 30))];
+
+export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'> & { glb?: string; w?: number }): Record<Dim, [number, number]> {
   const t = m.type;
+  // Models uploaded before 1.15.1 were saved with a single width (min = max); they can be resized too.
+  const fixedModel = m.glb && (!m.rw || m.rw[0] === m.rw[1]);
   return {
-    w: m.rw ?? [30, 120],
+    w: fixedModel ? modelWidthRange(m.rw?.[0] ?? m.w ?? 60) : (m.rw ?? [30, 120]),
     h: t === 'tall' ? [180, 240] : t === 'upper' ? [35, 100] : t === 'fridge' ? [170, 200] : t === 'hood' ? [25, 25] : [60, 80],
     d: t === 'upper' ? [25, 40] : t === 'hood' ? [50, 50] : [45, 65],
   };
@@ -75,6 +80,8 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.appl ? { appl: 1 } : {}),
     ...(def.oven ? { oven: 1 } : {}),
     ...(def.glb ? { glb: def.glb } : {}),
+    ...(def.panels?.length ? { panels: clone(def.panels), pdim: def.pdim } : {}),
+    ...(def.draw ? { draw: def.draw } : {}),
     moduleVersion: def.version,
   };
 }
@@ -151,3 +158,58 @@ export function updateModule(p: ProjectData, id: number, patch: Partial<ModuleIn
     }),
   };
 }
+
+// ---------- moving ----------
+export type Place = { wall: 'A' | 'B' | 'C' | 'D'; pos: number } | { wall: 'F'; x: number; y: number };
+
+/** Distance (cm) within which a moved module snaps to a corner or to the edge of a neighbour. */
+export const SNAP_CM = 4;
+
+/**
+ * Moves a module along a wall (kept inside it and snapped to corners and neighbours on the same level) or to
+ * a free-standing spot (inside the room). Widths never change; overlaps are left to validation to flag.
+ */
+export function moveModule(p: ProjectData, id: number, to: Place, snap = SNAP_CM): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m) return p;
+  const { A, B } = p.room;
+  const snapTo = (v: number, targets: number[], lo: number, hi: number) => {
+    const c = Math.max(lo, Math.min(hi, v));
+    let best = c;
+    let dist = snap + 1e-9;
+    for (const t of targets) {
+      if (t < lo - 1e-9 || t > hi + 1e-9) continue;
+      const d = Math.abs(c - t);
+      if (d <= dist) {
+        best = t;
+        dist = d;
+      }
+    }
+    return Math.round(best);
+  };
+  let patch: Partial<ModuleInstance>;
+  if (to.wall === 'F') {
+    const hiX = Math.max(0, A - m.w);
+    const hiY = Math.max(0, B - m.d);
+    patch = { wall: 'F', pos: undefined, x: snapTo(to.x, [0, hiX], 0, hiX), y: snapTo(to.y, [0, hiY], 0, hiY) };
+  } else {
+    const len = to.wall === 'A' || to.wall === 'D' ? A : B;
+    const hi = Math.max(0, len - m.w);
+    const neighbours = p.mods.filter((x) => x.id !== id && x.wall === to.wall && isFloor(x) === isFloor(m) && x.pos != null);
+    const targets = [0, hi, ...neighbours.flatMap((x) => [x.pos! - m.w, x.pos! + x.w])];
+    patch = { wall: to.wall, pos: snapTo(to.pos, targets, 0, hi), x: undefined, y: undefined };
+  }
+  return {
+    ...p,
+    mods: p.mods.map((x) => {
+      if (x.id !== id) return x;
+      const next = { ...x, ...patch };
+      for (const k of ['pos', 'x', 'y'] as const) if (next[k] === undefined) delete next[k];
+      return next;
+    }),
+  };
+}
+
+/** Where a module stands, as a Place (islands have x/y, the rest a wall and a distance from its corner). */
+export const placeOf = (m: Pick<ModuleInstance, 'wall' | 'pos' | 'x' | 'y'>): Place =>
+  m.wall === 'F' ? { wall: 'F', x: m.x ?? 0, y: m.y ?? 0 } : { wall: m.wall, pos: m.pos ?? 0 };

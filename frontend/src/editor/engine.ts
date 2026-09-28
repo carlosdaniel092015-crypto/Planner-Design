@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { type CameraState, type Drawing, type DrawItem, front2D, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
+import { type CameraState, type Drawing, type DrawItem, drawsNative, front2D, frontsOf, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -101,7 +101,7 @@ export function snapshot(cfg: unknown, o: SnapOptions): Promise<string | null> {
 
 let rendererP: Promise<Renderer> | null = null;
 export function loadRenderer(): Promise<Renderer> {
-  rendererP ??= import(/* @vite-ignore */ new URL('/planner-3d.js', window.location.origin).href) as Promise<Renderer>;
+  rendererP ??= import(/* @vite-ignore */ new URL(__RENDERER_URL__, window.location.origin).href) as Promise<Renderer>;
   return rendererP;
 }
 
@@ -111,7 +111,9 @@ export const handleOf = (a?: string) => (a === 'Gola' ? 'gola' : a === 'Push' ? 
 export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: number[]; cotas: boolean; altos: boolean; dark: boolean }) {
   if (window.SPEngine) window.SPEngine.room = { A: p.room.A, B: p.room.B };
   return {
-    mods: p.mods,
+    // Uploaded modules drawn as native modules (doors and drawers read from their boards or set in the library):
+    // plinth, materials, handles and opening like the catalogue ones. The rest keep their own 3D model.
+    mods: p.mods.map((m) => (m.glb && drawsNative(m) ? { ...m, glb: undefined, fr: frontsOf(m) } : m)),
     mats: p.mats,
     room: p.room,
     ops: p.ops,
@@ -135,7 +137,7 @@ export function colorsFor(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectD
 /** Prototype frontThumb(): the module's front elevation with some padding. */
 export function frontThumb(m: ModuleInstance, mats: ProjectData['mats'], byCode: Record<string, { color: string }>, apertura?: string): Drawing {
   const items: DrawItem[] = [];
-  front2D(m, 0, 0, m.w, m.h, colorsFor(m, mats, byCode), handleOf(apertura), items);
+  front2D({ ...m, fr: frontsOf(m) }, 0, 0, m.w, m.h, colorsFor(m, mats, byCode), handleOf(apertura), items);
   const pad = Math.max(m.w, m.h) * 0.08;
   return { items, vb: [-pad, -pad, m.w + pad * 2, m.h + pad * 2] };
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "approval_links" ADD COLUMN "show_prices" boolean DEFAULT true NOT NULL;

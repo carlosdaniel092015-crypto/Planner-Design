@@ -2,7 +2,11 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { create } from 'openskp';
 import { strToU8, zipSync } from 'fflate';
 import sharp from 'sharp';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { DEFAULT_KITCHEN, type ModuleInstance, parts, templateOf } from '../src/core';
+import { moduleDefinitions } from '../src/db/schema';
 import { API, setup, type Ctx, type TestUser } from './helpers';
 
 let t: Ctx;
@@ -201,6 +205,8 @@ describe('biblioteca', () => {
     expect(mod.status, JSON.stringify(mod.data)).toBe(201);
     glbModuleCode = mod.data.module.code;
     expect(mod.data.module).toMatchObject({ source: 'modelo3d', defW: 60, fixedH: 76, fixedD: 60, materialSlots: { Frente: 'fijo', Cuerpo: 'fijo' } });
+    // The model stretches to the width you give it: half to double its own width.
+    expect(mod.data.module).toMatchObject({ minW: 30, maxW: 120 });
     expect(mod.data.module.modelFileId).not.toBe(f.data.id); // Draco-compressed copy
     const again = await t.req('POST', '/library/models/inspect', { user: dis, body: { fileId: mod.data.module.modelFileId } });
     expect(again.data.materials).toEqual(['Frente', 'Cuerpo']);
@@ -215,6 +221,81 @@ describe('biblioteca', () => {
     expect(ins.status).toBe(200);
     expect(ins.data.bbox).toEqual({ w: 60, h: 76, d: 60 });
     expect(ins.data.materials).toContain('Frente');
+  });
+
+  it('un mueble hecho por tablas (MB 1 puerta del usuario) trae su despiece real y se ajusta al ancho', async () => {
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/mb_1_puerta.3ds', import.meta.url)));
+    const f = await upload(dis, 'modelo3d', 'MB_1_PUERTA.3ds', bytes, 'application/octet-stream');
+    expect(f.status, JSON.stringify(f.data)).toBe(201);
+    const mod = await t.req('POST', '/library/modules', { user: dis, body: { name: 'MB 1 puerta', source: 'modelo3d', modelFileId: f.data.id } });
+    expect(mod.status, JSON.stringify(mod.data)).toBe(201);
+    expect(mod.data.module).toMatchObject({ defW: 30, fixedH: 78, fixedD: 60, minW: 15, maxW: 60 });
+    const panels = mod.data.module.recipe.panels as { n: string; s: number[] }[];
+    expect(panels.map((p) => p.n).sort()).toEqual(['División Libre 1', 'Entrepaño fijo', 'Entrepaño fijo', 'Lateral Derecho', 'Lateral Izquierdo', 'Puerta (unica)', 'Suelo', 'Trasera'].sort());
+    // It becomes a native module: one door read from its front board.
+    expect(mod.data.module.recipe.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
+    // The project instance gets the boards; the despiece uses the real sizes (the back is 18 mm here, not HDF).
+    const cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.modules[mod.data.module.code];
+    const inst = { ...templateOf(def), id: 1, wall: 'A', pos: 0 } as unknown as ModuleInstance;
+    const list = parts(inst, DEFAULT_KITCHEN.mats, cat.context.materials);
+    const byName = Object.fromEntries(list.map((p) => [p.pieza, p]));
+    expect(byName['Lateral Derecho']).toMatchObject({ cant: 1, L: 780, A: 582, esp: 18, slot: 'cuerpo' });
+    expect(byName['Puerta (unica)']).toMatchObject({ L: 755, A: 297, esp: 18, slot: 'frentes', cantos: '4L' });
+    expect(byName.Trasera).toMatchObject({ L: 762, A: 264, esp: 18, slot: 'cuerpo' });
+    expect(byName['Entrepaño fijo']!.cant).toBe(1); // two shelves of different depth stay as two rows
+    expect(list.reduce((a, p) => a + p.cant, 0)).toBe(8);
+    // Stretched to 60 cm: floor, back and door grow by the 300 mm added; the sides stay 18 mm and on the edges.
+    const wide = parts({ ...inst, w: 60 }, DEFAULT_KITCHEN.mats, cat.context.materials);
+    expect(wide.find((p) => p.pieza === 'Suelo')).toMatchObject({ L: 582, A: 564 });
+    expect(wide.find((p) => p.pieza === 'Lateral Derecho')).toMatchObject({ L: 780, A: 582, esp: 18 });
+    expect(wide.find((p) => p.pieza === 'Puerta (unica)')).toMatchObject({ L: 755, A: 597 });
+  });
+
+  it('un modelo subido antes (sin piezas guardadas) recibe su despiece solo al cargar el catálogo, una vez', async () => {
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/mb_1_puerta.3ds', import.meta.url)));
+    const f = await upload(dis, 'modelo3d', 'MB_VIEJO.3ds', bytes, 'application/octet-stream');
+    const mod = await t.req('POST', '/library/modules', { user: dis, body: { name: 'MB viejo', source: 'modelo3d', modelFileId: f.data.id } });
+    // As it was saved before boards were read: no panels, fixed width.
+    await t.db.update(moduleDefinitions).set({ recipe: { fr: [] }, minW: 30, maxW: 30 }).where(eq(moduleDefinitions.id, mod.data.module.id));
+    const cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.modules[mod.data.module.code];
+    expect(def.panels).toHaveLength(8);
+    expect(def.pdim).toEqual([30, 78, 60]);
+    expect(def.rw).toEqual([15, 60]);
+    const [row] = await t.db.select().from(moduleDefinitions).where(eq(moduleDefinitions.id, mod.data.module.id));
+    expect((row!.recipe as { pscan?: number }).pscan).toBe(1);
+    expect(def.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
+
+    // Read before it became native (boards saved, no fronts): it gets its door on the next load.
+    const { fr: _fr, ...boards } = row!.recipe as Record<string, unknown>;
+    await t.db.update(moduleDefinitions).set({ recipe: { ...boards, fr: [] } }).where(eq(moduleDefinitions.id, mod.data.module.id));
+    const again = (await t.req('GET', '/catalog', { user: dis })).data.context.modules[mod.data.module.code];
+    expect(again.fr).toEqual([{ t: 'door', n: 1, f: 1 }]);
+    expect(again.panels).toHaveLength(8);
+  });
+
+  it('se crea un módulo dentro de la app y un modelo subido se puede dejar como modelo 3D o volver a nativo', async () => {
+    const created = await t.req('POST', '/library/modules', { user: dis, body: { source: 'parametrico', name: 'Bajo gaveta y 2 puertas', type: 'base', category: 'Bajos', defW: 80, minW: 40, maxW: 120, fixedH: 76, fixedD: 60, unitPrice: 0, recipe: { fr: [{ t: 'door', n: 2, f: 0.75 }, { t: 'drawer', f: 0.25 }] } } });
+    expect(created.status, JSON.stringify(created.data)).toBe(201);
+    let cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    expect(cat.context.modules[created.data.module.code]).toMatchObject({ w: 80, rw: [40, 120], fr: [{ t: 'door', n: 2, f: 0.75 }, { t: 'drawer', f: 0.25 }] });
+
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/mb_1_puerta.3ds', import.meta.url)));
+    const f = await upload(dis, 'modelo3d', 'MB_POLY.3ds', bytes, 'application/octet-stream');
+    const mod = (await t.req('POST', '/library/modules', { user: dis, body: { name: 'MB poly', source: 'modelo3d', modelFileId: f.data.id } })).data.module;
+    const asModel = await t.req('PATCH', `/library/modules/${mod.id}`, { user: dis, body: { recipe: { ...mod.recipe, draw: 'modelo' } } });
+    expect(asModel.status, JSON.stringify(asModel.data)).toBe(200);
+    cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    expect(cat.context.modules[mod.code].draw).toBe('modelo');
+    // Back to native with two doors set by hand: the despiece switches to the standard box (fronts changed).
+    await t.req('PATCH', `/library/modules/${mod.id}`, { user: dis, body: { recipe: { ...mod.recipe, draw: 'nativo', fr: [{ t: 'door', n: 2, f: 1 }] } } });
+    cat = (await t.req('GET', '/catalog', { user: dis })).data;
+    const def = cat.context.modules[mod.code];
+    expect(def).toMatchObject({ draw: 'nativo', fr: [{ t: 'door', n: 2, f: 1 }] });
+    const inst = { ...templateOf(def), id: 1, wall: 'A', pos: 0 } as unknown as ModuleInstance;
+    expect(inst.draw).toBe('nativo');
+    expect(parts(inst, DEFAULT_KITCHEN.mats, cat.context.materials).find((p) => p.pieza === 'Puerta')!.cant).toBe(2);
   });
 
   it('un .3ds (suelto o en ZIP con su textura) se convierte a GLB', async () => {

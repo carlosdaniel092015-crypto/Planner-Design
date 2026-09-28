@@ -8,7 +8,7 @@ import { defineConfig, type Plugin } from 'vite';
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 /** Public files the planner needs offline (the original prototype and docs stay online-only). */
-const OFFLINE_PUBLIC = /^(planner-3d\.js|manifest\.webmanifest|icons\/.*|screenshots\/.*|vendor\/.*\.js|vendor\/lucide\/.*\.(css|woff2)|_ds\/[^/]+\/styles\.css)$/;
+const OFFLINE_PUBLIC = /^(manifest\.webmanifest|icons\/.*|screenshots\/.*|vendor\/.*\.js|vendor\/lucide\/.*\.(css|woff2)|_ds\/[^/]+\/styles\.css)$/;
 /** Cross-origin stylesheets the pages link to (the fonts they pull in are cached at runtime). */
 const EXTERNAL = ['https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap'];
 
@@ -17,6 +17,23 @@ function walk(dir: string): string[] {
     const p = join(dir, f);
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
+}
+
+/**
+ * The 3D engine is plain JS in public/, loaded at runtime. It is published under a name that changes with its
+ * contents: while a new service worker waits, the old one still answers unchanged URLs from its cache, and the
+ * new pages would run the old engine.
+ */
+const RENDERER_SRC = readFileSync(here('public/planner-3d.js'));
+const RENDERER_FILE = `planner-3d.${createHash('sha256').update(RENDERER_SRC).digest('hex').slice(0, 10)}.js`;
+function renderer(): Plugin {
+  return {
+    name: 'planner-renderer',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: RENDERER_FILE, source: RENDERER_SRC });
+    },
+  };
 }
 
 /** Emits sw.js with the list of files to precache baked in (see frontend/sw.js). */
@@ -53,12 +70,16 @@ function serviceWorker(): Plugin {
 
 const pkg = JSON.parse(readFileSync(here('../package.json'), 'utf8')) as { version: string };
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: here('.'),
   // Shown in the account menu ("Planner v1.0.0") and compared with /api/v1/version.
-  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILT_AT__: JSON.stringify(new Date().toISOString()) },
-  plugins: [react(), serviceWorker()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILT_AT__: JSON.stringify(new Date().toISOString()),
+    __RENDERER_URL__: JSON.stringify(command === 'build' ? `/${RENDERER_FILE}` : '/planner-3d.js'),
+  },
+  plugins: [react(), renderer(), serviceWorker()],
   resolve: { alias: { '@core': here('../src/core') } },
   build: { outDir: here('../dist/web'), emptyOutDir: true, sourcemap: true },
   server: { port: 5173, proxy: { '/api': 'http://localhost:3000' } },
-});
+}));

@@ -137,7 +137,7 @@ export function PublicApprovalPage() {
           )}
         </section>
 
-        <section className="pub-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
+        <section className="pub-grid" style={{ display: 'grid', gridTemplateColumns: est ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
           <div style={{ background: 'var(--color-surface)', padding: 16 }}>
             <h2 style={{ margin: '0 0 10px', fontSize: 20 }}>Materiales</h2>
             {v.materials.map((m) => (
@@ -150,6 +150,7 @@ export function PublicApprovalPage() {
               </div>
             ))}
           </div>
+          {est && (
           <div style={{ background: 'var(--color-surface)', padding: 16 }}>
             <h2 style={{ margin: '0 0 10px', fontSize: 20 }}>Presupuesto</h2>
             {budgetRows(est, est.currency).map(([k, val]) => (
@@ -165,6 +166,7 @@ export function PublicApprovalPage() {
               </a>
             )}
           </div>
+          )}
         </section>
 
         <section style={{ background: 'var(--color-surface)', padding: 20, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640 }}>

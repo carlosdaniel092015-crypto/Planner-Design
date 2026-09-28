@@ -3,10 +3,79 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
-## 1.13.1 · 2026-09-28
+## 1.19.1 · 2026-09-28
 
 ### Despliegue en Dokploy
 - Planner también se puede instalar en **Dokploy**: un archivo listo (`docker-compose.dokploy.yml`) levanta la app y su base de datos de una vez, y la guía explica cómo pasar los datos desde Easypanel.
+
+## 1.19.0 · 2026-09-26
+
+### Crea y convierte tus módulos dentro de Planner
+- **Crear módulo** (Bibliotecas → Módulos): nombre, montaje (bajo, alto o columna), categoría, ancho con su mínimo y máximo, alto, fondo, precio y **frentes**: puertas (1 a 4 por fila), gavetas, abierto con repisas o hueco de horno, cada uno con su alto en cm. Lo ves en una vista previa mientras lo armas, y el alto de los frentes se ajusta solo a la altura del módulo.
+- **Convertir y frentes** en cada módulo que subes desde **Polyboard** (3DS o DAE) o **SketchUp** (.skp):
+  - elige cómo se dibuja: **módulo nativo** (puertas y gavetas que abren, zócalo, jaladeras y tu material) o **modelo 3D tal cual**, con su forma y colores, útil para electrodomésticos o decoración;
+  - corrige las puertas y gavetas que Planner detectó en tus piezas, o vuelve a las del modelo con un toque;
+  - un modelo que no viene por tablas también se puede convertir a nativo, poniéndole tú sus frentes.
+- Los módulos paramétricos de la biblioteca también tienen «Editar frentes».
+- Consejo: para que Planner lea el despiece real, exporta cada tabla como pieza separada con su nombre (Puerta, Gaveta, Lateral, Suelo, Trasera…).
+
+## 1.18.0 · 2026-09-26
+
+### Lo que subes a la biblioteca funciona como un módulo nativo
+- Los muebles que subes hechos por tablas (3DS, SketchUp, GLB) **se convierten en módulos nativos**: Planner lee sus puertas y gavetas de las piezas de frente (una puerta, dos puertas, tres gavetas…) y los dibuja con el mismo motor que los del catálogo. Así tienen **zócalo, el material y la textura que elijas, jaladeras, y puertas y gavetas que se abren**, en 3D, en planta, en los alzados, en la vista isométrica y en el PDF. También en islas.
+- Sus **piezas reales** siguen yendo al despiece y a la lista de corte. Si cambias el número de puertas o gavetas en el editor, se despieza como un módulo estándar.
+- Las piezas de la caja de una gaveta (laterales, trasera, fondo) ya no se toman como frentes.
+- Los módulos que ya habías subido y los que ya tenías colocados se convierten solos al abrir el editor.
+
+### Corrección
+- Después de actualizar, el 3D podía seguir usando el motor anterior hasta cerrar la app (por eso tu módulo se veía como caja blanca sin zócalo). Ahora cada versión trae su propio motor 3D y nunca se mezclan.
+
+## 1.17.0 · 2026-09-26
+
+### Mover módulos en el teléfono y la tableta
+- **Arrastra los módulos en la vista Planta** con el dedo, el ratón o el lápiz: el módulo se desliza por su muro (o libremente si es de isla) y **se alinea solo** con las esquinas y con el borde de los módulos vecinos. Mientras lo mueves ves «Muro A · 120 cm desde la esquina». Un toque sin arrastrar lo sigue seleccionando.
+- Nueva sección **«Ubicación»** en las propiedades del módulo: elige el **muro** (A, B, C, D o isla), escribe la **distancia desde la esquina** o usa los botones **‹ › « »** para moverlo 1 o 5 cm (si los mantienes presionados, sigue avanzando). En los de isla, X, Y y flechas.
+- Todo se puede deshacer con Ctrl+Z o el botón deshacer.
+
+### Módulos subidos: puertas, texturas y zócalo
+- **Las puertas y cajones de tus modelos se abren** con el botón «Abrir puertas y cajones» de la vista 3D, girando sobre su bisagra como los del catálogo, con su jaladera.
+- **La textura o el material de frente que eliges se ve en el 3D**, también en los modelos que no están hechos por tablas (antes solo cambiaba en el despiece).
+- En los **alzados** los módulos subidos dibujan sus **puertas en su posición real**, con jaladera y línea de apertura.
+- Los modelos que **ya habías subido** leen sus piezas solos la próxima vez que abres el editor, y los que ya estaban colocados en tus proyectos las toman al abrir el proyecto: **no hace falta volver a subirlos**. Su ancho deja de ser fijo.
+
+## 1.16.0 · 2026-09-26
+
+### Módulos y texturas que subes
+- **Despiece real de tus muebles:** si el modelo que subes (3DS, SketchUp o GLB) está hecho por tablas, como los que exportan los programas de carpintería, Planner lee **cada pieza con su nombre y medida real** (laterales, suelo, trasera, entrepaños, divisiones, puertas…). Aparecen en **Planos de ensamblaje**, la **vista explosionada**, la **lista de corte** y el **PDF**. Las puertas y frentes toman el material de frentes y el resto el del cuerpo, incluidas las texturas que subas.
+- En la **vista 3D** esos muebles se dibujan pieza por pieza con los materiales y texturas que elijas (la puerta con el de frentes, el resto con el del cuerpo), en lugar del color fijo del archivo.
+- Si cambias el ancho, alto o fondo del módulo, las piezas se ajustan: los espesores no cambian, los laterales siguen en su lugar y las tablas que van de lado a lado crecen lo mismo que el mueble.
+- Un modelo que no está hecho por tablas se despieza como una caja estándar con sus medidas.
+- El **ancho** de un módulo subido ya se puede editar, de la mitad al doble de su ancho original, también en los que ya tenías.
+- Lo que subes a la biblioteca aparece en el editor **al momento**; antes podía tardar hasta un minuto.
+- Los módulos subidos se colocan **sobre el zócalo** como los demás (en 3D y en alzados), en lugar de estirarse hasta el piso.
+- Al seleccionar un módulo subido aparece **«Materiales y herrajes»** (cuerpo, frente y herrajes), como en los módulos del catálogo.
+- El precio de los módulos subidos no cambia.
+- Los módulos que ya habías subido usan la caja estándar. Para que tomen sus piezas reales, vuelve a subir el modelo.
+
+## 1.15.0 · 2026-09-26
+
+### Presupuesto en una propuesta ya enviada
+- En «Enviar al cliente» → «Envíos anteriores», cada enlace activo tiene el botón **«Ocultar presupuesto» / «Mostrar presupuesto»**: cambias lo que ve el cliente en la misma propuesta, sin mandarle otro enlace. Lo ve al recargar (mientras no haya respondido).
+
+## 1.14.0 · 2026-09-26
+
+### Enviar al cliente con o sin presupuesto
+- Al crear el enlace para el cliente hay una casilla **«Incluir el presupuesto»**. Si la quitas, el cliente ve el diseño, los planos, los alzados y los materiales, **sin precios ni totales** (el servidor ni siquiera los manda a su teléfono), y el texto que acepta al firmar no menciona el presupuesto.
+- En «Envíos anteriores» se marca qué enlaces se mandaron «sin presupuesto». Tu proyecto conserva sus precios igual.
+
+## 1.13.1 · 2026-09-25
+
+### Aprobación en el teléfono
+- El aviso «Aprobado por…» ya no se amontona: el texto ocupa todo el ancho y debajo quedan la firma y el botón «Reabrir para cambios».
+- Las pestañas **Vistas, Planos, Corte y PDF** siempre se ven: antes, en un proyecto sin aprobar, los botones Exportar / Enviar / Aprobar las tapaban y no se podía cambiar de vista. Ahora las pestañas van arriba y las acciones debajo.
+- El menú Exportar ya no se sale de la pantalla.
+- En Planos, el módulo se elige con una lista y flechas ‹ › en lugar de una columna larga; en PDF y Planos la página baja completa en vez de tener recuadros con su propio desplazamiento.
+- En computadora, las pestañas usan nombres cortos cuando no cabe todo y el despiece de Planos muestra todas sus columnas.
 
 ## 1.13.0 · 2026-09-25
 

@@ -215,11 +215,48 @@ function buildModule(m, ctx) {
   const zr = E.zr(m, ctx.zoc), yb = zr[0] / 100, yt = zr[1] / 100;
   const bodyId = m.cue || ctx.mats.cuerpo, frId = m.fre || ctx.mats.frentes, hdMat = baseMat(ctx.mats.jaladeras);
   let seed = m.id * 97 + Math.round(m.pos || m.x || 0);
+  // Uploaded modules stand on the plinth like the parametric ones (recessed 6 cm; islands on both faces).
+  const plinth = () => { if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
+  if (m.boards && m.boards.length) {
+    plinth();
+    // Uploaded model built from boards: each board where it is, in the project's body / front material.
+    // Front boards facing the room open like the catalogue's: doors swing on their hinge, drawers slide out.
+    const fronts = m.boards.filter(bd => bd.slot === 'frentes' && bd.thin === 1);
+    const doors = fronts.filter(bd => !bd.drawer);
+    for (const bd of m.boards) {
+      const [x0, x1, y0, y1, z0, z1] = bd.b.map(v => v / 1000);
+      const bw = x1 - x0, bh = z1 - z0, bdp = y1 - y0;
+      const faceW = bd.thin === 0 ? bdp : bw, faceH = bd.thin === 2 ? bdp : bh;
+      const mat = texMat(bd.slot === 'frentes' ? frId : bodyId, faceW, faceH, bd.slot === 'frentes' && faceW > faceH, seed++);
+      if (!fronts.includes(bd)) { bx(g, bw, bh, bdp, mat, x0, yb + z0, y0); continue; }
+      const top = yb + z1, bottom = yb + z0;
+      if (bd.drawer) {
+        const dr = new T.Group(); dr.userData.mv = { kind: 'drawer', travel: Math.min(.45, D * .7) }; g.add(dr);
+        bx(dr, bw, bh, bdp, mat, x0, bottom, y0);
+        if (ctx.handle === 'bar') hbar(dr, (x0 + x1) / 2, top - .04, Math.min(.32, bw * .5), y1, hdMat);
+        continue;
+      }
+      // Pairs open from the middle; a single door follows the module's "Apertura" (right by default).
+      const hingeLeft = doors.length > 1 ? (x0 + x1) / 2 < W / 2 : m.open === 'izq';
+      const hx = hingeLeft ? x0 : x1;
+      const pv = new T.Group(); pv.position.set(hx, 0, y0); pv.userData.mv = { kind: 'door', dir: hingeLeft ? -1 : 1 }; g.add(pv);
+      bx(pv, bw, bh, bdp, mat, x0 - hx, bottom, 0);
+      if (ctx.handle === 'bar') {
+        const L = bh > 1.2 ? .32 : .16, cy = m.type === 'upper' ? bottom + .03 + L / 2 : top - .04 - L / 2;
+        vbar(pv, (hingeLeft ? x1 - .035 : x0 + .035) - hx, cy, L, bdp, hdMat);
+      }
+    }
+    return g;
+  }
   if (m.glb) {
     const src = glbCache[m.glb + '_scene'];
-    const y0 = m.type === 'upper' ? 1.5 : 0, y1 = m.type === 'upper' ? 1.5 + H : yt;
+    // The model fills the module's body (above the plinth), not the plinth height too.
+    const y0 = m.type === 'upper' ? 1.5 : m.type === 'fridge' ? 0 : yb, y1 = m.type === 'upper' ? 1.5 + H : yt;
+    plinth();
     if (src) {
       const o = src.clone(true), bb = new T.Box3().setFromObject(o), sz = bb.getSize(new T.Vector3());
+      // A model not built from boards keeps its own colours unless a material was chosen for this module.
+      if (m.fre || m.cue) { const tm = texMat(m.fre ? frId : bodyId, W, y1 - y0, false, seed++); o.traverse(c => { if (c.isMesh) c.material = tm; }); }
       o.scale.set(W / (sz.x || 1), (y1 - y0) / (sz.y || 1), D / (sz.z || 1));
       const bb2 = new T.Box3().setFromObject(o);
       o.position.set(-bb2.min.x, y0 - bb2.min.y, -bb2.min.z); g.add(o);

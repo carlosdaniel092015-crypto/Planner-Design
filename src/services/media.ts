@@ -1,5 +1,6 @@
 import { getBounds, type Document, NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { BOARD_MAX_THICK, BOARD_MIN_SIDE, type ModelPanel, panelName, panelSlot } from '../core';
 import { unprocessable } from '../lib/errors';
 
 // ---------- content sniffing (real bytes, not the extension) ----------
@@ -95,6 +96,8 @@ export interface ModelInspection {
   triangles: number;
   textures: { name: string; width: number | null; height: number | null; mimeType: string }[];
   warnings: string[];
+  /** Boards found in the model (one per mesh that looks like a panel); empty when it isn't built from boards. */
+  panels: ModelPanel[];
 }
 
 let ioPromise: Promise<NodeIO> | null = null;
@@ -174,6 +177,25 @@ export async function inspectModel(bytes: Uint8Array): Promise<ModelInspection> 
   for (const tx of textures)
     if ((tx.width ?? 0) > 4096 || (tx.height ?? 0) > 4096) warnings.push(`La textura "${tx.name}" mide ${tx.width}×${tx.height} (recomendado ≤ 4096 px).`);
   if (mm) warnings.push('El modelo parece estar en milímetros; se convirtió a centímetros.');
+  // Each mesh shaped like a board becomes a piece of the despiece (mm; x width, y depth from the back, z height).
+  const kmm = k * 10;
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  let panels: ModelPanel[] = [];
+  for (const node of root.listNodes()) {
+    if (!node.getMesh()) continue;
+    const b = getBounds(node);
+    const sz = [(b.max[0] - b.min[0]) * kmm, (b.max[2] - b.min[2]) * kmm, (b.max[1] - b.min[1]) * kmm];
+    const sorted = [...sz].sort((x, y) => x - y);
+    if (!sorted.every(Number.isFinite) || sorted[0]! > BOARD_MAX_THICK || sorted[1]! < BOARD_MIN_SIDE) continue;
+    const n = panelName(node.getName() || node.getMesh()!.getName() || 'Pieza');
+    panels.push({
+      n,
+      p: [r1((b.min[0] - min[0]) * kmm), r1((b.min[2] - min[2]) * kmm), r1((b.min[1] - min[1]) * kmm)],
+      s: [r1(sz[0]!), r1(sz[1]!), r1(sz[2]!)],
+      slot: panelSlot(n, sorted[0]!),
+    });
+  }
+  if (panels.length < 3 || panels.length > 300) panels = [];
   return {
     format,
     bbox: { w: Math.round(size[0]! * k * 10) / 10, h: Math.round(size[1]! * k * 10) / 10, d: Math.round(size[2]! * k * 10) / 10 },
@@ -182,6 +204,7 @@ export async function inspectModel(bytes: Uint8Array): Promise<ModelInspection> 
     triangles,
     textures,
     warnings,
+    panels,
   };
 }
 

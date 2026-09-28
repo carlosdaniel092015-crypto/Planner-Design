@@ -18,7 +18,7 @@ export const snapshotHash = (data: unknown) => sha256(canonicalJson(data));
  * Freezes a version and creates the client's link. Nothing is emailed: the designer shares the link (WhatsApp or copy).
  * `recipient` is only a label for the history (client name, phone or email).
  */
-export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipient: string, expiresInDays: number) {
+export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: string, recipient: string, expiresInDays: number, showPrices = true) {
   const { db, config } = deps;
   const out = await db.transaction(async (tx) => {
     const row = await getProject(tx, a, projectId);
@@ -36,10 +36,10 @@ export async function createApprovalLink(deps: Deps, a: AuthContext, projectId: 
     const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000);
     const [link] = await tx
       .insert(approvalLinks)
-      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail: recipient, expiresAt, createdBy: a.user.id })
+      .values({ projectId: row.id, versionId: version.id, tokenHash: sha256(token), recipientEmail: recipient, showPrices, expiresAt, createdBy: a.user.id })
       .returning();
     await tx.update(projects).set({ status: 'enviado' }).where(eq(projects.id, row.id));
-    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipient });
+    await audit(tx, a, 'enviar', 'project', row.id, { linkId: link!.id, versionId: version.id, recipient, showPrices });
     return { row, link: link!, version, token };
   });
   const url = `${config.frontendUrl}/p/${out.token}`;
@@ -59,6 +59,20 @@ export async function revokeLink(db: Db, a: AuthContext, linkId: string) {
       .where(and(eq(approvalLinks.projectId, row.id), isNull(approvalLinks.revokedAt), isNull(approvalLinks.usedAt), gt(approvalLinks.expiresAt, new Date())));
     if (!live.length && row.status === 'enviado') await tx.update(projects).set({ status: 'diseno' }).where(eq(projects.id, row.id));
     await audit(tx, a, 'revocar', 'approval_link', link.id, { projectId: row.id });
+    return { row, link: upd! };
+  });
+}
+
+/** Shows or hides the budget on a link already shared with the client (same URL, nothing to resend). */
+export async function setLinkPrices(db: Db, a: AuthContext, linkId: string, showPrices: boolean) {
+  return db.transaction(async (tx) => {
+    const [link] = await tx.select().from(approvalLinks).where(eq(approvalLinks.id, linkId)).limit(1);
+    if (!link) throw notFound('El enlace');
+    const row = await getProject(tx, a, link.projectId); // 404 for other orgs / not shared
+    if (link.usedAt) throw conflict('ENLACE_USADO', 'El cliente ya respondió a este enlace; ya no se puede cambiar.');
+    if (link.revokedAt || link.expiresAt.getTime() <= Date.now()) throw conflict('ENLACE_INACTIVO', 'Este enlace ya no está activo. Crea uno nuevo desde «Enviar al cliente».');
+    const [upd] = await tx.update(approvalLinks).set({ showPrices }).where(eq(approvalLinks.id, link.id)).returning();
+    await audit(tx, a, 'actualizar', 'approval_link', link.id, { projectId: row.id, showPrices });
     return { row, link: upd! };
   });
 }
