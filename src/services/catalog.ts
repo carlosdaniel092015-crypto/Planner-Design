@@ -176,3 +176,10 @@ export function snapshotFor(project: ProjectData, ctx: PricingContext): PricingS
 
 export const isSnapshot = (x: unknown): x is PricingSnapshot =>
   !!x && typeof x === 'object' && 'settings' in x && 'modules' in x && 'materials' in x && 'hardware' in x;
+
+/** Organisation-wide own modules for the generated layout (settings.modulos): standard code → catalogue code. */
+export function moduleDefaultsOf(o: { settings: unknown }): Record<string, string> {
+  const m = (o.settings as { modulos?: unknown } | null)?.modulos;
+  if (!m || typeof m !== 'object') return {};
+  return Object.fromEntries(Object.entries(m as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]));
+}

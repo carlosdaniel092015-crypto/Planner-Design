@@ -131,6 +131,8 @@ export const projectDataSchema = z
         apertura: z.enum(['Jaladera', 'Gola', 'Push']).default('Jaladera'),
         zocalo: z.string().optional(),
         presupuesto: z.number().optional(),
+        /** Own modules for the generated layout: standard code → catalogue code ('' keeps the standard one). */
+        mods: z.record(z.string().max(60), z.string().max(60)).optional(),
       })
       .loose()
       .default({ apertura: 'Jaladera' }),

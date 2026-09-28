@@ -580,6 +580,11 @@ export function EditorPage() {
       .then((r) => setProject((cur) => (cur ? { ...cur, ...r.project, data: cur.data, name: cur.name } : r.project)))
       .catch(() => {});
   };
+  /** Own modules for the generated layout: the project's choices over the organisation's defaults. */
+  const withOwnMods = (p: ProjectData): ProjectData => {
+    const mods = { ...(catalog?.moduleDefaults ?? {}), ...((p.prefs as { mods?: Record<string, string> }).mods ?? {}) };
+    return { ...p, prefs: { ...p.prefs, mods } };
+  };
   const generate = () => {
     if (readOnly || genStep != null) return;
     const base = data;
@@ -587,7 +592,7 @@ export function EditorPage() {
     setGenStep(0);
     for (let i = 0; i < GEN_STEPS.length; i++) setTimeout(() => setGenStep(i + 1), tick * (i + 1));
     setTimeout(() => {
-      const g = generateDesign(base, catalog.context.modules);
+      const g = generateDesign(withOwnMods(base), catalog.context.modules);
       commit({ ...base, mods: g.mods, mats: g.mats });
       setPhase(2);
       setGenStep(null);
@@ -610,7 +615,7 @@ export function EditorPage() {
             ['Mixto', 'U'],
           ] as const)
       ).map(([label, layout]) => {
-        const g = generateDesign({ ...data, layout }, catalog.context.modules);
+        const g = generateDesign(withOwnMods({ ...data, layout }), catalog.context.modules);
         const next: ProjectData = { ...data, layout, mods: g.mods, mats: g.mats };
         const ml = g.mods.filter((m) => m.type !== 'upper' && m.type !== 'hood').reduce((a, m) => a + m.w, 0) / 100;
         return { label, next, current: sig(g.mods) === sig(data.mods), ml, total: computeEstimate(next, catalog.context, currency).total, art: iso(next, materialsByCode as never, { cotas: false, altos: true }) };
@@ -774,7 +779,21 @@ export function EditorPage() {
           flash={flash}
         />
       ) : phase === 1 ? (
-        <SpecWizard data={data} step={specStep} setStep={setSpecStep} commit={commit} onGenerate={generate} currency={currency} readOnly={readOnly} flash={flash} materials={catalog.materials} />
+        <SpecWizard
+          data={data}
+          step={specStep}
+          setStep={setSpecStep}
+          commit={commit}
+          onGenerate={generate}
+          currency={currency}
+          readOnly={readOnly}
+          flash={flash}
+          materials={catalog.materials}
+          modules={catalog.context.modules}
+          moduleDefaults={catalog.moduleDefaults ?? {}}
+          canSaveModuleDefaults={me?.user.role === 'admin'}
+          onSavedModuleDefaults={(moduleDefaults) => setCatalog((c) => (c ? { ...c, moduleDefaults } : c))}
+        />
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div className="ed-body" style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>

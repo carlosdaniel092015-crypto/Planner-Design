@@ -22,7 +22,7 @@ import {
   updateMaterial,
   updateModule,
 } from '../services/catalog-admin';
-import { loadPricingContext, settingsOf } from '../services/catalog';
+import { loadPricingContext, moduleDefaultsOf, settingsOf } from '../services/catalog';
 import { backfillModelPanels } from '../services/library';
 import type { Db } from '../db/client';
 import { requireFeature } from '../lib/plans';
@@ -76,7 +76,7 @@ export function catalogRoutes() {
       security,
       request: { query: CurrencyQuery },
       responses: {
-        200: json(z.object({ modules: z.array(Any), materials: z.array(Any), hardware: z.array(Any), groups: z.array(Any), pricing: Any, context: Any.openapi({ description: 'PricingContext de src/core (incluye inactivos para marcar descontinuados).' }) })),
+        200: json(z.object({ modules: z.array(Any), materials: z.array(Any), hardware: z.array(Any), groups: z.array(Any), pricing: Any, moduleDefaults: z.record(z.string(), z.string()), context: Any.openapi({ description: 'PricingContext de src/core (incluye inactivos para marcar descontinuados).' }) })),
         304: { description: 'Sin cambios' },
         ...authErrors,
       },
@@ -100,6 +100,8 @@ export function catalogRoutes() {
         hardware: hw.map((h) => withPrice(serialize(h), 'unitPrice', a.org, cur)),
         groups: GROUPS.map((g) => ({ k: g.k, label: g.label })),
         pricing: pricingJson(a.org),
+        // Own modules the generated layout uses in new projects (Especificaciones → Módulos de la propuesta).
+        moduleDefaults: moduleDefaultsOf(a.org),
         // Exactly what the server feeds to src/core (computeEstimate / validateProject), so the editor matches it.
         context,
       };

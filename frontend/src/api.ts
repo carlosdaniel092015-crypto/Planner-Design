@@ -146,6 +146,8 @@ export interface Catalog {
   materials: CatalogMaterial[];
   groups: { k: 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras'; label: string }[];
   pricing: { baseCurrency: Currency; exchangeRateDopPerUsd: number; taxName: string; taxRate: number };
+  /** Own modules the generated layout uses in new projects (standard code → catalogue code). */
+  moduleDefaults?: Record<string, string>;
   context: PricingContext;
 }
 
