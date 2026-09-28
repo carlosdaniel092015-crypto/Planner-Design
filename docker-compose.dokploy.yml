@@ -2,6 +2,7 @@
 #
 # - Las variables se ponen en Dokploy → Environment (Dokploy las guarda en .env junto a este archivo).
 #   Obligatorias: POSTGRES_PASSWORD, AUTH_SECRET, APP_URL (p. ej. https://planear.acentosdeco.lat).
+#   Opcional: DATABASE_URL para usar una base externa (p. ej. la de Easypanel durante una mudanza); sin ella se usa el servicio db.
 # - El dominio se agrega en Dokploy → Domains: servicio "app", puerto 3000, HTTPS con Let's Encrypt.
 # - No publica puertos: Traefik (de Dokploy) llega al contenedor por la red interna.
 services:
@@ -15,7 +16,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgres://planner:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}@db:5432/planner
+      DATABASE_URL: ${DATABASE_URL:-postgres://planner:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD}@db:5432/planner}
       AUTH_SECRET: ${AUTH_SECRET:?Falta AUTH_SECRET (32+ caracteres)}
       API_URL: ${APP_URL:?Falta APP_URL, p. ej. https://planear.tudominio.com}
       FRONTEND_URL: ${APP_URL}

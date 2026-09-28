@@ -216,6 +216,10 @@ La misma imagen (`Dockerfile`) funciona en [Dokploy](https://dokploy.com). Hay d
 5. **Verifica** `https://planear.tudominio.com/api/v1/health` → `{"status":"ok","db":"ok"}`.
 6. **Despliegue automático:** en *General → Autodeploy* activa el webhook de GitHub para desplegar cada push a `main`.
 
+**Usar otra base de datos** (por ejemplo, dejar temporalmente la de Easypanel mientras mudas): agrega `DATABASE_URL=postgres://…`
+en *Environment* y la app la usa en lugar del servicio `db`. Cada consulta cruza internet, así que es más lento: úsalo como paso
+temporal y limita el puerto de Postgres a la IP del servidor de Dokploy.
+
 ### Opción B: Application + base de datos de Dokploy (igual que en Easypanel)
 
 1. *Create Service → Database → PostgreSQL* (versión 16). Copia su **Internal Connection URL**.
