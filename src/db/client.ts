@@ -19,7 +19,28 @@ export interface DbHandle {
  * - Neon host (or DATABASE_DRIVER=neon) → Neon serverless driver over WebSockets (production)
  * - anything else → node-postgres
  */
+/**
+ * Fails fast with a readable message (never printing the URL, it holds the password) instead of a TypeError deep inside pg.
+ * The usual cause is a password with @ : / # ? that is not percent-encoded, or quotes/spaces pasted around the value.
+ */
+export function assertDatabaseUrl(url: string) {
+  const u = url.trim();
+  const hint =
+    'Revisa DATABASE_URL (o POSTGRES_PASSWORD en Dokploy): formato postgres://usuario:clave@host:5432/base, sin comillas ni espacios. ' +
+    'Si la contraseña tiene @ : / # ? % codifícala (%40 %3A %2F %23 %3F %25) o usa una solo con letras y números.';
+  if (u !== url || /^["']|["']$/.test(u)) throw new Error(`DATABASE_URL tiene espacios o comillas alrededor. ${hint}`);
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    throw new Error(`DATABASE_URL no es una URL válida. ${hint}`);
+  }
+  if (!/^postgres(ql)?:$/.test(parsed.protocol)) throw new Error(`DATABASE_URL debe empezar con postgres:// (empieza con ${parsed.protocol}//). ${hint}`);
+  if (!parsed.hostname) throw new Error(`DATABASE_URL no tiene servidor (host). ${hint}`);
+}
+
 export async function connect(url: string): Promise<DbHandle> {
+  if (!url.startsWith('pglite:')) assertDatabaseUrl(url);
   if (url.startsWith('pglite:')) {
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');

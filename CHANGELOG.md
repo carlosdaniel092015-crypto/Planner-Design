@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.19.3 · 2026-09-28
+
+### Instalación
+- Si la dirección de la base de datos está mal escrita (por ejemplo, una contraseña con `@`, `#` o `/`), el servidor ahora lo dice claramente al arrancar en lugar de mostrar un error técnico.
+
 ## 1.19.2 · 2026-09-28
 
 ### Dokploy con una base de datos externa
