@@ -64,10 +64,16 @@ export interface Viewer {
   getCamera(): CameraState;
   focus(id: number): void;
   setCamera(c: CameraState): void;
+  /** Move mode: pressing on a module drags it (the camera stays still). */
+  setMoveMode(on: boolean): void;
+  /** Shows a module at a new place while it is dragged (the editor commits it at the end). */
+  previewMove(id: number, patch: { pos?: number; x?: number; y?: number; rot?: number }): void;
 }
+/** Drag of a module in the 3D view: offset in cm over the floor (x along wall A, z along wall B). */
+export type Drag3D = (id: number, dx: number, dz: number, phase: 'start' | 'move' | 'end' | 'cancel') => void;
 interface Renderer {
   init(): Promise<void>;
-  createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null, add: boolean) => void; onReady?: () => void }): Promise<Viewer>;
+  createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null, add: boolean) => void; onDrag?: Drag3D; onReady?: () => void }): Promise<Viewer>;
   snapshot(cfg: unknown, o: SnapOptions): Promise<string | null>;
 }
 

@@ -52,6 +52,8 @@ export function RightPanel(props: {
   onReplace: () => void;
   onRemove: () => void;
   onMove: (to: Place) => void;
+  /** Turns the module 90° (islands on themselves; wall modules to the next wall). */
+  onTurn: () => void;
 }) {
   const { data, sel, currency, rate, readOnly } = props;
   const line = sel ? props.estimate.lines.find((l) => l.id === sel.id) : undefined;
@@ -131,7 +133,7 @@ export function RightPanel(props: {
           </button>
         </div>
 
-        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} />
+        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} onTurn={props.onTurn} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
           <h6 style={{ margin: 0 }}>Medidas</h6>
@@ -335,7 +337,7 @@ const WALLS = [
 ] as const;
 
 /** Where the module stands: wall, distance from its corner and nudge buttons (islands: X and Y). Works with a finger. */
-function Ubicacion({ sel, room, readOnly, onMove }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void }) {
+function Ubicacion({ sel, room, readOnly, onMove, onTurn }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void; onTurn: () => void }) {
   const at = placeOf(sel);
   const upper = sel.type === 'upper' || sel.type === 'hood';
   const setWall = (w: string) => {
@@ -394,7 +396,13 @@ function Ubicacion({ sel, room, readOnly, onMove }: { sel: ModuleInstance; room:
           </div>
         </>
       )}
-      <p style={{ margin: 0, fontSize: 12, color: MUTED }}>También puedes arrastrarlo en la vista Planta. Se alinea solo con las esquinas y los módulos vecinos.</p>
+      <button type="button" className="btn btn-secondary" onClick={onTurn} disabled={readOnly} style={{ alignSelf: 'flex-start' }}>
+        <Icon name="rotate-cw-square" size={15} />
+        Girar 90°{sel.wall === 'F' && sel.rot ? ` · ahora ${sel.rot}°` : ''}
+      </button>
+      <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
+        También puedes arrastrarlo en la vista Planta, o en 3D con el botón «Mover muebles». Se alinea solo con las esquinas y los módulos vecinos.{sel.wall !== 'F' ? ' Al girarlo pasa al siguiente muro: los muebles de muro siempre miran a la habitación.' : ''}
+      </p>
     </div>
   );
 }

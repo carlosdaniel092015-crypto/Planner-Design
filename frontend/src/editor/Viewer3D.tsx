@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadRenderer, type Viewer } from './engine';
+import { type Drag3D, loadRenderer, type Viewer } from './engine';
 
 /** Hosts the prototype's three.js viewer. Falls back to `fallback` if WebGL/three cannot load. */
-export function Viewer3D({ cfg, onSelect, onViewer, onLoaded, fallback }: { cfg: unknown; onSelect: (id: number | null, add: boolean) => void; onViewer: (v: Viewer | null) => void; /** After the first scene is built (e.g. to apply a saved camera). */ onLoaded?: (v: Viewer) => void; fallback: React.ReactNode }) {
+export function Viewer3D({ cfg, onSelect, onDrag, onViewer, onLoaded, fallback }: { cfg: unknown; onSelect: (id: number | null, add: boolean) => void; /** Modules dragged in move mode. */ onDrag?: Drag3D; onViewer: (v: Viewer | null) => void; /** After the first scene is built (e.g. to apply a saved camera). */ onLoaded?: (v: Viewer) => void; fallback: React.ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer | null>(null);
   const cfgRef = useRef(cfg);
   const selectRef = useRef(onSelect);
+  const dragRef = useRef(onDrag);
+  dragRef.current = onDrag;
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [pct, setPct] = useState(12);
   cfgRef.current = cfg;
@@ -16,7 +18,7 @@ export function Viewer3D({ cfg, onSelect, onViewer, onLoaded, fallback }: { cfg:
     let dead = false;
     const iv = setInterval(() => setPct((p) => Math.min(92, p + 9)), 180);
     loadRenderer()
-      .then((R) => R.createViewer(host.current!, { onSelect: (id, add) => selectRef.current(id, add), onReady: () => !dead && setState('ready') }))
+      .then((R) => R.createViewer(host.current!, { onSelect: (id, add) => selectRef.current(id, add), onDrag: (id, dx, dz, phase) => dragRef.current?.(id, dx, dz, phase), onReady: () => !dead && setState('ready') }))
       .then((v) => {
         if (dead) return v.dispose();
         viewer.current = v;
