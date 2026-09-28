@@ -133,10 +133,6 @@ export function HomePage() {
             <Icon name="library" size={16} />
             <span className="install-label">Bibliotecas</span>
           </button>
-          <a className="btn btn-ghost home-proto" href="/prototipo/" title="Prototipo original de Claude Design">
-            <Icon name="circle-help" />
-            Prototipo
-          </a>
           <UserMenu />
         </div>
       </header>
@@ -340,7 +336,7 @@ export function HomePage() {
           .type-body{border-top:0!important;border-left:2px solid var(--color-divider);padding:12px 14px!important;gap:4px!important;justify-content:center;min-width:0}
           .type-name{font-size:20px!important}
           .type-desc{min-height:0!important;font-size:13px!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-          .home-proto,.sync-label,.install-label{display:none!important}
+          .sync-label,.install-label{display:none!important}
         }
         @media (max-width: 560px){
           header{gap:8px!important;padding:0 10px!important}
