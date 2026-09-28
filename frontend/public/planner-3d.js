@@ -421,10 +421,10 @@ function place(g, m) {
   else if (m.wall === 'C') { g.rotation.y = -Math.PI / 2; g.position.set(R.A, 0, m.pos / 100); }
   else if (m.wall === 'D') { g.rotation.y = Math.PI; g.position.set((m.pos + m.w) / 100, 0, R.B); }
   else if (m.wall === 'F' && m.rot) {
-    // Island turned clockwise seen from above; its front (local +z) then faces walls C, A or B.
-    const r = m.rot, W = m.w / 100, D = m.d / 100, x0 = geo.x0 / 100, z0 = geo.y0 / 100;
-    g.rotation.y = r === 90 ? Math.PI / 2 : r === 180 ? Math.PI : -Math.PI / 2;
-    if (r === 90) g.position.set(x0, 0, z0 + W); else if (r === 180) g.position.set(x0 + W, 0, z0 + D); else g.position.set(x0 + D, 0, z0);
+    // Free module turned any angle around its centre (the centre of the box it takes on the floor).
+    const t = m.rot * Math.PI / 180, W = m.w / 100, D = m.d / 100, cx = (geo.x0 + geo.x1) / 200, cz = (geo.y0 + geo.y1) / 200;
+    g.rotation.y = t;
+    g.position.set(cx - (W / 2 * Math.cos(t) + D / 2 * Math.sin(t)), 0, cz - (-W / 2 * Math.sin(t) + D / 2 * Math.cos(t)));
   }
   else { g.rotation.y = 0; g.position.set(geo.x0 / 100, 0, geo.y0 / 100); }
 }
@@ -433,12 +433,6 @@ function toWorld(m, lx, lz) {
   if (m.wall === 'B') return [lz, (m.pos + m.w) / 100 - lx];
   if (m.wall === 'C') return [R.A - lz, m.pos / 100 + lx];
   if (m.wall === 'D') return [(m.pos + m.w) / 100 - lx, R.B - lz];
-  if (m.wall === 'F' && m.rot) {
-    const W = m.w / 100, D = m.d / 100, x0 = geo.x0 / 100, z0 = geo.y0 / 100;
-    if (m.rot === 90) return [x0 + lz, z0 + W - lx];
-    if (m.rot === 180) return [x0 + W - lx, z0 + D - lz];
-    return [x0 + D - lz, z0 + lx];
-  }
   return [geo.x0 / 100 + lx, geo.y0 / 100 + lz];
 }
 const alongZ = wall => wall === 'B' || wall === 'C';
@@ -458,7 +452,15 @@ function slab(root, wall, a0, a1, d0, d1, y, th, holes, matId) {
 function counters(root, mods, ctx, groups) {
   const E = window.SPEngine, th = { cuarzo: .02, granito: .03, macizo: .04 }[ctx.mats.encimera] || .03, out = [];
   // A freestanding range has its own top: the worktop stops on both sides of it.
-  const bases = mods.filter(m => m.type === 'base' && !m.range);
+  const bases = mods.filter(m => m.type === 'base' && !m.range && m.wall !== 'F');
+  // Free-standing modules (islands, peninsulas, any angle): the worktop is built in their own frame and turns with them.
+  mods.filter(m => m.type === 'base' && !m.range && m.wall === 'F').forEach(m => {
+    const g = groups[m.id]; if (!g) return;
+    const W = m.w / 100, Dm = m.d / 100, top = (ctx.zoc + m.h) / 100, hz0 = Dm - .08 - .42;
+    const holes = m.sink ? sinkBowls(W, m.sink).map(({ hx, hw }) => ({ a0: hx, a1: hx + hw, d0: hz0, d1: hz0 + .42 })) : [];
+    slab(g, 'A', -.02, W + .02, -.02, Dm + .02, top, th, holes, ctx.mats.encimera);
+    if (m.sink) addSink(g, W, Dm, top + th, m.sink); if (m.cook) addCooktop(g, W, Dm, top + th, m.cook);
+  });
   const by = {};
   bases.forEach(m => { const k = m.wall === 'F' ? 'F' + m.id : m.wall; (by[k] = by[k] || []).push(m); });
   const aCorner = bases.find(m => m.wall === 'A' && m.pos === 0);

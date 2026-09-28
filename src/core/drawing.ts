@@ -1,6 +1,6 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
-import { geo, shade, wallPt, zocaloCm, zr } from './geometry';
+import { corners, geo, shade, wallPt, zocaloCm, zr } from './geometry';
 import { frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
@@ -100,9 +100,30 @@ export function plan(p: ProjectData, opts: { altos?: boolean; cotas?: boolean; n
     const h = g.y1 - g.y0;
     const up = m.type === 'upper' || m.type === 'hood';
     const sel = opts.sel === m.id || !!opts.sels?.includes(m.id);
-    if (up) rect(g.x0, g.y0, w, h, 'none', sel ? ACC : '#6d6a68', sel ? 1.8 : 0.8, { dash: '4 3', mid: m.id });
+    if (m.wall === 'F' && m.rot && !up) {
+      // Free module turned any angle: its real outline, the front edge thicker, and its sink / burners turned with it.
+      const c = corners(m);
+      const [FL, FR, BR, BL] = c as [[number, number], [number, number], [number, number], [number, number]];
+      const L = (u: number, v: number): [number, number] => [BL[0] + u * (BR[0] - BL[0]) + v * (FL[0] - BL[0]), BL[1] + u * (BR[1] - BL[1]) + v * (FL[1] - BL[1])];
+      const quad = (u0: number, u1: number, v0: number, v1: number, extra: Partial<DrawItem>) => it.push({ d: `M${[L(u0, v0), L(u1, v0), L(u1, v1), L(u0, v1)].map((q) => P(q[0], q[1])).join('L')}Z`, ...extra });
+      quad(0, 1, 0, 1, { fill: sel ? '#fff2ef' : '#ffffff', stroke: sel ? ACC : INK, sw: sel ? 1.8 : 1, mid: m.id });
+      it.push({ d: `M${P(FL[0], FL[1])}L${P(FR[0], FR[1])}`, stroke: sel ? ACC : INK, sw: 2.2 });
+      if (m.type === 'fridge' || m.type === 'tall') {
+        it.push({ d: `M${P(...L(0, 0))}L${P(...L(1, 1))}`, stroke: '#9b9797', sw: 0.6 });
+        it.push({ d: `M${P(...L(1, 0))}L${P(...L(0, 1))}`, stroke: '#9b9797', sw: 0.6 });
+      }
+      if (m.sink === 2) {
+        quad(0.1, 0.47, 0.15, 0.75, { fill: 'none', stroke: INK, sw: 0.7 });
+        quad(0.53, 0.9, 0.15, 0.75, { fill: 'none', stroke: INK, sw: 0.7 });
+      } else if (m.sink) quad(0.15, 0.85, 0.15, 0.75, { fill: 'none', stroke: INK, sw: 0.7 });
+      if (m.cook)
+        for (const q of burnerSpots(m.cook)) {
+          const [cx, cy] = L(q[0], q[1]);
+          it.push({ t: 'c', cx, cy, r: Math.min(m.w, m.d) * (m.cook === 6 ? 0.1 : 0.12), fill: 'none', stroke: INK, sw: 0.7 });
+        }
+    } else if (up) rect(g.x0, g.y0, w, h, 'none', sel ? ACC : '#6d6a68', sel ? 1.8 : 0.8, { dash: '4 3', mid: m.id });
     else rect(g.x0, g.y0, w, h, sel ? '#fff2ef' : '#ffffff', sel ? ACC : INK, sel ? 1.8 : 1, { mid: m.id });
-    if (!up) {
+    if (!up && !(m.wall === 'F' && m.rot)) {
       if (m.type === 'fridge' || m.type === 'tall') {
         ln(g.x0, g.y0, g.x1, g.y1, '#9b9797', 0.6);
         ln(g.x1, g.y0, g.x0, g.y1, '#9b9797', 0.6);

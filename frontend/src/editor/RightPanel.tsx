@@ -52,8 +52,10 @@ export function RightPanel(props: {
   onReplace: () => void;
   onRemove: () => void;
   onMove: (to: Place) => void;
-  /** Turns the module 90° (islands on themselves; wall modules to the next wall). */
-  onTurn: () => void;
+  /** Turns the module by `deg` on itself (floor modules come off their wall; uppers go to the next wall). */
+  onTurn: (deg: number) => void;
+  /** Sets its turn (absolute degrees); `preview` while the slider moves, committed on release. */
+  onRot: (deg: number, preview?: boolean) => void;
 }) {
   const { data, sel, currency, rate, readOnly } = props;
   const line = sel ? props.estimate.lines.find((l) => l.id === sel.id) : undefined;
@@ -133,7 +135,7 @@ export function RightPanel(props: {
           </button>
         </div>
 
-        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} onTurn={props.onTurn} />
+        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} onTurn={props.onTurn} onRot={props.onRot} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
           <h6 style={{ margin: 0 }}>Medidas</h6>
@@ -337,7 +339,72 @@ const WALLS = [
 ] as const;
 
 /** Where the module stands: wall, distance from its corner and nudge buttons (islands: X and Y). Works with a finger. */
-function Ubicacion({ sel, room, readOnly, onMove, onTurn }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void; onTurn: () => void }) {
+/** Turn of a module: the angle it faces now, a slider (any angle), ±15° and +90° steps and the degrees typed in. */
+export function RotateControl({ sel, disabled, onTurn, onRot, compact }: { sel: ModuleInstance; disabled?: boolean; onTurn: (deg: number) => void; onRot: (deg: number, preview?: boolean) => void; compact?: boolean }) {
+  const hung = sel.type === 'upper' || sel.type === 'hood';
+  const faces = { A: 0, B: 90, D: 180, C: 270 } as const;
+  const now = sel.wall === 'F' ? (sel.rot ?? 0) : faces[sel.wall];
+  const [live, setLive] = useState<number | null>(null);
+  const shown = Math.round(live ?? now);
+  if (hung)
+    return (
+      <button type="button" className="btn btn-secondary" onClick={() => onTurn(90)} disabled={disabled} style={{ alignSelf: 'flex-start' }}>
+        <Icon name="rotate-cw-square" size={15} />
+        Pasar al siguiente muro
+      </button>
+    );
+  const end = () => {
+    if (live != null) onRot(live);
+    setLive(null);
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {!compact && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}>
+          <span style={{ flex: 1 }}>
+            Giro <span style={{ fontWeight: 400, color: MUTED }}>0–359°</span>
+          </span>
+          <NumberField value={shown} min={0} max={359} disabled={disabled} label="Giro en grados" onCommit={(v) => onRot(v)} style={{ padding: '4px 8px', minHeight: 32, width: 76 }} />
+        </div>
+      )}
+      <input
+        type="range"
+        min={0}
+        max={359}
+        step={1}
+        value={shown}
+        disabled={disabled}
+        aria-label="Girar el mueble"
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setLive(v);
+          onRot(v, true);
+        }}
+        onPointerUp={end}
+        onKeyUp={end}
+        onBlur={end}
+        style={{ width: '100%', accentColor: 'var(--color-accent)' }}
+      />
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {(
+          [
+            [-15, '−15°', 'rotate-ccw'],
+            [15, '+15°', 'rotate-cw'],
+            [90, '+90°', 'rotate-cw-square'],
+          ] as const
+        ).map(([d, l, icon]) => (
+          <button key={d} type="button" className="btn btn-secondary" disabled={disabled} onClick={() => onTurn(d)} aria-label={`Girar ${l}`} style={{ flex: 1, minHeight: 36, padding: '4px 6px', fontSize: 13 }}>
+            <Icon name={icon} size={14} />
+            {l}
+          </button>
+        ))}
+        {compact && <span style={{ fontWeight: 800, fontSize: 13, minWidth: 40, textAlign: 'right' }}>{shown}°</span>}
+      </div>
+    </div>
+  );
+}
+
+function Ubicacion({ sel, room, readOnly, onMove, onTurn, onRot }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void; onTurn: (deg: number) => void; onRot: (deg: number, preview?: boolean) => void }) {
   const at = placeOf(sel);
   const upper = sel.type === 'upper' || sel.type === 'hood';
   const setWall = (w: string) => {
@@ -396,12 +463,9 @@ function Ubicacion({ sel, room, readOnly, onMove, onTurn }: { sel: ModuleInstanc
           </div>
         </>
       )}
-      <button type="button" className="btn btn-secondary" onClick={onTurn} disabled={readOnly} style={{ alignSelf: 'flex-start' }}>
-        <Icon name="rotate-cw-square" size={15} />
-        Girar 90°{sel.wall === 'F' && sel.rot ? ` · ahora ${sel.rot}°` : ''}
-      </button>
+      <RotateControl sel={sel} disabled={readOnly} onTurn={onTurn} onRot={onRot} />
       <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
-        También puedes arrastrarlo en la vista Planta, o en 3D con el botón «Mover muebles». Se alinea solo con las esquinas y los módulos vecinos.{sel.wall !== 'F' ? ' Al girarlo pasa al siguiente muro: los muebles de muro siempre miran a la habitación.' : ''}
+        También puedes arrastrarlo en la vista Planta, o en 3D con el botón «Mover muebles». Se alinea solo con las esquinas y los módulos vecinos.{sel.type === 'upper' || sel.type === 'hood' ? ' Los altos van siempre en un muro.' : ' Con «Mover muebles» lo llevas a donde quieras, también al centro. Al girarlo queda libre; arrímalo de espaldas a un muro (derecho) para pegarlo otra vez.'}
       </p>
     </div>
   );
