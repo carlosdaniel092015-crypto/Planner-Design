@@ -3,6 +3,11 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.19.2 · 2026-09-28
+
+### Dokploy con una base de datos externa
+- La instalación en Dokploy puede usar una base de datos que esté en otro servidor (por ejemplo, la de Easypanel mientras mudas), poniendo `DATABASE_URL`.
+
 ## 1.19.1 · 2026-09-28
 
 ### Despliegue en Dokploy
