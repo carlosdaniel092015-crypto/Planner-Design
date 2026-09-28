@@ -9,6 +9,7 @@ import {
   geo,
   iso,
   type ModuleInstance,
+  optimizeCut,
   ortho,
   type Part,
   parts,
@@ -22,6 +23,7 @@ import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type Cat
 import { handleOf, sceneCfg } from '../editor/engine';
 import { Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg } from '../ui';
 import { CameraDialog } from './CameraDialog';
+import { exportNestingPdf, fetchNesting, NestingSection } from './Nesting';
 import { downloadApi, exportPdf, Photo, SignaturePad } from './shared';
 
 type Tab = 'galeria' | 'planos' | 'corte' | 'pdf';
@@ -97,6 +99,25 @@ export function ApprovalView(props: {
   const walls: Wall[] = ['A', 'B', ...(['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w))];
   const buildable = useMemo(() => data.mods.filter((m) => parts(m, data.mats, mats).length), [data, mats]);
   const cut = useMemo(() => (tab === 'corte' || tab === 'pdf' ? corte(data, mats) : []), [tab, data, mats]);
+  // Saw settings of the cut optimisation, remembered on this device.
+  const [nestOpts, setNestOpts] = useState<{ kerf: number; trim: number }>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('planner.nest') ?? 'null');
+      if (v && Number.isFinite(v.kerf) && Number.isFinite(v.trim)) return { kerf: v.kerf, trim: v.trim };
+    } catch {
+      // private mode: defaults
+    }
+    return { kerf: 4, trim: 10 };
+  });
+  const saveNestOpts = (o: { kerf: number; trim: number }) => {
+    setNestOpts(o);
+    try {
+      localStorage.setItem('planner.nest', JSON.stringify(o));
+    } catch {
+      // not remembered
+    }
+  };
+  const nest = useMemo(() => (tab === 'corte' ? optimizeCut(cut, mats, nestOpts) : []), [tab, cut, mats, nestOpts]);
   // Detail view: the module chosen in the gallery, else the sink/cooktop (kitchens) or the long hanging (closets).
   const cams = data.cams ?? {};
   const detMod =
@@ -126,7 +147,7 @@ export function ApprovalView(props: {
     }
     return true;
   };
-  const doExport = async (kind: 'pdf' | 'csv' | 'dxf') => {
+  const doExport = async (kind: 'pdf' | 'csv' | 'dxf' | 'opt' | 'optcsv') => {
     setExpOpen(false);
     try {
       if (kind === 'pdf') {
@@ -136,6 +157,18 @@ export function ApprovalView(props: {
         setPdf({ pct: 3, step: 'Preparando páginas…' });
         const name = await exportPdf(pdfRoot.current, project.name, (pct, step) => setPdf({ pct, step }));
         flash(`PDF descargado: ${name}`);
+      } else if (kind === 'opt' || kind === 'optcsv') {
+        if (!(await guard())) return;
+        if (kind === 'optcsv') {
+          const name = await downloadApi(`/projects/${project.id}/optimizacion.csv?kerf=${nestOpts.kerf}&trim=${nestOpts.trim}`, 'optimizacion-de-corte.csv');
+          flash(`Optimización de corte descargada (${name}, compatible con Excel)`);
+        } else {
+          setPdf({ pct: 20, step: 'Acomodando las piezas en los tableros…' });
+          const groups = await fetchNesting(project.id, nestOpts);
+          setPdf({ pct: 70, step: 'Dibujando los tableros…' });
+          const name = await exportNestingPdf(groups, mats, project.name, nestOpts);
+          flash(`Optimización de corte descargada: ${name}`);
+        }
       } else {
         if (!(await guard())) return;
         const name = kind === 'csv' ? await downloadApi(`/projects/${project.id}/cutlist.csv`, 'lista-de-corte.csv') : await downloadApi(`/projects/${project.id}/pieces.dxf`, 'piezas.dxf');
@@ -183,6 +216,8 @@ export function ApprovalView(props: {
                       ['file-text', 'Exportar PDF', 'PDF', 'pdf'],
                       ['file-spreadsheet', 'Lista de corte', 'CSV / Excel', 'csv'],
                       ['pen-tool', 'Piezas para CNC', 'DXF', 'dxf'],
+                      ['layout-grid', 'Optimización de corte', 'PDF', 'opt'],
+                      ['table', 'Optimización de corte', 'CSV', 'optcsv'],
                     ] as const
                   ).map(([icon, l, ext, k]) => (
                     <button type="button" role="menuitem" key={k} className="val-btn" onClick={() => doExport(k)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 0, borderBottom: '1px solid var(--color-divider)', font: 'inherit', fontSize: 14, color: 'var(--color-text)', cursor: 'pointer', textAlign: 'left' }}>
@@ -357,7 +392,9 @@ export function ApprovalView(props: {
                 <h4 style={{ margin: 0 }}>
                   {g.mat} · {g.esp} mm
                 </h4>
-                <span style={{ fontSize: 13, color: SOFT }}>{g.pieces} piezas · tablero 2440 × 1830 mm</span>
+                <span style={{ fontSize: 13, color: SOFT }}>
+                  {g.pieces} piezas · plancha {g.sheet[0]} × {g.sheet[1]} mm{g.supplier ? ` · ${g.supplier}` : ''}
+                </span>
               </div>
               <div className="cut-row" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: SOFT, padding: '8px 0', borderBottom: '2px solid var(--color-divider)' }}>
                 <span>Pieza</span>
@@ -383,6 +420,7 @@ export function ApprovalView(props: {
                 ))}
             </div>
           ))}
+          <NestingSection groups={nest} mats={mats} opts={nestOpts} onOpts={saveNestOpts} onPdf={() => doExport('opt')} onCsv={() => doExport('optcsv')} />
         </div>
       )}
 

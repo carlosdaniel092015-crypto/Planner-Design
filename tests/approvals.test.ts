@@ -117,6 +117,18 @@ describe('aprobación pública', () => {
     expect(csv.data.startsWith('"Material","Espesor (mm)"')).toBe(true);
     const raw = new Uint8Array(await (await t.app.request(`/api/v1/projects/${p.id}/cutlist.csv`, { headers: { authorization: `Bearer ${taller.token}` } })).arrayBuffer());
     expect([...raw.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    // Cut optimisation: every piece on a board of its material, with the saw settings asked for.
+    const opt = await t.req('GET', `/projects/${p.id}/optimizacion?kerf=3&trim=8`, { user: taller });
+    expect(opt.status, JSON.stringify(opt.data)).toBe(200);
+    const cutRows = csv.data.trim().split('\n').slice(1).map((l: string) => Number(JSON.parse(`[${l}]`)[4]));
+    const total = cutRows.reduce((a: number, n: number) => a + n, 0);
+    expect(opt.data.groups.reduce((a: number, g: any) => a + g.pieces + g.oversize.reduce((b: number, o: any) => b + o.cant, 0), 0)).toBe(total);
+    expect(opt.data.groups[0]).toMatchObject({ sheet: [2440, 1830] });
+    expect(opt.data.groups[0].sheets[0].placements[0].x).toBeGreaterThanOrEqual(8);
+    const optCsv = await t.req('GET', `/projects/${p.id}/optimizacion.csv`, { user: taller });
+    expect(optCsv.status).toBe(200);
+    expect(optCsv.data).toContain('"Tablero n.º"');
+    expect((await t.req('GET', `/projects/${p.id}/optimizacion?kerf=99`, { user: taller })).status).toBe(400);
     const dxf = await t.req('GET', `/projects/${p.id}/pieces.dxf`, { user: taller });
     expect(dxf.status).toBe(200);
     const dxfText = new TextDecoder().decode(dxf.data);
