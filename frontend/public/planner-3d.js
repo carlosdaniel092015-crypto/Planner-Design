@@ -140,7 +140,8 @@ function fabric(hex) { return std('fab' + hex, { color: new T.Color(hex), roughn
 function baseMat(id) {
   const E = window.SPEngine, m = E.MATS[id] || E.MATS.blanco, t = m.type || '';
   return M('m' + id + (m.img || '') + (m.tile || '') + (m.rough || ''), () => {
-    let p = { color: 0xffffff, roughness: .55, metalness: 0 }, ud = { tile: .5, tileH: .5 }, phys = false;
+    // c / name: the catalogue colour and name (the COLLADA export uses them instead of the texture).
+    let p = { color: 0xffffff, roughness: .55, metalness: 0 }, ud = { tile: .5, tileH: .5, c: m.c, name: m.name || id }, phys = false;
     if (m.img) {
       const tx = loadedTex[m.img];
       if (tx) p.map = tx; else p.color = new T.Color(m.c);
@@ -553,8 +554,8 @@ function buildWall(root, wall, cfg, splash) {
 function buildRoom(root, cfg, ctx, runs) {
   const A = cfg.room.A / 100, Bw = cfg.room.B / 100;
   const fl = new T.Mesh(new T.PlaneGeometry(A, Bw), tiledMat(floorTex(), A, Bw, 1.8, { physical: true, roughness: .5, clearcoat: .25, clearcoatRoughness: .4, bump: .25 }));
-  fl.rotation.x = -Math.PI / 2; fl.position.set(A / 2, 0, Bw / 2); fl.receiveShadow = true; root.add(fl);
-  bx(root, A + 2 * WALL_T, .05, Bw + 2 * WALL_T, mats.edge(), -WALL_T, -.0501, -WALL_T, { noCast: 1 });
+  fl.rotation.x = -Math.PI / 2; fl.position.set(A / 2, 0, Bw / 2); fl.receiveShadow = true; fl.userData.room = 1; root.add(fl);
+  const edge = bx(root, A + 2 * WALL_T, .05, Bw + 2 * WALL_T, mats.edge(), -WALL_T, -.0501, -WALL_T, { noCast: 1 }); if (edge) edge.userData.room = 1;
   return ['A', 'B', 'C', 'D'].map(w => buildWall(root, w, cfg, ctx.kitchen ? runs : []));
 }
 /** Hides the walls standing between the camera and the room (dynamic cut-away), so any side can be viewed. */
@@ -851,6 +852,81 @@ export function snapshot(cfg, o) {
   queue = job.catch(() => null);
   return job;
 }
+/**
+ * COLLADA 1.4 (.dae) of the furniture for SketchUp (File → Import): one named node per module (each becomes a group),
+ * geometry in metres with Y up, one colour material per catalogue finish (textures are not exported).
+ */
+export async function exportDae(cfg) {
+  await init(); await resolveGlbs(cfg);
+  const root = new T.Group();
+  const groups = buildScene(root, cfg);
+  root.updateMatrixWorld(true);
+  const esc = s => String(s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+  const f = n => (Math.abs(n) < 5e-6 ? 0 : +n.toFixed(5));
+  const mats = new Map();
+  const matOf = mat => {
+    const m = Array.isArray(mat) ? mat[0] : mat;
+    const ud = (m && m.userData) || {};
+    // three keeps colours linear; COLLADA viewers (SketchUp) expect sRGB components.
+    const col = ud.c ? new T.Color(ud.c) : m && m.color ? m.color.clone() : new T.Color(0.8, 0.8, 0.8);
+    const rgb = col.getRGB({ r: 0, g: 0, b: 0 }, T.SRGBColorSpace);
+    const op = m && m.transparent ? Math.max(0.05, m.opacity == null ? 1 : m.opacity) : 1;
+    const name = ud.name || (m && m.name) || `Color ${col.getHexString().toUpperCase()}`;
+    const key = name + col.getHexString() + op.toFixed(2);
+    if (!mats.has(key)) mats.set(key, { id: 'mat' + mats.size, name, rgb: [rgb.r, rgb.g, rgb.b], op });
+    return mats.get(key);
+  };
+  const geoms = [], nodes = [];
+  const pos = new T.Vector3(), nrm = new T.Vector3(), nm = new T.Matrix3();
+  const shown = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
+  /** One named node (a SketchUp group) with the given meshes, baked in world coordinates. */
+  const addNode = (id, name, meshes) => {
+    const inst = [];
+    meshes.forEach(o => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position || !shown(o)) return;
+      const geo = o.geometry, P = geo.attributes.position, N = geo.attributes.normal, I = geo.index;
+      nm.getNormalMatrix(o.matrixWorld);
+      const vs = [], ns = [];
+      for (let i = 0; i < P.count; i++) {
+        pos.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); vs.push(f(pos.x), f(pos.y), f(pos.z));
+        if (N) { nrm.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); ns.push(f(nrm.x), f(nrm.y), f(nrm.z)); } else ns.push(0, 1, 0);
+      }
+      const idx = I ? Array.from(I.array) : Array.from({ length: P.count }, (_, i) => i);
+      const tris = Math.floor(idx.length / 3);
+      if (!tris) return;
+      const gid = 'g' + geoms.length, mat = matOf(o.material);
+      const p = []; for (let i = 0; i < tris * 3; i++) p.push(idx[i], idx[i]);
+      geoms.push(`<geometry id="${gid}"><mesh>` +
+        `<source id="${gid}-p"><float_array id="${gid}-pa" count="${vs.length}">${vs.join(' ')}</float_array><technique_common><accessor source="#${gid}-pa" count="${P.count}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>` +
+        `<source id="${gid}-n"><float_array id="${gid}-na" count="${ns.length}">${ns.join(' ')}</float_array><technique_common><accessor source="#${gid}-na" count="${P.count}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>` +
+        `<vertices id="${gid}-v"><input semantic="POSITION" source="#${gid}-p"/></vertices>` +
+        `<triangles material="m" count="${tris}"><input semantic="VERTEX" source="#${gid}-v" offset="0"/><input semantic="NORMAL" source="#${gid}-n" offset="1"/><p>${p.join(' ')}</p></triangles>` +
+        `</mesh></geometry>`);
+      inst.push(`<instance_geometry url="#${gid}"><bind_material><technique_common><instance_material symbol="m" target="#${mat.id}"/></technique_common></bind_material></instance_geometry>`);
+    });
+    if (inst.length) nodes.push(`<node id="${id}" name="${esc(name)}">${inst.join('')}</node>`);
+  };
+  const meshesOf = o => { const out = []; o.traverse(x => { if (x.isMesh) out.push(x); }); return out; };
+  for (const m of cfg.mods || []) {
+    const g = groups[m.id];
+    if (g && g.visible) addNode('mod' + m.id, `M${m.id} ${m.name}`, meshesOf(g));
+  }
+  // Countertops (built over the runs, outside the modules); the room itself (floor, walls) is left out.
+  const modGroups = new Set(Object.values(groups)), walls = new Set(root.userData.walls || []);
+  const tops = root.children.filter(o => !modGroups.has(o) && !walls.has(o) && !o.isLight && !(o.userData && o.userData.room));
+  addNode('encimera', 'Encimera', tops.flatMap(meshesOf));
+  disposeTree(root);
+  const now = new Date().toISOString();
+  const effects = [...mats.values()].map(m => `<effect id="${m.id}-fx"><profile_COMMON><technique sid="common"><lambert><diffuse><color>${m.rgb.map(f).join(' ')} 1</color></diffuse>${m.op < 1 ? `<transparent opaque="A_ONE"><color>0 0 0 ${f(m.op)}</color></transparent><transparency><float>1</float></transparency>` : ''}</lambert></technique></profile_COMMON></effect>`).join('');
+  const materials = [...mats.values()].map(m => `<material id="${m.id}" name="${esc(m.name)}"><instance_effect url="#${m.id}-fx"/></material>`).join('');
+  return '<?xml version="1.0" encoding="utf-8"?>\n' +
+    '<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">' +
+    `<asset><contributor><authoring_tool>Planner</authoring_tool></contributor><created>${now}</created><modified>${now}</modified><unit name="meter" meter="1"/><up_axis>Y_UP</up_axis></asset>` +
+    `<library_effects>${effects}</library_effects><library_materials>${materials}</library_materials><library_geometries>${geoms.join('')}</library_geometries>` +
+    `<library_visual_scenes><visual_scene id="scene" name="${esc(cfg.name || 'Proyecto')}">${nodes.join('')}</visual_scene></library_visual_scenes>` +
+    '<scene><instance_visual_scene url="#scene"/></scene></COLLADA>';
+}
+
 export async function modelInfo(url) {
   await init(); const s = await loadGLB(url); if (!s) throw new Error('No se pudo leer el modelo');
   const v = new T.Box3().setFromObject(s).getSize(new T.Vector3());
