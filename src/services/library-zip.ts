@@ -42,7 +42,9 @@ const MODULE_FIELDS = ['code', 'name', 'projectType', 'source', 'row', 'category
 
 const pickFields = (row: Record<string, unknown>, keys: readonly string[]) => Object.fromEntries(keys.map((k) => [k, row[k] ?? null]));
 
-export async function exportLibrary(db: Db, storage: Storage, orgId: string, items: ExportItem[]): Promise<Uint8Array> {
+export async function exportLibrary(db: Db, storage: Storage, orgId: string, items: ExportItem[], userId?: string): Promise<Uint8Array> {
+  // Other users' personal items are not exported.
+  const mine = <T extends { ownerUserId: string | null }>(r: T) => !r.ownerUserId || r.ownerUserId === userId;
   const zipFiles: Record<string, Uint8Array> = {};
   const fileCache = new Map<string, ManifestFile>();
   const addFile = async (id: string | null): Promise<ManifestFile | undefined> => {
@@ -61,7 +63,7 @@ export async function exportLibrary(db: Db, storage: Storage, orgId: string, ite
   const manifest: Manifest = { format: LIBRARY_FORMAT, version: 1, exportedAt: new Date().toISOString(), textures: [], modules: [] };
   if (items.includes('textures')) {
     const rows = await db.select().from(materials).where(and(eq(materials.organizationId, orgId), eq(materials.source, 'subido')));
-    for (const m of rows) {
+    for (const m of rows.filter(mine)) {
       const maps: TextureEntry['maps'] = {};
       for (const k of MAP_KEYS) {
         const mf = await addFile(m[mapColumn(k)]);
@@ -72,7 +74,7 @@ export async function exportLibrary(db: Db, storage: Storage, orgId: string, ite
   }
   if (items.includes('modules')) {
     const rows = await db.select().from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, orgId));
-    for (const m of rows) manifest.modules.push({ module: pickFields(m, MODULE_FIELDS), model: await addFile(m.modelFileId) });
+    for (const m of rows.filter(mine)) manifest.modules.push({ module: pickFields(m, MODULE_FIELDS), model: await addFile(m.modelFileId) });
   }
   zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
   return zipSync(zipFiles, { level: 6 });

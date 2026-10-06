@@ -15,6 +15,8 @@ const ROUGH = { Mate: 0.72, Satinado: 0.45, Brillante: 0.14 } as const;
 
 export const TextureInput = z
   .object({
+    /** "Solo yo": a personal texture only its creator sees. */
+    personal: z.boolean().optional(),
     code: z.string().regex(/^[A-Za-z0-9_.-]{1,40}$/).optional(),
     name: z.string().min(1).max(120),
     type: z.string().min(1).max(60).default('Melamina').openapi({ description: 'Melamina, Melamina texturizada, Chapa natural, Lacado, Cuarzo, Granito, Madera maciza, Metal…' }),
@@ -41,7 +43,10 @@ export const TextureInput = z
   .openapi('TexturaEntrada', { example: { name: 'Roble ahumado', type: 'Chapa natural', uses: ['frentes'], tileCm: 60, finish: 'Mate', baseColorFileId: '6c1f…' } });
 
 export const LibraryModuleInput = ModuleInput.partial({ code: true, minW: true, maxW: true, defW: true, fixedH: true, fixedD: true, type: true })
-  .extend({ compressDraco: z.boolean().optional().openapi({ description: 'Comprime la malla del GLB con Draco antes de guardarlo.' }) })
+  .extend({
+    compressDraco: z.boolean().optional().openapi({ description: 'Comprime la malla del GLB con Draco antes de guardarlo.' }),
+    personal: z.boolean().optional().openapi({ description: '«Solo yo»: módulo personal que solo ve quien lo creó.' }),
+  })
   .openapi('ModuloBibliotecaEntrada', {
     example: { name: 'Refrigerador Samsung 70', source: 'modelo3d', modelFileId: '2d4e…', category: 'Mis módulos', unitPrice: 1450 },
   });

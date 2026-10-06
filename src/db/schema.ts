@@ -316,6 +316,8 @@ export const moduleDefinitions = pgTable(
     unitPrice: money('unit_price').notNull().default(0),
     priceCurrency: currencyEnum('price_currency').notNull().default('USD'),
     useInAutolayout: boolean('use_in_autolayout').notNull().default(true),
+    /** Personal library item ("Solo yo"): only this user sees it; null = the whole organisation's. */
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     thumbnailUrl: text('thumbnail_url'),
     version: integer('version').notNull().default(1),
     description: text('description'),
@@ -361,6 +363,8 @@ export const materials = pgTable(
     /** Distributor the board is bought from. */
     supplier: text('supplier'),
     source: materialSourceEnum('source').notNull().default('estandar'),
+    /** Personal library texture ("Solo yo"): only this user sees it; null = the whole organisation's. */
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     version: integer('version').notNull().default(1),
     active: boolean('active').notNull().default(true),
     sort: integer('sort').notNull().default(0),

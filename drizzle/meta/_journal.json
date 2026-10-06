@@ -85,6 +85,13 @@
       "when": 1791307774642,
       "tag": "0011_mueble_tv",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791309381346,
+      "tag": "0012_biblioteca_personal",
+      "breakpoints": true
     }
   ]
 }

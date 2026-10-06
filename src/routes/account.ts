@@ -1,4 +1,5 @@
 import { createRoute, z } from '@hono/zod-openapi';
+import { releasePersonalLibrary } from '../services/library-scope';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client';
 import { projectShares, projects, sessions, userCredentials, userIdentities, users, verificationTokens } from '../db/schema';
@@ -109,6 +110,8 @@ export function accountRoutes() {
         await tx.delete(userCredentials).where(eq(userCredentials.userId, a.user.id));
         // Signing in with Google / Microsoft again must start fresh, not land on the anonymised account.
         await tx.delete(userIdentities).where(eq(userIdentities.userId, a.user.id));
+        // Their personal library stays with the company.
+        await releasePersonalLibrary(tx, a.org.id, a.user.id);
         await tx
           .update(users)
           .set({ name: 'Cuenta eliminada', email: `eliminada+${a.user.id}@planner.invalid`, active: false, updatedAt: now })

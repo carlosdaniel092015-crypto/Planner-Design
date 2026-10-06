@@ -1,4 +1,5 @@
 // Bibliotecas: the organisation's own textures and modules (JSON, GLB and 3DS/OBJ/DAE/FBX converted to GLB), stored on the server.
+import { useAuth } from '../auth';
 import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel, placesFor } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
@@ -55,6 +56,13 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
   const [busy, setBusy] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<string[]>([]);
   const [drag, setDrag] = useState(false);
+  const { me } = useAuth();
+  const isAdmin = me?.user.role === 'admin';
+  // Where new uploads go, and which items the lists show (company / mine).
+  const [scope, setScope] = useState<'empresa' | 'personal'>('empresa');
+  const [show, setShow] = useState<'todo' | 'empresa' | 'mio'>('todo');
+  const shown = <T extends { ownerUserId?: string | null }>(x: T) => show === 'todo' || (show === 'mio' ? !!x.ownerUserId : !x.ownerUserId);
+  const personal = scope === 'personal';
   const changed = useRef(false);
   const zipRef = useRef<HTMLInputElement>(null);
 
@@ -89,7 +97,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
       try {
         const up = await uploadFile('textura', f, f.name);
         const g = guessTexture(f.name);
-        await lib.createTexture({ name: prettyName(f.name), type: g.type, kind: g.kind, uses: g.uses, tileCm: 60, finish: 'Mate', baseColorFileId: up.id });
+        await lib.createTexture({ name: prettyName(f.name), type: g.type, kind: g.kind, uses: g.uses, tileCm: 60, finish: 'Mate', baseColorFileId: up.id, personal });
         touch();
       } catch (e) {
         out.push(`${f.name}: ${errText(e)}`);
@@ -109,7 +117,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.modules) ? parsed.modules : [parsed];
           for (const m of list) {
             try {
-              await lib.createModule({ source: 'parametrico', category: 'Mis módulos', ...m });
+              await lib.createModule({ source: 'parametrico', category: 'Mis módulos', ...m, personal });
               touch();
             } catch (e) {
               out.push(`${f.name} · ${m?.code ?? m?.name ?? 'módulo'}: ${errText(e)}`);
@@ -138,6 +146,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
         const info = await lib.inspect(up.id);
         const tall = info.bbox.h > 120;
         const r = await lib.createModule({
+          personal,
           name: prettyName(f.name),
           source: 'modelo3d',
           modelFileId: up.id,
@@ -168,7 +177,8 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
   };
 
   const patchTex = async (t: LibTexture, patch: Record<string, unknown>) => {
-    setTex((xs) => xs?.map((x) => (x.id === t.id ? ({ ...x, ...patch } as LibTexture) : x)) ?? null);
+    const local = 'personal' in patch ? { ...patch, ownerUserId: patch.personal ? (me?.user.id ?? 'yo') : null } : patch;
+    setTex((xs) => xs?.map((x) => (x.id === t.id ? ({ ...x, ...local } as LibTexture) : x)) ?? null);
     try {
       await lib.updateTexture(t.id, patch);
       touch();
@@ -178,7 +188,8 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
     }
   };
   const patchMod = async (m: LibModule, patch: Record<string, unknown>) => {
-    setMods((xs) => xs?.map((x) => (x.id === m.id ? ({ ...x, ...patch } as LibModule) : x)) ?? null);
+    const local = 'personal' in patch ? { ...patch, ownerUserId: patch.personal ? (me?.user.id ?? 'yo') : null } : patch;
+    setMods((xs) => xs?.map((x) => (x.id === m.id ? ({ ...x, ...local } as LibModule) : x)) ?? null);
     try {
       await lib.updateModule(m.id, patch);
       touch();
@@ -197,7 +208,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
     if (rest.minW > rest.defW || rest.defW > rest.maxW) return setMsgs(['El ancho debe estar entre el ancho mínimo y el máximo.']);
     setBusy('Creando el módulo…');
     try {
-      const r = await lib.createModule({ source: 'parametrico', name: name.trim(), type: rest.type, category: rest.category, defW: rest.defW, minW: rest.minW, maxW: rest.maxW, fixedH: rest.fixedH, fixedD: rest.fixedD, unitPrice: rest.unitPrice, priceCurrency: 'DOP', recipe: { fr: rest.fr } });
+      const r = await lib.createModule({ personal, source: 'parametrico', name: name.trim(), type: rest.type, category: rest.category, defW: rest.defW, minW: rest.minW, maxW: rest.maxW, fixedH: rest.fixedH, fixedD: rest.fixedD, unitPrice: rest.unitPrice, priceCurrency: 'DOP', recipe: { fr: rest.fr } });
       touch();
       setCreating(null);
       setMsgs([`Módulo "${r.module.name}" creado (${r.module.code}). Ya aparece en la pestaña Módulos, en «${r.module.category}».`]);
@@ -282,6 +293,25 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           />
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+            {canWrite && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                Guardar lo nuevo en
+                <select className="input" value={scope} onChange={(e) => setScope(e.target.value as 'empresa' | 'personal')} style={{ width: 'auto' }}>
+                  <option value="empresa">Biblioteca de la empresa</option>
+                  <option value="personal">Mi biblioteca (solo yo)</option>
+                </select>
+              </label>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              Mostrar
+              <select className="input" value={show} onChange={(e) => setShow(e.target.value as 'todo' | 'empresa' | 'mio')} style={{ width: 'auto' }}>
+                <option value="todo">Todo</option>
+                <option value="empresa">De la empresa</option>
+                <option value="mio">Solo míos</option>
+              </select>
+            </label>
+          </div>
           {canWrite ? (
             <label
               onDragOver={(e) => (e.preventDefault(), setDrag(true))}
@@ -333,13 +363,25 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
           {tab === 'tex' && (
             <>
               {tex?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay tableros propios. Sube la imagen de cada tablero (sin costuras, de 1024 px o más) y completa su espesor, el tamaño de la plancha y el distribuidor.</p>}
-              {tex?.map((t) => (
+              {tex?.filter(shown).map((t) => (
                 <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 36px', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'start' }}>
                   <div style={{ width: 88, height: 88, background: t.maps.baseColor ? `url(${t.maps.baseColor.thumb ?? t.maps.baseColor.url}) center/cover` : t.color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.12)' }} />
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
                     <div className="field">
                       <label>Nombre</label>
                       <input className="input" defaultValue={t.name} disabled={!canWrite} maxLength={120} onBlur={(e) => e.target.value.trim() && e.target.value !== t.name && patchTex(t, { name: e.target.value.trim() })} />
+                    </div>
+                    <div className="field">
+                      <label title="«Solo yo»: solo tú lo ves en tu biblioteca, la paleta y el asistente">Visible para</label>
+                      <select
+                        className="input"
+                        value={t.ownerUserId ? 'personal' : 'empresa'}
+                        disabled={!canWrite || (!t.ownerUserId && !isAdmin)}
+                        onChange={(e) => patchTex(t, { personal: e.target.value === 'personal' })}
+                      >
+                        <option value="empresa">Toda la empresa</option>
+                        <option value="personal">Solo yo</option>
+                      </select>
                     </div>
                     <div className="field">
                       <label>Tipo</label>
@@ -504,7 +546,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                 </div>
               )}
               {mods?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay módulos propios.</p>}
-              {mods?.map((m) => (
+              {mods?.filter(shown).map((m) => (
                 <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 36px', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'start' }}>
                   <div style={{ width: 88, height: 88, background: m.thumbnailUrl ? `url(${m.thumbnailUrl}) center/contain no-repeat var(--sp-canvas)` : 'var(--sp-canvas)', display: 'grid', placeItems: 'center' }}>
                     {!m.thumbnailUrl && <Icon name={m.source === 'modelo3d' ? 'box' : 'layout-grid'} size={30} style={{ opacity: 0.5 }} />}
@@ -513,6 +555,18 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                     <div className="field" style={{ gridColumn: 'span 2' }}>
                       <label>Nombre</label>
                       <input className="input" defaultValue={m.name} disabled={!canWrite} maxLength={120} onBlur={(e) => e.target.value.trim() && e.target.value !== m.name && patchMod(m, { name: e.target.value.trim() })} />
+                    </div>
+                    <div className="field">
+                      <label title="«Solo yo»: solo tú lo ves en tu biblioteca, la paleta y el asistente">Visible para</label>
+                      <select
+                        className="input"
+                        value={m.ownerUserId ? 'personal' : 'empresa'}
+                        disabled={!canWrite || (!m.ownerUserId && !isAdmin)}
+                        onChange={(e) => patchMod(m, { personal: e.target.value === 'personal' })}
+                      >
+                        <option value="empresa">Toda la empresa</option>
+                        <option value="personal">Solo yo</option>
+                      </select>
                     </div>
                     <div className="field">
                       <label>Código</label>
