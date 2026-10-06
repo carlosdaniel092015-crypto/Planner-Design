@@ -113,7 +113,7 @@ export function validateProject(s: ProjectData, ctx?: PricingContext): Validatio
       code: 'JUNTA_L',
       text: `Encimera en L: se requiere junta en la esquina (tramos de ${(s.room.A / 100).toFixed(1).replace('.', ',')} m y ${((s.room.B - 60) / 100).toFixed(1).replace('.', ',')} m)`,
     });
-  if (s.ptype !== 'cocina' && mods.length) out.push({ st: 'ok', code: 'PROFUNDIDAD_COLGADO', text: 'Profundidad de colgado suficiente (≥ 55 cm) en todos los módulos' });
+  if ((s.ptype === 'closet' || s.ptype === 'vestidor') && mods.length) out.push({ st: 'ok', code: 'PROFUNDIDAD_COLGADO', text: 'Profundidad de colgado suficiente (≥ 55 cm) en todos los módulos' });
 
   out.push(...structuralIssues(s, ctx));
   return out;

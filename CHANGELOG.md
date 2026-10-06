@@ -3,6 +3,19 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.27.0 · 2026-10-06
+
+### Nuevo: Mueble de TV
+- En **Nuevo proyecto** aparece **Mueble de TV** (centro de entretenimiento), con su propio asistente:
+  - **Paso 4, Equipos:** consola de videojuegos, barra de sonido, decodificador, chimenea eléctrica e iluminación LED.
+  - **Paso 5, Preferencias:** tamaño de la TV en pulgadas (te dice la medida de la pantalla), altura del centro de la TV, 0, 1 o 2 torres laterales, número de repisas flotantes, panel detrás de la TV y alacena superior.
+- **«Generar distribución»** arma el mueble: torres en los extremos, consola entre ellas, panel centrado detrás de la pantalla y a su altura, repisas a los lados y alacena encima. Si la TV es muy grande para el muro, o no caben las torres o las repisas, te avisa.
+- Módulos nuevos en el catálogo: **Consola TV, Torre lateral, Panel para TV, Repisa flotante y Alacena superior**. Le llegan solos a todas las organizaciones.
+- El panel y las repisas salen en la **lista de corte como un solo tablero**, no como una caja, y se dibujan con el material de los frentes.
+
+### Bibliotecas
+- Cada módulo tiene el campo **Proyecto** (Cocina, Closet y vestidor, o Mueble de TV). Así tus módulos se pueden usar y ubicar en cada tipo de proyecto, con ubicaciones de TV (consola, torre, panel, repisa, alacena superior).
+
 ## 1.26.0 · 2026-10-06
 
 ### Encender y apagar sombras

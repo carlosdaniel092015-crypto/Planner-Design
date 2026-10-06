@@ -773,7 +773,7 @@ function PdfTab(props: {
   const walls = 2 + (['C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w)).length;
   const count: Record<PdfKey, number> = { portada: 1, vistas: 2, planta: 1, alzados: walls, planos: props.buildable.length, corte: 1, presupuesto: 1 };
   const setClient = (k: 'nombre' | 'tel' | 'dir', v: string) => props.commit({ ...data, client: { ...client, [k]: v } });
-  const kind = data.ptype === 'cocina' ? 'cocina' : data.ptype === 'closet' ? 'closet' : 'vestidor';
+  const kind = data.ptype === 'cocina' ? 'cocina' : data.ptype === 'closet' ? 'closet' : data.ptype === 'tv' ? 'mueble de TV' : 'vestidor';
   return (
     <div className="ap-2col ap-split" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }}>
       <div style={{ borderRight: '2px solid var(--color-divider)', overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>

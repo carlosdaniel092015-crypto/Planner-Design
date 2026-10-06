@@ -1,8 +1,8 @@
 // New-project defaults — the prototype's initial state and startProject()/generate().
 import { TEMPLATES } from './catalog';
 import type { ProjectData } from './schema';
-import { DEFAULT_CLOSET, defaultAppl, ESTILOS } from './spec';
-import type { ProjectKind } from './types';
+import { DEFAULT_CLOSET, DEFAULT_TV, defaultAppl, ESTILOS } from './spec';
+import type { ModuleFamily, ProjectKind } from './types';
 
 const KITCHEN_OPS: ProjectData['ops'] = [
   { id: 1, t: 'ventana', wall: 'A', pos: 100, w: 70, h: 100, z: 110 },
@@ -19,20 +19,22 @@ const KITCHEN_PTS: ProjectData['pts'] = [
 
 /** Same shape the prototype builds in startProject(); kitchens start from the KITCHEN template. */
 export function newProject(ptype: ProjectKind, name?: string): ProjectData {
-  const closet = ptype !== 'cocina';
+  const tv = ptype === 'tv';
+  const closet = ptype !== 'cocina' && !tv;
   return {
     schemaVersion: 1,
     ptype,
-    pname: name ?? (ptype === 'cocina' ? 'Nueva cocina' : ptype === 'closet' ? 'Nuevo closet' : 'Nuevo vestidor'),
-    layout: closet ? (ptype === 'vestidor' ? 'abierto' : 'lineal') : 'L',
-    room: closet ? { A: 360, B: 240, H: 250 } : { A: 360, B: 300, H: 250 },
-    ops: closet ? [{ id: 1, t: 'puerta', wall: 'D', pos: 250, w: 80, h: 210 }] : structuredClone(KITCHEN_OPS),
-    pts: closet ? [{ id: 1, t: 'elec', wall: 'B', pos: 200, z: 110 }] : structuredClone(KITCHEN_PTS),
-    prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: 'Jaladera', zocalo: '10 cm', presupuesto: 400000 },
-    mods: closet ? (ptype === 'vestidor' ? TEMPLATES.VESTIDOR() : TEMPLATES.CLOSET()) : TEMPLATES.KITCHEN(),
+    pname: name ?? (ptype === 'cocina' ? 'Nueva cocina' : ptype === 'closet' ? 'Nuevo closet' : tv ? 'Nuevo mueble de TV' : 'Nuevo vestidor'),
+    layout: closet ? (ptype === 'vestidor' ? 'abierto' : 'lineal') : tv ? 'lineal' : 'L',
+    room: tv ? { A: 400, B: 450, H: 250 } : closet ? { A: 360, B: 240, H: 250 } : { A: 360, B: 300, H: 250 },
+    ops: tv ? [{ id: 1, t: 'puerta', wall: 'D', pos: 320, w: 90, h: 210 }] : closet ? [{ id: 1, t: 'puerta', wall: 'D', pos: 250, w: 80, h: 210 }] : structuredClone(KITCHEN_OPS),
+    pts: tv ? [{ id: 1, t: 'elec', wall: 'A', pos: 200, z: 40 }, { id: 2, t: 'elec', wall: 'A', pos: 200, z: 110 }] : closet ? [{ id: 1, t: 'elec', wall: 'B', pos: 200, z: 110 }] : structuredClone(KITCHEN_PTS),
+    prefs: { estilo: 'Contemporáneo', alacena: '70 cm', apertura: tv ? 'Push' : 'Jaladera', zocalo: tv ? '5 cm' : '10 cm', presupuesto: tv ? 150000 : 400000 },
+    mods: tv ? TEMPLATES.TV() : closet ? (ptype === 'vestidor' ? TEMPLATES.VESTIDOR() : TEMPLATES.CLOSET()) : TEMPLATES.KITCHEN(),
     mats: { ...ESTILOS[0].m },
     appl: defaultAppl(ptype),
     ...(closet ? { closet: { ...DEFAULT_CLOSET } } : {}),
+    ...(tv ? { tv: { ...DEFAULT_TV } } : {}),
     priceAdj: { inst: 8, desc: 0, final: null, counter: null, taxRate: null },
   };
 }
@@ -41,7 +43,7 @@ export function newProject(ptype: ProjectKind, name?: string): ProjectData {
 export const DEFAULT_KITCHEN: ProjectData = { ...newProject('cocina', 'Cocina Familia Ortega'), client: { nombre: 'Familia Ortega' } };
 
 /** Project type column value (the database only distinguishes cocina / closet). */
-export const projectTypeOf = (ptype: ProjectKind): 'cocina' | 'closet' => (ptype === 'cocina' ? 'cocina' : 'closet');
+export const projectTypeOf = (ptype: ProjectKind): ModuleFamily => (ptype === 'cocina' ? 'cocina' : ptype === 'tv' ? 'tv' : 'closet');
 
 /**
  * "Empezar en blanco": keeps the project type, name, room size and style, and clears everything else so the
@@ -57,6 +59,7 @@ export function blankProject(p: ProjectData): ProjectData {
     appl,
     mods: [],
     dist: { walls: ['A'] },
-    ...(p.ptype !== 'cocina' ? { closet: { largo: 0, corto: 0, cajoneras: 0, zapatos: 0, luz: 'Sin iluminación' } } : {}),
+    ...(p.ptype === 'closet' || p.ptype === 'vestidor' ? { closet: { largo: 0, corto: 0, cajoneras: 0, zapatos: 0, luz: 'Sin iluminación' } } : {}),
+    ...(p.ptype === 'tv' ? { tv: { ...DEFAULT_TV, torres: 0, repisas: 0, panel: false, alacena: false } } : {}),
   };
 }

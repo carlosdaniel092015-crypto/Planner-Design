@@ -1,7 +1,7 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
 import { corners, geo, shade, wallPt, zocaloCm, zr } from './geometry';
-import { frontsOf } from './parts';
+import { bodyMaterialOf, frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
 
@@ -38,10 +38,10 @@ const P = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
 export type Colors = { f: string; b: string; c: string; hd: string };
 const colorOf = (materials: Record<string, MaterialDefinition>, code: string, fallback: string) => materials[code]?.color ?? fallback;
-export function cols(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectData['mats'], materials: Record<string, MaterialDefinition>): Colors {
+export function cols(m: Pick<ModuleInstance, 'cue' | 'fre'> & Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb'>>, mats: ProjectData['mats'], materials: Record<string, MaterialDefinition>): Colors {
   return {
     f: colorOf(materials, m.fre || mats.frentes, '#c49a6c'),
-    b: colorOf(materials, m.cue || mats.cuerpo, '#eeebe6'),
+    b: colorOf(materials, bodyMaterialOf(m, mats), '#eeebe6'),
     c: colorOf(materials, mats.encimera, '#e9e7e2'),
     hd: colorOf(materials, mats.jaladeras, '#2a2928'),
   };

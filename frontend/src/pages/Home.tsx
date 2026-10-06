@@ -18,6 +18,7 @@ const TYPES: { k: ProjectKind; name: string; kicker: string; desc: string }[] = 
   { k: 'cocina', name: 'Cocina', kicker: 'Lineal · L · U · Isla', desc: 'Bajos, alacenas, columnas y electrodomésticos con validación de instalaciones.' },
   { k: 'closet', name: 'Closet', kicker: 'Puertas abatibles', desc: 'Colgado largo y corto, cajoneras y zapateras en un muro o en esquina.' },
   { k: 'vestidor', name: 'Vestidor', kicker: 'Abierto · en U', desc: 'Módulos abiertos con isla cajonera e iluminación integrada.' },
+  { k: 'tv', name: 'Mueble de TV', kicker: 'Centro de entretenimiento', desc: 'Consola, torres, panel para la TV, repisas flotantes y alacena superior.' },
 ];
 
 // Same look as the Claude Design prototype's home: each type drawn in its own finishes, closets without the door.
@@ -25,6 +26,7 @@ const ART_MATS: Record<ProjectKind, ProjectData['mats']> = {
   cocina: { cuerpo: 'blanco', frentes: 'roble', encimera: 'cuarzo', jaladeras: 'negro' },
   closet: { cuerpo: 'blanco', frentes: 'blanco', encimera: 'cuarzo', jaladeras: 'laton' },
   vestidor: { cuerpo: 'nogal', frentes: 'nogal', encimera: 'cuarzo', jaladeras: 'laton' },
+  tv: { cuerpo: 'grafito', frentes: 'nogal', encimera: 'cuarzo', jaladeras: 'negro' },
 };
 const art = (k: ProjectKind, ang = 45, pad = 10) => {
   const p = newProject(k);
@@ -58,7 +60,7 @@ export function HomePage() {
   const pending = new Set(sync?.pending ?? []);
   const [libOpen, setLibOpen] = useState(false);
   const arts = useMemo(() => Object.fromEntries(TYPES.map((t) => [t.k, art(t.k)])), []);
-  const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30) }), []);
+  const thumbs = useMemo(() => ({ cocina: art('cocina', 45, 30), closet: art('closet', 45, 30), tv: art('tv', 45, 30) }), []);
 
   const load = () =>
     listProjects()

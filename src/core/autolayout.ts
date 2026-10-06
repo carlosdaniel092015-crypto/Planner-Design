@@ -5,7 +5,7 @@ import { DEFAULT_MODULES } from './catalog';
 import { templateOf } from './editing';
 import { zocaloCm } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
-import { applOf, closetOf, cmOf, distOf, ESTILOS, isCustomAppl } from './spec';
+import { applOf, closetOf, cmOf, distOf, ESTILOS, isCustomAppl, tvOf, tvSize } from './spec';
 import type { ModuleDefinition, ModuleShape } from './types';
 
 type Wall = 'A' | 'B' | 'C' | 'D';
@@ -35,7 +35,7 @@ const FALLBACK = Object.fromEntries(DEFAULT_MODULES.map((d) => [d.code, d]));
  * Standard modules the generator places, one per role. The designer can replace each with one of the organisation's own
  * modules (`prefs.mods`: standard code → chosen code; '' = keep the standard one).
  */
-export const MODULE_ROLES: { code: string; label: string; ptype: 'cocina' | 'closet' | 'vestidor' }[] = [
+export const MODULE_ROLES: { code: string; label: string; ptype: 'cocina' | 'closet' | 'vestidor' | 'tv' }[] = [
   { code: 'E-L', label: 'Esquinero', ptype: 'cocina' },
   { code: 'BF', label: 'Base fregadero', ptype: 'cocina' },
   { code: 'LV-60', label: 'Lavavajillas y empotrados', ptype: 'cocina' },
@@ -62,13 +62,18 @@ export const MODULE_ROLES: { code: string; label: string; ptype: 'cocina' | 'clo
   { code: 'VZ-80', label: 'Zapatero', ptype: 'vestidor' },
   { code: 'VE-80', label: 'Entrepaños', ptype: 'vestidor' },
   { code: 'IC-100', label: 'Isla cajonera', ptype: 'vestidor' },
+  { code: 'TV-CON', label: 'Consola TV', ptype: 'tv' },
+  { code: 'TV-TOR', label: 'Torre lateral', ptype: 'tv' },
+  { code: 'TV-PAN', label: 'Panel para TV', ptype: 'tv' },
+  { code: 'TV-REP', label: 'Repisa flotante', ptype: 'tv' },
+  { code: 'TV-ALT', label: 'Alacena superior', ptype: 'tv' },
 ];
 
 /**
  * Default locations a library module can declare ("Ubicación predeterminada"). The generator uses it automatically in
  * those roles, or in the extra spots (`roles: []`: corner upper, over the fridge) that only exist for own modules.
  */
-export const MODULE_PLACES: { key: string; label: string; ptype: 'cocina' | 'closet'; type: ModuleShape['type']; roles: string[] }[] = [
+export const MODULE_PLACES: { key: string; label: string; ptype: 'cocina' | 'closet' | 'tv'; type: ModuleShape['type']; roles: string[] }[] = [
   { key: 'bajo', label: 'Bajo encimera', ptype: 'cocina', type: 'base', roles: ['B-1P', 'B-2P'] },
   { key: 'esquina-baja', label: 'Bajo encimera esquina', ptype: 'cocina', type: 'base', roles: ['E-L'] },
   { key: 'fregadero', label: 'Bajo fregadero', ptype: 'cocina', type: 'base', roles: ['BF'] },
@@ -87,6 +92,11 @@ export const MODULE_PLACES: { key: string; label: string; ptype: 'cocina' | 'clo
   { key: 'zapatero', label: 'Zapatero', ptype: 'closet', type: 'tall', roles: ['ZP-60', 'VZ-80'] },
   { key: 'entrepanos', label: 'Entrepaños', ptype: 'closet', type: 'tall', roles: ['CL-E', 'VE-80'] },
   { key: 'isla-closet', label: 'Isla cajonera', ptype: 'closet', type: 'base', roles: ['IC-100'] },
+  { key: 'consola-tv', label: 'Consola TV', ptype: 'tv', type: 'base', roles: ['TV-CON'] },
+  { key: 'torre-tv', label: 'Torre lateral', ptype: 'tv', type: 'tall', roles: ['TV-TOR'] },
+  { key: 'panel-tv', label: 'Panel para TV', ptype: 'tv', type: 'upper', roles: ['TV-PAN'] },
+  { key: 'repisa-tv', label: 'Repisa flotante', ptype: 'tv', type: 'upper', roles: ['TV-REP'] },
+  { key: 'alto-tv', label: 'Alacena superior', ptype: 'tv', type: 'upper', roles: ['TV-ALT'] },
 ];
 
 /** Locations that fit a module (same kind of project; montaje compatible). */
@@ -104,7 +114,7 @@ export function placedFor(code: string, catalog: Record<string, ModuleDefinition
 
 /** Roles for a project (a closet laid out "abierto" uses the walk-in modules). */
 export const moduleRolesFor = (p: Pick<ProjectData, 'ptype' | 'layout'>) =>
-  MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' ? 'cocina' : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
+  MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' || p.ptype === 'tv' ? p.ptype : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
 
 /** Catalogue modules that can stand in for a standard one: same kind of project and same module type. */
 /** Bought appliances (fridges, hoods, ranges, dishwashers…), not furniture. */
@@ -231,14 +241,16 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
   };
 
   if (isKitchen) kitchen();
+  else if (p.ptype === 'tv') tv();
   else closet();
 
-  // ----- chosen depths and heights -----
-  for (const o of out) {
-    if (o.tpl.type === 'base') o.patch = { ...o.patch, h: o.patch?.h && o.tpl.appl ? o.patch.h : dist.baseH, d: depth };
-    else if (o.tpl.type === 'tall' && isKitchen) o.patch = { ...o.patch, d: depth };
-    else if (o.tpl.type === 'upper' && !keepDepth.has(o)) o.patch = { ...o.patch, d: dist.upperD };
-  }
+  // ----- chosen depths and heights (the TV unit sets its own) -----
+  if (p.ptype !== 'tv')
+    for (const o of out) {
+      if (o.tpl.type === 'base') o.patch = { ...o.patch, h: o.patch?.h && o.tpl.appl ? o.patch.h : dist.baseH, d: depth };
+      else if (o.tpl.type === 'tall' && isKitchen) o.patch = { ...o.patch, d: depth };
+      else if (o.tpl.type === 'upper' && !keepDepth.has(o)) o.patch = { ...o.patch, d: dist.upperD };
+    }
   for (const m of islands) if (isKitchen) m.h = dist.baseH;
 
   // ----- ids -----
@@ -520,6 +532,107 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
           next!.w += gap;
         }
       }
+  }
+
+  // =====================================================================
+  /**
+   * Mueble de TV on the first furnished wall: side towers at the ends, the console between them, the panel behind the
+   * screen (sized from the TV's inches, its centre at the chosen height), floating shelves beside it and an upper
+   * cabinet over everything.
+   */
+  function tv() {
+    const t = tvOf(p.tv);
+    const zoc = zocaloCm(p.prefs.zocalo);
+    const wall = (walls[0] ?? 'A') as Wall;
+    const seg = segs.filter((s) => s.wall === wall).sort((x, y) => y.b - y.a - (x.b - x.a))[0];
+    if (!seg) {
+      notes.push('No hay un muro libre para el mueble de TV.');
+      return;
+    }
+    const screen = tvSize(clamp(t.pulgadas, 24, 120));
+    const L = seg.b - seg.a;
+    const towerT = tpl('TV-TOR', 40);
+    const towerW = clamp(40, towerT.rw?.[0] ?? 40, towerT.rw?.[1] ?? 40);
+    const asked = clamp(Math.round(t.torres), 0, 2);
+    let towers = asked;
+    // Towers only while the console between them still takes the screen.
+    while (towers > 0 && L - towers * towerW < Math.max(100, screen.w + 20)) towers--;
+    if (towers < asked) notes.push(`El muro es corto para ${asked} torre${asked === 1 ? '' : 's'}; quedaron ${towers}.`);
+    const towerH = Math.round(clamp(p.room.H - zoc - 30, 150, 220));
+    let in0 = seg.a;
+    let in1 = seg.b;
+    if (towers >= 1) {
+      out.push({ wall, pos: Math.round(seg.a), w: towerW, tpl: towerT, patch: { h: towerH, d: towerT.d } });
+      in0 += towerW;
+    }
+    if (towers === 2) {
+      out.push({ wall, pos: Math.round(seg.b - towerW), w: towerW, tpl: towerT, patch: { h: towerH, d: towerT.d, open: 'izq' } });
+      in1 -= towerW;
+    }
+    const inner = in1 - in0;
+    const conStd = tpl('TV-CON');
+    const [clo, chi] = conStd.rw ?? [80, 320];
+    const cw = Math.round(Math.min(chi, towers ? inner : clamp(Math.max(screen.w + 40, 150), clo, inner)));
+    if (cw < clo) {
+      notes.push('No cabe la consola en ese muro.');
+      return;
+    }
+    const c0 = Math.round(in0 + (inner - cw) / 2);
+    const conT = tpl('TV-CON', cw);
+    out.push({ wall, pos: c0, w: cw, tpl: conT, patch: { d: depth } });
+    const conTop = zoc + conT.h;
+    const cx = c0 + cw / 2;
+    // Screen: centred at the chosen height, at least 10 cm over the console.
+    const tvBottom = Math.max(conTop + 10, t.centro - screen.h / 2);
+    const tvTop = tvBottom + screen.h;
+    if (tvTop > p.room.H - 10) notes.push(`Una TV de ${t.pulgadas} pulgadas a esa altura llega casi al techo; baja la altura del centro.`);
+    if (screen.w > cw) notes.push(`La TV de ${t.pulgadas} pulgadas (${screen.w} cm) es más ancha que la consola (${cw} cm).`);
+
+    let side = screen.w + 20;
+    let panelTop = tvTop;
+    if (t.panel) {
+      const panStd = tpl('TV-PAN');
+      const pw = Math.round(clamp(screen.w + 60, panStd.rw?.[0] ?? 60, cw));
+      const pz = conTop + 3;
+      const ph = Math.round(clamp(tvTop + 15 - pz, 60, p.room.H - pz - 5));
+      const panT = tpl('TV-PAN', pw);
+      out.push({ wall, pos: Math.round(cx - pw / 2), w: pw, tpl: panT, patch: { z: pz, h: ph } });
+      side = pw;
+      panelTop = pz + ph;
+    }
+    let ceiling = p.room.H - 5;
+    if (t.alacena) {
+      const altT = tpl('TV-ALT', cw);
+      const z = Math.round(Math.max(panelTop, tvTop + 10) + 5);
+      if (z + altT.h <= p.room.H - 2) {
+        out.push({ wall, pos: c0, w: cw, tpl: altT, patch: { z } });
+        ceiling = z;
+      } else notes.push('No queda altura para la alacena superior sobre la TV.');
+    }
+
+    const want = clamp(Math.round(t.repisas), 0, 8);
+    if (want) {
+      const repStd = tpl('TV-REP');
+      const [rlo, rhi] = repStd.rw ?? [30, 150];
+      const zones = (
+        [
+          [c0, cx - side / 2 - 5],
+          [cx + side / 2 + 5, c0 + cw],
+        ] as [number, number][]
+      ).filter(([a, b]) => b - a >= rlo + 10);
+      const levels: number[] = [];
+      for (let z = conTop + 35; z + repStd.h <= ceiling - 25; z += 35) levels.push(z);
+      let placed = 0;
+      for (const z of levels)
+        for (const [a, b] of zones) {
+          if (placed >= want) break;
+          const sw = Math.round(clamp(b - a - 10, rlo, rhi));
+          out.push({ wall, pos: Math.round((a + b) / 2 - sw / 2), w: sw, tpl: tpl('TV-REP', sw), patch: { z: Math.round(z) } });
+          placed++;
+        }
+      if (placed < want)
+        notes.push(placed ? `Solo cupieron ${placed} de ${want} repisas junto a la TV.` : 'No hay espacio junto a la TV para repisas: la TV o el panel ocupan casi toda la consola.');
+    }
   }
 
   // =====================================================================

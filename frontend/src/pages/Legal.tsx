@@ -28,7 +28,7 @@ export function PrivacyPage() {
   return (
     <LegalShell title="Política de privacidad">
       <p>
-        Planner es una herramienta para diseñar cocinas, closets y vestidores y presupuestarlos. La usan empresas de muebles (la «organización») con sus diseñadores, su taller y sus clientes.
+        Planner es una herramienta para diseñar cocinas, closets, vestidores y muebles de TV y presupuestarlos. La usan empresas de muebles (la «organización») con sus diseñadores, su taller y sus clientes.
         Esta política explica qué datos se guardan, para qué y qué puedes hacer con ellos.
       </p>
       <h2>Qué datos guardamos</h2>

@@ -27,7 +27,12 @@ export const LAYOUTS_C: LayoutOption[] = [
   { k: 'personalizada', name: 'Personalizada', desc: 'Tú eliges los muros con módulos y el fondo.', r: [] },
 ];
 
-export const layoutsFor = (ptype: ProjectKind) => (ptype === 'cocina' ? LAYOUTS_K : LAYOUTS_C);
+export const LAYOUTS_T: LayoutOption[] = [
+  { k: 'lineal', name: 'Muro de TV', desc: 'Consola, panel y torres en un muro.', r: [[10, 10, 80, 12]] },
+  { k: 'personalizada', name: 'Personalizada', desc: 'Tú eliges el muro y el fondo.', r: [] },
+];
+
+export const layoutsFor = (ptype: ProjectKind) => (ptype === 'cocina' ? LAYOUTS_K : ptype === 'tv' ? LAYOUTS_T : LAYOUTS_C);
 
 export interface Appliance {
   on: boolean;
@@ -99,7 +104,15 @@ export const APPL_C: ApplianceOption[] = [
   { k: 'led', name: 'Iluminación LED', icon: 'lightbulb', insts: ['Integrado', 'Libre'], d: { on: true, inst: 'Integrado', w: 300, h: 1, d: 1 } },
 ];
 
-export const appliancesFor = (ptype: ProjectKind) => (ptype === 'cocina' ? APPL_K : APPL_C);
+export const APPL_T: ApplianceOption[] = [
+  { k: 'consola', name: 'Consola de videojuegos', icon: 'gamepad-2', insts: ['En nicho', 'Libre'], d: { on: true, inst: 'En nicho', w: 40, h: 10, d: 30 } },
+  { k: 'barra', name: 'Barra de sonido', icon: 'speaker', insts: ['Sobre la consola', 'Colgada'], d: { on: true, inst: 'Sobre la consola', w: 90, h: 7, d: 10 } },
+  { k: 'deco', name: 'Decodificador / router', icon: 'router', insts: ['En nicho', 'Libre'], d: { on: true, inst: 'En nicho', w: 30, h: 6, d: 20 } },
+  { k: 'chimenea', name: 'Chimenea eléctrica', icon: 'flame', insts: ['Empotrada', 'Libre'], d: { on: false, inst: 'Empotrada', w: 100, h: 50, d: 20 } },
+  { k: 'led', name: 'Iluminación LED', icon: 'lightbulb', insts: ['Detrás del panel', 'En repisas'], d: { on: true, inst: 'Detrás del panel', w: 200, h: 1, d: 1 } },
+];
+
+export const appliancesFor = (ptype: ProjectKind) => (ptype === 'cocina' ? APPL_K : ptype === 'tv' ? APPL_T : APPL_C);
 
 export function defaultAppl(ptype: ProjectKind): Record<string, Appliance> {
   return Object.fromEntries(appliancesFor(ptype).map((a) => [a.k, { ...a.d }]));
@@ -153,6 +166,31 @@ export function closetOf(closet: Record<string, unknown> | null | undefined): Cl
   return { ...DEFAULT_CLOSET, ...(closet as Partial<ClosetPrefs> | undefined) };
 }
 
+export const STEP_T = ['Distribución', 'Medidas', 'Instalaciones', 'Equipos', 'Preferencias', 'Resumen'] as const;
+
+export interface TvPrefs {
+  /** Screen diagonal (inches). */
+  pulgadas: number;
+  /** Height of the screen's centre from the floor (cm); about eye level when seated. */
+  centro: number;
+  /** Side towers: 0, 1 (left) or 2. */
+  torres: number;
+  /** Floating shelves beside the TV. */
+  repisas: number;
+  /** Board behind the TV. */
+  panel: boolean;
+  /** Upper cabinet over the TV. */
+  alacena: boolean;
+}
+export const DEFAULT_TV: TvPrefs = { pulgadas: 65, centro: 110, torres: 2, repisas: 2, panel: true, alacena: true };
+
+export function tvOf(tv: Record<string, unknown> | null | undefined): TvPrefs {
+  return { ...DEFAULT_TV, ...(tv as Partial<TvPrefs> | undefined) };
+}
+
+/** Screen size (cm) of a 16:9 TV from its diagonal in inches. */
+export const tvSize = (pulgadas: number) => ({ w: Math.round(pulgadas * 2.54 * 0.8716), h: Math.round(pulgadas * 2.54 * 0.4903) });
+
 /** Budget slider range in RD$ (prototype: MXN 80k–400k). */
 export const BUDGET_RANGE = { min: 100_000, max: 3_000_000, step: 25_000 } as const;
 
@@ -185,10 +223,10 @@ export function distOf(p: { ptype: ProjectKind; layout?: string; dist?: Partial<
   const d = p.dist ?? {};
   const kit = p.ptype === 'cocina';
   const custom = p.layout === 'personalizada';
-  const presetIsland = kit ? p.layout === 'isla' || p.layout === 'peninsula' : p.layout === 'abierto' || p.ptype === 'vestidor';
+  const presetIsland = kit ? p.layout === 'isla' || p.layout === 'peninsula' : p.ptype !== 'tv' && (p.layout === 'abierto' || p.ptype === 'vestidor');
   return {
     walls: custom && d.walls?.length ? [...new Set(d.walls)].sort() as FurnitureWall[] : custom ? ['A', 'B'] : wallsFor(p.layout, p.ptype),
-    baseD: d.baseD ?? (kit ? 60 : p.ptype === 'vestidor' || p.layout === 'abierto' ? 55 : 60),
+    baseD: d.baseD ?? (kit ? 60 : p.ptype === 'tv' ? 45 : p.ptype === 'vestidor' || p.layout === 'abierto' ? 55 : 60),
     baseH: d.baseH ?? 76,
     upperD: d.upperD ?? 35,
     aisle: d.aisle ?? 90,

@@ -10,7 +10,7 @@ const OVEN_COL: FrontSegment[] = [{ t: 'drawer', f: 0.17 }, { t: 'drawer', f: 0.
 const DR3: FrontSegment[] = [{ t: 'drawer', f: 0.4 }, { t: 'drawer', f: 0.32 }, { t: 'drawer', f: 0.28 }];
 const DR2: FrontSegment[] = [{ t: 'drawer', f: 0.5 }, { t: 'drawer', f: 0.5 }];
 
-type Placed = ModuleShape & { id: number; wall: WallId; pos?: number; x?: number; y?: number; open?: 'der' | 'izq' };
+type Placed = ModuleShape & { id: number; wall: WallId; pos?: number; x?: number; y?: number; z?: number; open?: 'der' | 'izq' };
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
 
 // ---------- layout templates (prototype KITCHEN, ISLAND, LINEAL, CLOSET, VESTIDOR) ----------
@@ -56,6 +56,21 @@ const VESTIDOR_T: Placed[] = [
   { id: 6, code: 'VL-90', name: 'Colgado largo abierto', cat: 'Closet', wall: 'B', pos: 145, w: 90, h: 230, d: 55, type: 'tall', fr: OPEN_ROD, rw: [60, 120] },
   { id: 7, code: 'IC-100', name: 'Isla cajonera', cat: 'Closet', wall: 'F', x: 150, y: 130, w: 100, h: 80, d: 55, type: 'base', fr: [{ t: 'drawer', f: 0.34 }, { t: 'drawer', f: 0.33 }, { t: 'drawer', f: 0.33 }], rw: [80, 140] },
 ];
+// Mueble de TV (65" on a 4 m wall): two towers, console, panel behind the TV, two shelves and an upper cabinet.
+// The panel and the shelves are single boards (`panels`): the despiece lists one board, not a box.
+const TV_PANEL = { panels: [{ n: 'Panel para TV', p: [0, 0, 0], s: [1600, 18, 1100], slot: 'frentes' }], pdim: [160, 110, 2] } as Pick<ModuleShape, 'panels' | 'pdim'>;
+const TV_SHELF = { panels: [{ n: 'Repisa flotante', p: [0, 0, 0], s: [900, 250, 36], slot: 'frentes' }], pdim: [90, 4, 25] } as Pick<ModuleShape, 'panels' | 'pdim'>;
+const TV_CONSOLE: FrontSegment[] = [{ t: 'open', f: 0.4 }, { t: 'door', n: 2, f: 0.6 }];
+const TV_TOWER: FrontSegment[] = [{ t: 'open', f: 0.55 }, { t: 'door', n: 1, f: 0.45 }];
+const TV_T: Placed[] = [
+  { id: 1, code: 'TV-TOR', name: 'Torre lateral', cat: 'Mueble TV', wall: 'A', pos: 0, w: 40, h: 200, d: 35, type: 'tall', fr: TV_TOWER, rw: [30, 60] },
+  { id: 2, code: 'TV-CON', name: 'Consola TV', cat: 'Mueble TV', wall: 'A', pos: 40, w: 320, h: 45, d: 45, type: 'base', fr: TV_CONSOLE, rw: [80, 320] },
+  { id: 3, code: 'TV-TOR', name: 'Torre lateral', cat: 'Mueble TV', wall: 'A', pos: 360, w: 40, h: 200, d: 35, type: 'tall', fr: TV_TOWER, rw: [30, 60], open: 'izq' },
+  { id: 4, code: 'TV-PAN', name: 'Panel para TV', cat: 'Mueble TV', wall: 'A', pos: 120, w: 160, h: 110, d: 2, type: 'upper', fr: [], rw: [60, 320], z: 62, ...TV_PANEL },
+  { id: 5, code: 'TV-REP', name: 'Repisa flotante', cat: 'Mueble TV', wall: 'A', pos: 50, w: 60, h: 4, d: 25, type: 'upper', fr: [], rw: [30, 150], z: 100, ...TV_SHELF },
+  { id: 6, code: 'TV-REP', name: 'Repisa flotante', cat: 'Mueble TV', wall: 'A', pos: 290, w: 60, h: 4, d: 25, type: 'upper', fr: [], rw: [30, 150], z: 100, ...TV_SHELF },
+  { id: 7, code: 'TV-ALT', name: 'Alacena superior', cat: 'Mueble TV', wall: 'A', pos: 40, w: 320, h: 35, d: 35, type: 'upper', fr: [{ t: 'door', n: 4, f: 1 }], rw: [60, 320], z: 185 },
+];
 
 export const TEMPLATES = {
   KITCHEN: () => clone(KITCHEN_T) as unknown as ModuleInstance[],
@@ -63,6 +78,7 @@ export const TEMPLATES = {
   LINEAL: () => clone(LINEAL_T) as unknown as ModuleInstance[],
   CLOSET: () => clone(CLOSET_T) as unknown as ModuleInstance[],
   VESTIDOR: () => clone(VESTIDOR_T) as unknown as ModuleInstance[],
+  TV: () => clone(TV_T) as unknown as ModuleInstance[],
 };
 
 // ---------- library (prototype LIB) ----------
@@ -100,7 +116,7 @@ function toDefinition(m: ModuleShape): ModuleDefinition {
   return {
     ...clone(m),
     rw: m.rw ?? [m.w, m.w],
-    projectType: m.cat === 'Closet' ? 'closet' : 'cocina',
+    projectType: m.cat === 'Closet' ? 'closet' : m.cat === 'Mueble TV' ? 'tv' : 'cocina',
     source: 'parametrico',
     unitPrice,
     priceCurrency: 'USD',
@@ -113,9 +129,9 @@ function toDefinition(m: ModuleShape): ModuleDefinition {
 export const DEFAULT_MODULES: ModuleDefinition[] = (() => {
   const byCode = new Map<string, ModuleShape>();
   for (const m of LIB) byCode.set(m.code, m);
-  for (const m of [...KITCHEN_T, ...ISLAND_EXTRA, ...LINEAL_T, ...CLOSET_T, ...VESTIDOR_T]) {
+  for (const m of [...KITCHEN_T, ...ISLAND_EXTRA, ...LINEAL_T, ...CLOSET_T, ...VESTIDOR_T, ...TV_T]) {
     if (byCode.has(m.code)) continue;
-    const shape: ModuleShape = { code: m.code, name: m.name, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, fr: m.fr, rw: m.rw };
+    const shape: ModuleShape = { code: m.code, name: m.name, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, fr: m.fr, rw: m.rw, ...(m.panels ? { panels: m.panels, pdim: m.pdim } : {}) };
     for (const k of ['sink', 'cook', 'appl', 'oven', 'range', 'fd'] as const) if (m[k]) shape[k] = m[k];
     byCode.set(m.code, shape);
   }

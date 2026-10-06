@@ -10,7 +10,7 @@ import { type LibModule, type LibTexture, lib, uploadFile } from './upload';
 type Tab = 'tex' | 'mod';
 const BUILTIN = new Set(DEFAULT_MODULES.map((d) => d.code));
 const TEX_TYPES = ['Melamina', 'Melamina texturizada', 'Chapa natural', 'Lacado', 'Cuarzo', 'Granito', 'Madera maciza', 'Metal', 'Vidrio'];
-const CATS = ['Mis módulos', 'Bajos', 'Altos', 'Columnas', 'Esquinas', 'Cajoneras', 'Closet', 'Electro'];
+const CATS = ['Mis módulos', 'Bajos', 'Altos', 'Columnas', 'Esquinas', 'Cajoneras', 'Closet', 'Mueble TV', 'Electro'];
 const USES = [
   ['frentes', 'Frentes', 'door-closed'],
   ['cuerpo', 'Cuerpo', 'box'],
@@ -524,6 +524,23 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                         {[...new Set([...CATS, m.category])].map((c) => (
                           <option key={c}>{c}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label title="En qué tipo de proyecto se usa (asistente, ubicación predeterminada)">Proyecto</label>
+                      <select
+                        className="input"
+                        value={m.projectType ?? 'cocina'}
+                        disabled={!canWrite}
+                        onChange={(e) => {
+                          const projectType = e.target.value as NonNullable<LibModule['projectType']>;
+                          const keep = placesFor({ projectType, type: m.type }).some((p) => p.key === m.anchor?.place);
+                          patchMod(m, { projectType, ...(m.anchor?.place && !keep ? { anchor: null } : {}) });
+                        }}
+                      >
+                        <option value="cocina">Cocina</option>
+                        <option value="closet">Closet y vestidor</option>
+                        <option value="tv">Mueble de TV</option>
                       </select>
                     </div>
                     <div className="field">

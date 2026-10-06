@@ -129,7 +129,7 @@ export const priceAdjSchema = z.object({
 export const projectDataSchema = z
   .object({
     schemaVersion: z.literal(1),
-    ptype: z.enum(['cocina', 'closet', 'vestidor']),
+    ptype: z.enum(['cocina', 'closet', 'vestidor', 'tv']),
     pname: z.string().min(1).max(160),
     layout: z.string().max(40).optional(),
     room: z.object({ A: z.number().min(50).max(2000), B: z.number().min(50).max(2000), H: z.number().min(150).max(600) }),
@@ -149,6 +149,8 @@ export const projectDataSchema = z
       .loose()
       .default({ apertura: 'Jaladera' }),
     closet: z.record(z.string(), z.unknown()).optional(),
+    /** Mueble de TV preferences (Especificaciones paso 5): TV size, towers, shelves, panel, upper cabinet. */
+    tv: z.record(z.string(), z.unknown()).optional(),
     /** Cameras chosen by hand in the approval gallery (also used by the PDF and the client page). */
     cams: z
       .object({
