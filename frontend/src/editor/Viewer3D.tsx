@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { type Drag3D, loadRenderer, type Viewer } from './engine';
+import { type Drag3D, loadRenderer, shadowsOn, type Viewer } from './engine';
 
 /** Hosts the prototype's three.js viewer. Falls back to `fallback` if WebGL/three cannot load. */
 export function Viewer3D({ cfg, onSelect, onDrag, onViewer, onLoaded, fallback }: { cfg: unknown; onSelect: (id: number | null, add: boolean) => void; /** Modules dragged in move mode. */ onDrag?: Drag3D; onViewer: (v: Viewer | null) => void; /** After the first scene is built (e.g. to apply a saved camera). */ onLoaded?: (v: Viewer) => void; fallback: React.ReactNode }) {
@@ -22,6 +22,7 @@ export function Viewer3D({ cfg, onSelect, onDrag, onViewer, onLoaded, fallback }
       .then((v) => {
         if (dead) return v.dispose();
         viewer.current = v;
+        v.setShadows(shadowsOn());
         onViewer(v);
         return v.update(cfgRef.current).then(() => !dead && onLoaded?.(v));
       })
@@ -43,6 +44,13 @@ export function Viewer3D({ cfg, onSelect, onDrag, onViewer, onLoaded, fallback }
   useEffect(() => {
     viewer.current?.update(cfg).catch((e) => console.warn('update 3D', e));
   }, [cfg]);
+
+  // The "Sombras" button (in any open viewer) applies to all of them.
+  useEffect(() => {
+    const on = (e: Event) => viewer.current?.setShadows((e as CustomEvent<boolean>).detail);
+    window.addEventListener('planner:sombras', on);
+    return () => window.removeEventListener('planner:sombras', on);
+  }, []);
 
   return (
     <>

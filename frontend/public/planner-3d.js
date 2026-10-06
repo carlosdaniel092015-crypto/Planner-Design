@@ -749,6 +749,14 @@ class Viewer {
   renderNow() { this.dirty = false; if (this.cfg) cutaway(this.root.userData.walls, this.cam, this.cfg); this.r.render(this.scene, this.cam); this.placeLabels(); }
   /** Opens (true) or closes every door and drawer with a short animation. */
   setOpen(open) { this.openTo = open ? 1 : 0; this.dirty = true; }
+  /** Turns cast shadows on or off (lighter on slow devices); materials recompile once for the new shadow map state. */
+  setShadows(on) {
+    on = !!on;
+    if (this.r.shadowMap.enabled === on) return;
+    this.r.shadowMap.enabled = on;
+    this.scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; ms.forEach(m => { m.needsUpdate = true; }); });
+    this.dirty = true;
+  }
   label(text, pos, dark) {
     const d = document.createElement('div');
     d.textContent = text;
