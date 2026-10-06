@@ -34,7 +34,7 @@ import { canCreate, canEdit, FullScreenLoader, useAuth } from '../auth';
 import { ShareDialog } from '../ShareDialog';
 import { VersionsDialog } from '../editor/VersionsDialog';
 import { BottomBar } from '../editor/BottomBar';
-import { installEngine, sceneCfg, snapshot, type Viewer } from '../editor/engine';
+import { installEngine, sceneCfg, setShadowsPref, shadowsOn, snapshot, type Viewer } from '../editor/engine';
 import { uploadFile } from '../library/upload';
 import { clipboardModules, copyModules, pasteModules, removeModules } from '../editor/clipboard';
 import { LeftPanel, type LeftTab } from '../editor/LeftPanel';
@@ -92,6 +92,14 @@ export function EditorPage() {
   const [zoom, setZoom] = useState(1);
   const [dark, setDark] = useState(false);
   const [open, setOpen] = useState(false);
+  const [shadows, setShadows] = useState(shadowsOn);
+  const toggleShadows = () => {
+    setShadowsPref(!shadows);
+    setShadows(!shadows);
+    flash(shadows ? 'Sombras apagadas: la vista 3D va más ligera' : 'Sombras encendidas');
+  };
+  const toggleShadowsRef = useRef(toggleShadows);
+  toggleShadowsRef.current = toggleShadows;
   // Phones and small tablets start with the 3D view clear; the panels slide over it.
   const narrow = typeof window !== 'undefined' && window.innerWidth <= 900;
   const [leftOpen, setLeftOpen] = useState(!narrow);
@@ -465,6 +473,8 @@ export function EditorPage() {
         setMove3d((v) => !v);
       } else if (phase === 2 && data && !mod && !readOnly && k === 'g') {
         turnBy(e.shiftKey ? -15 : 15);
+      } else if (phase === 2 && data && !mod && k === 's') {
+        toggleShadowsRef.current();
       } else if (e.key === 'Escape') {
         setSel(null);
         setReplaceMode(false);
@@ -718,6 +728,7 @@ export function EditorPage() {
           { k: 'turn', icon: 'rotate-cw-square', tip: 'Girar mueble 90° (G: 15°)', key: 'G', act: turnSelected },
         ]),
     { k: 'open', icon: 'door-open', tip: open ? 'Cerrar puertas y cajones' : 'Abrir puertas y cajones', key: 'P', on: open, act: () => (setView('3d'), setOpen(!open), viewer.current?.setOpen(!open)) },
+    { k: 'sombras', icon: shadows ? 'sun' : 'sun-dim', tip: shadows ? 'Apagar sombras' : 'Encender sombras', key: 'S', on: shadows, act: toggleShadows },
   ];
   const saveLabel =
     save.kind === 'saving'

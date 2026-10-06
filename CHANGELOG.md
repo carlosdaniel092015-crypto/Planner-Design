@@ -3,6 +3,12 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.26.0 · 2026-10-06
+
+### Encender y apagar sombras
+- En el editor 3D hay un botón **☀ Sombras** (o la tecla **S**) para apagarlas o encenderlas. Sin sombras la vista 3D va más fluida en teléfonos y computadoras lentas.
+- La elección se recuerda en cada dispositivo. Los renders de la galería, el PDF y la página del cliente siempre salen con sombras.
+
 ## 1.25.0 · 2026-09-28
 
 ### Electrodomésticos en Especificaciones

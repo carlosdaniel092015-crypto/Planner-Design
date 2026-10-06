@@ -61,6 +61,8 @@ export interface Viewer {
   setAngle(deg: number): void;
   /** Opens (true) or closes all doors and drawers, animated. */
   setOpen(open: boolean): void;
+  /** Cast shadows on/off (the editor's "Sombras" button; renders for the gallery and PDF always keep them). */
+  setShadows(on: boolean): void;
   getCamera(): CameraState;
   focus(id: number): void;
   setCamera(c: CameraState): void;
@@ -146,4 +148,20 @@ export function frontThumb(m: ModuleInstance, mats: ProjectData['mats'], byCode:
   front2D({ ...m, fr: frontsOf(m) }, 0, 0, m.w, m.h, colorsFor(m, mats, byCode), handleOf(apertura), items);
   const pad = Math.max(m.w, m.h) * 0.08;
   return { items, vb: [-pad, -pad, m.w + pad * 2, m.h + pad * 2] };
+}
+
+// "Sombras" preference of this device (a slow phone or laptop can turn them off); every live 3D viewer follows it.
+const SHADOWS_KEY = 'planner.sombras';
+export function shadowsOn(): boolean {
+  try {
+    return localStorage.getItem(SHADOWS_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+export function setShadowsPref(on: boolean) {
+  try {
+    localStorage.setItem(SHADOWS_KEY, on ? '1' : '0');
+  } catch {}
+  window.dispatchEvent(new CustomEvent('planner:sombras', { detail: on }));
 }
