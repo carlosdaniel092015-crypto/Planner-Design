@@ -1,7 +1,8 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
 import { auditLog, moduleDefinitions, organizations, users } from '../db/schema';
-import { moduleDefaultsOf } from '../services/catalog';
+import { cutTemplatesOf, moduleDefaultsOf } from '../services/catalog';
+import { cutTemplateSchema, isPresetCutTemplate } from '../core';
 import { audit } from '../lib/audit';
 import { unprocessable } from '../lib/errors';
 import { authErrors, body, json, router, security } from '../lib/openapi';
@@ -24,6 +25,7 @@ const Org = z
     brandColor: z.string().nullable(),
     approvalTerms: z.string().openapi({ description: 'Texto que el cliente acepta al aprobar (página pública y PDF).' }),
     moduleDefaults: z.record(z.string(), z.string()).openapi({ description: 'Módulos propios que usa la distribución propuesta en proyectos nuevos: código estándar → código del catálogo.' }),
+    cutTemplates: z.array(z.record(z.string(), z.unknown())).openapi({ description: 'Plantillas propias de lista de corte (además de las predefinidas de src/core).' }),
   })
   .openapi('Organizacion');
 
@@ -36,6 +38,11 @@ const OrgPatch = z
     moduleDefaults: z
       .record(z.string().max(60), z.string().max(60))
       .refine((m) => Object.keys(m).length <= 60, 'Demasiados módulos.'),
+    cutTemplates: z
+      .array(cutTemplateSchema)
+      .max(20)
+      .refine((l) => new Set(l.map((t) => t.id)).size === l.length, 'Dos plantillas tienen el mismo identificador.')
+      .refine((l) => !l.some((t) => isPresetCutTemplate(t.id)), 'Ese identificador es de una plantilla predefinida.'),
   })
   .partial()
   .openapi('OrganizacionCambios', { example: { name: 'Muebles Ortega', brandColor: '#1f6f5c' } });
@@ -49,6 +56,7 @@ const orgJson = (o: OrgRow) => ({
   brandColor: o.brandColor,
   approvalTerms: ((o.settings as { aprobacion?: { terminos?: string } }).aprobacion?.terminos ?? DEFAULT_TERMS) as string,
   moduleDefaults: moduleDefaultsOf(o),
+  cutTemplates: cutTemplatesOf(o),
 });
 
 export function organizationRoutes() {
@@ -86,6 +94,7 @@ export function organizationRoutes() {
       }
       let settings: Record<string, unknown> | undefined;
       if (input.approvalTerms) settings = { ...a.org.settings, aprobacion: { ...((a.org.settings as { aprobacion?: object }).aprobacion ?? {}), terminos: input.approvalTerms } };
+      if (input.cutTemplates) settings = { ...(settings ?? a.org.settings), plantillasCorte: input.cutTemplates };
       if (input.moduleDefaults) {
         // Only codes that exist in this organisation's catalogue ('' = standard, dropped).
         const codes = new Set((await db.select({ code: moduleDefinitions.code }).from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, a.org.id))).map((m) => m.code));

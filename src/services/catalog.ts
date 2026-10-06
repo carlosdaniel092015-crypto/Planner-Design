@@ -1,6 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
   BACK_PANEL_MATERIAL,
+  type CutTemplate,
+  cutTemplateSchema,
   DEFAULT_MODULES,
   frontCounts,
   type HardwareDefinition,
@@ -210,4 +212,14 @@ export async function ensureDefaultModules(db: DbOrTx, org: Organization): Promi
     .values(missing.map(({ d, i }) => ({ ...moduleDefToRow(d), unitPrice: price(d.unitPrice), priceCurrency: org.baseCurrency, organizationId: org.id, sort: i })))
     .onConflictDoNothing();
   return missing.length;
+}
+
+/** The organisation's own cut list templates (settings.plantillasCorte); invalid entries are skipped. */
+export function cutTemplatesOf(o: { settings: unknown }): CutTemplate[] {
+  const list = (o.settings as { plantillasCorte?: unknown } | null)?.plantillasCorte;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((t) => {
+    const r = cutTemplateSchema.safeParse(t);
+    return r.success ? [r.data] : [];
+  });
 }

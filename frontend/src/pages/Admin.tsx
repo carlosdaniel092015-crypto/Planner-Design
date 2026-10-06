@@ -1,4 +1,5 @@
 // Administración: organización (logo, color, términos), usuarios, precios, catálogo, clientes y auditoría.
+import { CutTemplatesTab } from './CutTemplatesTab';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, isNetworkError, type Role, request } from '../api';
@@ -7,7 +8,7 @@ import { uploadFile } from '../library/upload';
 import { UserMenu } from '../UserMenu';
 import { Brand, Dialog, fmtMoney, Icon, MUTED, relativeTime, useToast } from '../ui';
 
-type Tab = 'plan' | 'organizacion' | 'usuarios' | 'precios' | 'catalogo' | 'clientes' | 'auditoria';
+type Tab = 'plan' | 'organizacion' | 'usuarios' | 'precios' | 'catalogo' | 'corte' | 'clientes' | 'auditoria';
 const ROLE: Record<Role, string> = { admin: 'Administrador', disenador: 'Diseñador', taller: 'Taller', lectura: 'Solo lectura' };
 const errText = (e: unknown) => (isNetworkError(e) ? 'Sin conexión: la administración necesita internet.' : e instanceof ApiError ? e.message : 'No se pudo completar.');
 
@@ -23,6 +24,7 @@ export function AdminPage() {
     { k: 'usuarios', label: 'Usuarios', icon: 'users', admin: true },
     { k: 'precios', label: 'Precios', icon: 'banknote', admin: true },
     { k: 'catalogo', label: 'Catálogo', icon: 'package', admin: true },
+    { k: 'corte', label: 'Lista de corte', icon: 'scissors', admin: true },
     { k: 'clientes', label: 'Clientes', icon: 'contact' },
     { k: 'auditoria', label: 'Auditoría', icon: 'scroll-text', admin: true },
   ];
@@ -71,6 +73,7 @@ export function AdminPage() {
             {tab === 'catalogo' && <CatalogTab flash={flash} />}
             {tab === 'clientes' && <ClientsTab flash={flash} />}
             {tab === 'auditoria' && <AuditTab />}
+            {tab === 'corte' && <CutTemplatesTab flash={flash} />}
           </div>
         </main>
       </div>
