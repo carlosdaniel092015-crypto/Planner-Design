@@ -77,6 +77,8 @@ interface Renderer {
   init(): Promise<void>;
   createViewer(host: HTMLElement, opts: { onSelect?: (id: number | null, add: boolean) => void; onDrag?: Drag3D; onReady?: () => void }): Promise<Viewer>;
   snapshot(cfg: unknown, o: SnapOptions): Promise<string | null>;
+  /** COLLADA (.dae) of the furniture for SketchUp. */
+  exportDae(cfg: unknown): Promise<string>;
 }
 
 export interface SnapOptions {
@@ -171,4 +173,18 @@ export function setShadowsPref(on: boolean) {
     localStorage.setItem(SHADOWS_KEY, on ? '1' : '0');
   } catch {}
   window.dispatchEvent(new CustomEvent('planner:sombras', { detail: on }));
+}
+
+/** The project's furniture as a COLLADA file (SketchUp: Archivo → Importar), named after the project. */
+export async function exportSketchup(p: ProjectData): Promise<string> {
+  const r = await loadRenderer();
+  const dae = await r.exportDae({ ...sceneCfg(p, { sel: null, cotas: false, altos: true, dark: false }), name: p.pname });
+  const name = `${(p.pname || 'proyecto').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'proyecto'}.dae`;
+  const url = URL.createObjectURL(new Blob([dae], { type: 'model/vnd.collada+xml' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return name;
 }

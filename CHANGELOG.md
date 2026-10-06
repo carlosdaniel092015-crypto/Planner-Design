@@ -3,6 +3,13 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.30.0 · 2026-10-06
+
+### Exportar a SketchUp
+- En **Aprobación → Exportar** está **«Modelo 3D para SketchUp» (DAE)**. Descarga el proyecto en 3D para abrirlo en SketchUp con **Archivo → Importar → Archivos COLLADA (*.dae)**.
+- **Cada módulo llega como un grupo con su nombre** («M5 Columna horno»…), y la encimera como su propio grupo. Las medidas son reales y van en metros.
+- Los materiales llevan **el nombre y el color del catálogo** (Roble natural, Blanco mate, Cuarzo blanco…). Las texturas de imagen no se exportan; cada material va con su color.
+
 ## 1.29.0 · 2026-10-06
 
 ### Biblioteca de la empresa y biblioteca personal

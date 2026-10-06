@@ -21,7 +21,7 @@ import {
 } from '@core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type CatalogMaterial, type Currency, type ProjectDetail, request } from '../api';
-import { handleOf, sceneCfg } from '../editor/engine';
+import { exportSketchup, handleOf, sceneCfg } from '../editor/engine';
 import { Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg } from '../ui';
 import { CameraDialog } from './CameraDialog';
 import { exportNestingPdf, fetchNesting, NestingSection } from './Nesting';
@@ -174,10 +174,14 @@ export function ApprovalView(props: {
     }
     return true;
   };
-  const doExport = async (kind: 'pdf' | 'csv' | 'dxf' | 'opt' | 'optcsv') => {
+  const doExport = async (kind: 'pdf' | 'csv' | 'dxf' | 'opt' | 'optcsv' | 'dae') => {
     setExpOpen(false);
     try {
-      if (kind === 'pdf') {
+      if (kind === 'dae') {
+        setPdf({ pct: 40, step: 'Armando el modelo 3D…' });
+        const name = await exportSketchup(data);
+        flash(`Modelo 3D descargado: ${name}. En SketchUp: Archivo → Importar → Archivos COLLADA (*.dae).`);
+      } else if (kind === 'pdf') {
         setTab('pdf');
         await new Promise((r) => setTimeout(r, 400));
         if (!pdfRoot.current) return;
@@ -248,6 +252,7 @@ export function ApprovalView(props: {
                       ['pen-tool', 'Piezas para CNC', 'DXF', 'dxf'],
                       ['layout-grid', 'Optimización de corte', 'PDF', 'opt'],
                       ['table', 'Optimización de corte', 'CSV', 'optcsv'],
+                      ['box', 'Modelo 3D para SketchUp', 'DAE', 'dae'],
                     ] as const
                   ).map(([icon, l, ext, k]) => (
                     <button type="button" role="menuitem" key={k} className="val-btn" onClick={() => doExport(k)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 0, borderBottom: '1px solid var(--color-divider)', font: 'inherit', fontSize: 14, color: 'var(--color-text)', cursor: 'pointer', textAlign: 'left' }}>
