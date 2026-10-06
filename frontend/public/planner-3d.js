@@ -825,6 +825,35 @@ export async function createViewer(host, opts) { await init(); return new Viewer
 
 // ---------- offscreen snapshots ----------
 let snapR = null, queue = Promise.resolve();
+/** Post-processing for the photo-real renders (GTAO ambient occlusion); false when it cannot load (old GPU, offline). */
+let PP = null;
+async function post() {
+  if (PP !== null) return PP;
+  try {
+    const [ec, rp, gp, op] = await Promise.all(['EffectComposer', 'RenderPass', 'GTAOPass', 'OutputPass'].map(async n => import(await mod(`examples/jsm/postprocessing/${n}.js`))));
+    PP = { EffectComposer: ec.EffectComposer, RenderPass: rp.RenderPass, GTAOPass: gp.GTAOPass, OutputPass: op.OutputPass };
+  } catch (e) { console.warn('Oclusión ambiental no disponible', e); PP = false; }
+  return PP;
+}
+/** Renders with soft contact shadows in corners, joints and under the furniture; plain render if anything fails. */
+function renderHQ(r, scene, cam, w, h, pp) {
+  if (pp) {
+    try {
+      const comp = new pp.EffectComposer(r); comp.setPixelRatio(r.getPixelRatio()); comp.setSize(w, h);
+      comp.addPass(new pp.RenderPass(scene, cam));
+      const ao = new pp.GTAOPass(scene, cam, w, h);
+      ao.blendIntensity = 1;
+      ao.updateGtaoMaterial({ radius: .3, distanceExponent: 1.5, thickness: 1.2, scale: 1.1, samples: 16 });
+      ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 16 });
+      comp.addPass(ao); comp.addPass(new pp.OutputPass());
+      comp.render();
+      ao.dispose && ao.dispose(); comp.dispose();
+      return true;
+    } catch (e) { console.warn('render con oclusión', e); PP = false; }
+  }
+  r.render(scene, cam);
+  return false;
+}
 export function snapshot(cfg, o) {
   const job = queue.then(async () => {
     await init(); await resolveGlbs(cfg);
@@ -844,7 +873,7 @@ export function snapshot(cfg, o) {
     if (validCam(o.cam)) camFor(cam, new T.Vector3(...o.cam.target), o.cam.dist, o.cam.az, o.cam.polar);
     else camFor(cam, c, dist, o.ang != null ? o.ang * Math.PI / 180 : defaultAz(cfg), o.polar || (o.focusId ? 1.0 : 1.18));
     cutaway(root.userData.walls, cam, cfg);
-    snapR.render(scene, cam);
+    renderHQ(snapR, scene, cam, o.w, o.h, o.hq === false ? false : await post());
     const url = snapR.domElement.toDataURL('image/jpeg', .88);
     disposeTree(root);
     return url;

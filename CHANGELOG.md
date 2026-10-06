@@ -3,6 +3,12 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.31.0 · 2026-10-06
+
+### 3D más realista
+- Los renders de la **galería de vistas, el PDF y la página del cliente** llevan **oclusión ambiental**: sombras suaves de contacto en las esquinas, en la unión de la encimera con la pared, debajo de las alacenas y entre módulos. El diseño se ve con más profundidad, más parecido a una foto.
+- El editor 3D no cambia de velocidad, porque el efecto solo se aplica a los renders. También funciona sin conexión. Si el equipo no lo soporta, el render sale como antes.
+
 ## 1.30.0 · 2026-10-06
 
 ### Exportar a SketchUp

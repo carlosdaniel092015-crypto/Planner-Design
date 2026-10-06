@@ -13,6 +13,19 @@ const THREE_FILES = [
   'examples/jsm/geometries/RoundedBoxGeometry.js',
   'examples/jsm/utils/BufferGeometryUtils.js',
   'examples/jsm/utils/SkeletonUtils.js',
+  // Ambient occlusion (GTAO) for the gallery / PDF renders.
+  'examples/jsm/postprocessing/EffectComposer.js',
+  'examples/jsm/postprocessing/RenderPass.js',
+  'examples/jsm/postprocessing/GTAOPass.js',
+  'examples/jsm/postprocessing/OutputPass.js',
+  'examples/jsm/postprocessing/ShaderPass.js',
+  'examples/jsm/postprocessing/MaskPass.js',
+  'examples/jsm/postprocessing/Pass.js',
+  'examples/jsm/shaders/CopyShader.js',
+  'examples/jsm/shaders/GTAOShader.js',
+  'examples/jsm/shaders/PoissonDenoiseShader.js',
+  'examples/jsm/shaders/OutputShader.js',
+  'examples/jsm/math/SimplexNoise.js',
 ];
 
 interface ProtoMat {
@@ -92,6 +105,8 @@ export interface SnapOptions {
   open?: boolean;
   /** Hand-made camera; overrides ang / focusId framing. */
   cam?: CameraState;
+  /** false: plain render without ambient occlusion (faster). */
+  hq?: boolean;
 }
 
 const snapCache = new Map<string, Promise<string | null>>();
