@@ -1,7 +1,9 @@
 // Shared core (pure logic, no I/O). Ported from the Stephanny Planner prototype (planner-engine.js).
 // Units: centimetres for layout, millimetres for parts/cut list. Money: plain numbers.
 
-export type ProjectKind = 'cocina' | 'closet' | 'vestidor';
+export type ProjectKind = 'cocina' | 'closet' | 'vestidor' | 'tv';
+/** Catalogue family of a module (vestidores use the closet modules). */
+export type ModuleFamily = 'cocina' | 'closet' | 'tv';
 export type Currency = 'USD' | 'DOP';
 /** A–D are room walls (A top, B left, C right, D bottom); F is free-standing (island). */
 export type WallId = 'A' | 'B' | 'C' | 'D' | 'F';
@@ -83,7 +85,7 @@ export interface HardwareDefinition {
 }
 
 export interface ModuleDefinition extends ModuleShape {
-  projectType: 'cocina' | 'closet';
+  projectType: ModuleFamily;
   source: 'parametrico' | 'modelo3d';
   /** Labour/assembly per unit; for fridge/hood/modelo3d modules it is the whole price. */
   unitPrice: number;

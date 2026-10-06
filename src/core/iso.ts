@@ -2,6 +2,7 @@
 // Used for thumbnails and as a lightweight fallback when WebGL is not available.
 import { burnerSpots, type DrawItem, type Drawing } from './drawing';
 import { geo, shade, zocaloCm, zr } from './geometry';
+import { bodyMaterialOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -86,7 +87,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
   for (const m of list) {
     const g = geo(m, p.room);
     const [z0, z1] = zr(m, zoc);
-    const C = { f: col(m.fre || p.mats.frentes, '#c49a6c'), b: col(m.cue || p.mats.cuerpo, '#eeebe6'), c: col(p.mats.encimera, '#e9e7e2'), hd: col(p.mats.jaladeras, '#2a2928') };
+    const C = { f: col(m.fre || p.mats.frentes, '#c49a6c'), b: col(bodyMaterialOf(m, p.mats), '#eeebe6'), c: col(p.mats.encimera, '#e9e7e2'), hd: col(p.mats.jaladeras, '#2a2928') };
     // Wall B and islands turned 90° show their front on the x1 face.
     const isB = m.wall === 'B' || (m.wall === 'F' && m.rot === 90);
     const ex: Partial<DrawItem> = { mid: m.id };

@@ -14,7 +14,7 @@ export const ModuleInput = z
   .object({
     code,
     name: z.string().min(1).max(120),
-    projectType: z.enum(['cocina', 'closet']).default('cocina'),
+    projectType: z.enum(['cocina', 'closet', 'tv']).default('cocina'),
     source: z.enum(['parametrico', 'modelo3d']).default('parametrico'),
     type: z.enum(['base', 'upper', 'tall', 'fridge', 'hood']),
     category: z.string().min(1).max(60).default('Mis módulos'),

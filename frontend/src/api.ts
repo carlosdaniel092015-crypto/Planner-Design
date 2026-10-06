@@ -103,7 +103,7 @@ export interface Person {
 export interface ProjectSummary {
   id: string;
   name: string;
-  type: 'cocina' | 'closet';
+  type: 'cocina' | 'closet' | 'tv';
   status: Status;
   phase: number;
   ownerId: string;
@@ -167,7 +167,7 @@ export const api = {
   declineJoin: (id: string) => request<{ ok: true }>('POST', `/me/join-requests/${id}/decline`),
 
   listProjects: (timeoutMs?: number) => request<{ items: ProjectSummary[]; nextCursor: string | null }>('GET', '/projects?limit=100', undefined, {}, timeoutMs),
-  createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor'; name?: string; data?: ProjectData; currency?: Currency; clientRef?: string }, timeoutMs?: number) =>
+  createProject: (body: { ptype?: 'cocina' | 'closet' | 'vestidor' | 'tv'; name?: string; data?: ProjectData; currency?: Currency; clientRef?: string }, timeoutMs?: number) =>
     request<ProjectDetail>('POST', '/projects', body, {}, timeoutMs),
   getProject: (id: string, timeoutMs?: number) => request<ProjectDetail>('GET', `/projects/${id}`, undefined, {}, timeoutMs),
   saveProject: (id: string, body: { version: number; name?: string; currency?: Currency; phase?: number; coverUrl?: string | null; data: ProjectData }) =>

@@ -101,6 +101,6 @@ export interface LibModule {
   recipe: Record<string, unknown> | null;
   /** place: default location in the generated layout (MODULE_PLACES key). */
   anchor?: { place?: string } | null;
-  projectType?: 'cocina' | 'closet';
+  projectType?: 'cocina' | 'closet' | 'tv';
   active: boolean;
 }

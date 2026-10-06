@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { type CameraState, type Drawing, type DrawItem, drawsNative, front2D, frontsOf, geo, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
+import { bodyMaterialOf, type CameraState, type Drawing, type DrawItem, drawsNative, front2D, frontsOf, geo, isLooseFrontBoard, type ModuleInstance, type ProjectData, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -121,7 +121,14 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
   return {
     // Uploaded modules drawn as native modules (doors and drawers read from their boards or set in the library):
     // plinth, materials, handles and opening like the catalogue ones. The rest keep their own 3D model.
-    mods: p.mods.map((m) => (m.glb && drawsNative(m) ? { ...m, glb: undefined, fr: frontsOf(m) } : m)),
+    mods: p.mods.map((m) =>
+      m.glb && drawsNative(m)
+        ? { ...m, glb: undefined, fr: frontsOf(m) }
+        : // A loose board (TV panel, floating shelf) is cut from the fronts' board: draw it in that finish too.
+          isLooseFrontBoard(m) && !m.cue
+          ? { ...m, cue: bodyMaterialOf(m, p.mats) }
+          : m,
+    ),
     mats: p.mats,
     room: p.room,
     ops: p.ops,

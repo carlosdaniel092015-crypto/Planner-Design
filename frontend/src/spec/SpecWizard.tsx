@@ -23,6 +23,9 @@ import {
   type ProjectData,
   STEP_C,
   STEP_K,
+  STEP_T,
+  tvOf,
+  tvSize,
 } from '@core';
 import { type CSSProperties, useEffect, useState } from 'react';
 import type { CatalogMaterial } from '../api';
@@ -109,7 +112,11 @@ export function SpecWizard(props: {
 }) {
   const { data: s, step: st, setStep, commit, readOnly } = props;
   const kit = s.ptype === 'cocina';
-  const names = kit ? STEP_K : STEP_C;
+  const isTv = s.ptype === 'tv';
+  const names = kit ? STEP_K : isTv ? STEP_T : STEP_C;
+  const tvp = tvOf(s.tv);
+  const screen = tvSize(tvp.pulgadas);
+  const setTv = (patch: Partial<typeof tvp>) => set({ tv: { ...tvp, ...patch } });
   const appl = applOf(s.ptype, s.appl);
   const closet = closetOf(s.closet);
   const [tool, setTool] = useState<PointType>('agua');
@@ -126,21 +133,25 @@ export function SpecWizard(props: {
     1: ['¿Qué distribución tiene tu espacio?', kit ? 'Elige la forma general. Podrás ajustar cada módulo en el editor.' : 'Elige cómo se reparten los módulos en la habitación.'],
     2: ['Medidas del espacio', 'Captura el largo de cada muro y la altura del techo en centímetros. Agrega puertas y ventanas para evitar interferencias.'],
     3: ['¿Dónde están las instalaciones?', 'Elige un tipo y haz clic sobre un muro en la planta para ubicarlo. Luego puedes cambiar el muro, la distancia y la altura, o moverlo con el botón de mover.'],
-    4: [kit ? '¿Qué electrodomésticos llevará?' : '¿Qué accesorios quieres incluir?', kit ? 'Define el tipo de instalación y las medidas de cada equipo para reservar su hueco.' : 'Selecciona los accesorios y su forma de integración.'],
-    5: ['Preferencias de diseño', kit ? 'Estas elecciones definen materiales, alturas y herrajes de la propuesta.' : 'Indica cuánto espacio necesitas para cada tipo de prenda.'],
+    4: [kit ? '¿Qué electrodomésticos llevará?' : isTv ? '¿Qué equipos va a tener?' : '¿Qué accesorios quieres incluir?', kit ? 'Define el tipo de instalación y las medidas de cada equipo para reservar su hueco.' : isTv ? 'Consolas, barra de sonido y decodificador para reservar sus nichos.' : 'Selecciona los accesorios y su forma de integración.'],
+    5: ['Preferencias de diseño', kit ? 'Estas elecciones definen materiales, alturas y herrajes de la propuesta.' : isTv ? 'Tamaño y altura de la TV, torres, repisas, panel y alacena.' : 'Indica cuánto espacio necesitas para cada tipo de prenda.'],
     6: ['Revisa tus respuestas', 'Confirma que todo esté correcto antes de generar la distribución propuesta.'],
   };
 
   const cnt = (t: PointType) => s.pts.filter((p) => p.t === t).length;
   const applOn = [...appliancesFor(s.ptype).map((a) => ({ k: a.k, name: a.name })), ...Object.keys(appl).filter(isCustomAppl).map((k) => ({ k, name: appl[k]!.name ?? 'Accesorio' }))].filter((a) => appl[a.k]?.on);
-  const prefTxt = kit ? `${s.prefs.estilo ?? 'Contemporáneo'} · ${s.prefs.apertura}` : `Colgado ${String(closet.largo).replace('.', ',')} m + ${String(closet.corto).replace('.', ',')} m`;
+  const prefTxt = kit
+    ? `${s.prefs.estilo ?? 'Contemporáneo'} · ${s.prefs.apertura}`
+    : isTv
+      ? `TV de ${tvp.pulgadas} pulgadas · ${tvp.torres} torre${tvp.torres === 1 ? '' : 's'} · ${tvp.repisas} repisa${tvp.repisas === 1 ? '' : 's'}`
+      : `Colgado ${String(closet.largo).replace('.', ',')} m + ${String(closet.corto).replace('.', ',')} m`;
   const summary: [string, string, string, number][] = [
     ['shapes', 'Tipo de proyecto', s.ptype === 'cocina' ? 'Cocina' : s.ptype === 'closet' ? 'Closet' : 'Vestidor', 0],
     ['layout-grid', 'Distribución', `${lay?.name ?? '—'} · muros ${dist.walls.join(', ')}${dist.island.on ? ' + isla' : ''}`, 1],
     ['ruler', 'Medidas', `${s.room.A} × ${s.room.B} cm · techo ${s.room.H} cm`, 2],
     ['door-open', 'Puertas y ventanas', `${s.ops.filter((o) => o.t === 'puerta').length} puerta(s) · ${s.ops.filter((o) => o.t === 'ventana').length} ventana(s)`, 2],
     ['plug', 'Instalaciones', `${cnt('agua')} agua · ${cnt('desague')} desagüe · ${cnt('elec')} eléctrico · ${cnt('gas')} gas`, 3],
-    ['refrigerator', kit ? 'Electrodomésticos' : 'Accesorios', applOn.map((a) => a.name).join(', ') || 'Ninguno', 4],
+    ['refrigerator', kit ? 'Electrodomésticos' : isTv ? 'Equipos' : 'Accesorios', applOn.map((a) => a.name).join(', ') || 'Ninguno', 4],
     ['palette', 'Preferencias', prefTxt, 5],
   ];
 
@@ -249,7 +260,7 @@ export function SpecWizard(props: {
         {kit && <CmField label="Pasillo mínimo" value={dist.aisle} onCommit={(v) => setDist({ aisle: clampN(v, 60, 200) })} disabled={readOnly} />}
       </div>
       {kit && <p style={{ margin: '-8px 0 0', fontSize: 12, color: MUTED }}>Altura de encimera ≈ {cmOf(s.prefs.zocalo, 10) + dist.baseH + 3} cm (zócalo + bajo + encimera).</p>}
-      <div style={{ display: 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
+      <div style={{ display: isTv ? 'none' : 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', paddingBottom: 10 }}>
           <input type="checkbox" checked={dist.island.on} disabled={readOnly} onChange={() => toCustom({ island: { ...s.dist?.island, on: !dist.island.on, d: dist.island.d } })} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: 0 }} />
           {islandLabel}
@@ -769,7 +780,20 @@ export function SpecWizard(props: {
               </div>
             )}
 
-            {st === 5 && !kit && (
+            {st === 5 && isTv && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                {styleBlock}
+                <TvPrefsBlock tvp={tvp} screen={screen} setTv={setTv} readOnly={readOnly} />
+                <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 24, paddingTop: 24, borderTop: '2px solid var(--color-divider)' }}>
+                  {seg('Tipo de apertura', s.prefs.apertura, ['Jaladera', 'Gola', 'Push'], 'Push: sin jaladeras, se abre al presionar.', (v) => setPrefs({ apertura: v as 'Jaladera' }), 'apertura')}
+                  {segCm('Zócalo', s.prefs.zocalo, ['5 cm', '10 cm'], 'Altura del rodapié bajo la consola y las torres.', (v) => setPrefs({ zocalo: v }), 'zocalo', 0, 30, 5)}
+                </div>
+                <Budget value={s.prefs.presupuesto ?? 150000} currency={props.currency} onChange={(v) => setPrefs({ presupuesto: v })} disabled={readOnly} />
+                {modulePicker}
+              </div>
+            )}
+
+            {st === 5 && !kit && !isTv && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
                 {styleBlock}
                 <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '24px 40px', maxWidth: 900 }}>
@@ -855,7 +879,7 @@ export function SpecWizard(props: {
                         ]),
                       edit: 3,
                     },
-                    { n: 4, title: kit ? 'Electrodomésticos' : 'Accesorios', rows: applOn.map((a) => {
+                    { n: 4, title: kit ? 'Electrodomésticos' : isTv ? 'Equipos' : 'Accesorios', rows: applOn.map((a) => {
                       const o = appliancesFor(s.ptype).find((x) => x.k === a.k);
                       const c = appl[a.k]!;
                       const opt = o?.opts?.values.find((v) => v.v === (c.opt ?? o.opts!.values[0]!.v))?.l;
@@ -872,7 +896,16 @@ export function SpecWizard(props: {
                             ['Zócalo', s.prefs.zocalo ?? '—'],
                             ['Módulos propios', ownModules ? String(ownModules) : 'Estándar'],
                           ]
-                        : [
+                        : isTv
+                          ? [
+                              ['TV', `${tvp.pulgadas} pulgadas · ${screen.w} × ${screen.h} cm`],
+                              ['Centro de la TV', `${tvp.centro} cm del piso`],
+                              ['Torres', String(tvp.torres)],
+                              ['Repisas', String(tvp.repisas)],
+                              ['Panel / alacena', `${tvp.panel ? 'Sí' : 'No'} / ${tvp.alacena ? 'Sí' : 'No'}`],
+                              ['Módulos propios', ownModules ? String(ownModules) : 'Estándar'],
+                            ]
+                          : [
                             ['Colgado largo', `${closet.largo} m`],
                             ['Colgado corto', `${closet.corto} m`],
                             ['Cajoneras', String(closet.cajoneras)],
@@ -991,6 +1024,66 @@ export function SpecWizard(props: {
         @media (max-width: 560px){.spec-next{min-width:0!important;flex:1;max-width:220px}.spec-pad .btn-secondary{padding:0 12px!important}}
         @media (max-width: 760px){.spec-pad{padding-left:16px!important;padding-right:16px!important}.grid-3,.grid-2{grid-template-columns:minmax(0,1fr)!important}.step-name{display:none}}
       `}</style>
+    </div>
+  );
+}
+
+/** Especificaciones → Preferencias of a "Mueble de TV": screen size and height, towers, shelves, panel, upper cabinet. */
+function TvPrefsBlock({
+  tvp,
+  screen,
+  setTv,
+  readOnly,
+}: {
+  tvp: { pulgadas: number; centro: number; torres: number; repisas: number; panel: boolean; alacena: boolean };
+  screen: { w: number; h: number };
+  setTv: (patch: Partial<{ pulgadas: number; centro: number; torres: number; repisas: number; panel: boolean; alacena: boolean }>) => void;
+  readOnly: boolean;
+}) {
+  const range = (title: string, value: number, min: number, max: number, step: number, unit: string, note: string, pick: (v: number) => void) => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <h6 style={{ margin: 0 }}>{title}</h6>
+        <span style={{ fontSize: 20, fontWeight: 800 }}>
+          {value}
+          {unit}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => pick(+e.target.value)} disabled={readOnly} aria-label={title} style={{ flex: 1, minWidth: 0, accentColor: 'var(--color-accent)' }} />
+        <Num label={`${title}${unit}`} value={value} onCommit={(v) => pick(Math.max(min, Math.min(max, Math.round(v))))} disabled={readOnly} style={{ width: 76 }} />
+      </div>
+      <p style={{ fontSize: 12, margin: '4px 0 0', color: MUTED }}>{note}</p>
+    </div>
+  );
+  const check = (label: string, on: boolean, pick: (v: boolean) => void, note: string) => (
+    <label style={{ display: 'flex', alignItems: 'start', gap: 10, cursor: 'pointer' }}>
+      <input type="checkbox" checked={on} disabled={readOnly} onChange={() => pick(!on)} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: '2px 0 0' }} />
+      <span>
+        <span style={{ fontWeight: 700 }}>{label}</span>
+        <span style={{ display: 'block', fontSize: 12, color: MUTED }}>{note}</span>
+      </span>
+    </label>
+  );
+  return (
+    <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '24px 40px', maxWidth: 900 }}>
+      {range('Tamaño de la TV', tvp.pulgadas, 32, 100, 1, '"', `Pantalla de ${screen.w} × ${screen.h} cm.`, (v) => setTv({ pulgadas: v }))}
+      {range('Altura del centro de la TV', tvp.centro, 70, 160, 1, ' cm', 'Del piso al centro de la pantalla; unos 105–115 cm para verla sentado.', (v) => setTv({ centro: v }))}
+      <div>
+        <h6 style={{ margin: '0 0 10px' }}>Torres laterales</h6>
+        <div className="seg">
+          {[0, 1, 2].map((n) => (
+            <label key={n} className="seg-opt">
+              <input type="radio" name="torres" checked={tvp.torres === n} onChange={() => setTv({ torres: n })} disabled={readOnly} />
+              {n === 0 ? 'Sin torres' : n === 1 ? '1 torre' : '2 torres'}
+            </label>
+          ))}
+        </div>
+        <p style={{ fontSize: 12, margin: '4px 0 0', color: MUTED }}>Columnas a los lados de la consola, con nichos abiertos y puerta.</p>
+      </div>
+      {range('Repisas flotantes', tvp.repisas, 0, 8, 1, '', 'Se reparten a los lados del panel, por niveles.', (v) => setTv({ repisas: v }))}
+      {check('Panel detrás de la TV', tvp.panel, (v) => setTv({ panel: v }), 'Un tablero del ancho de la TV + 60 cm, desde la consola hasta arriba de la pantalla.')}
+      {check('Alacena superior', tvp.alacena, (v) => setTv({ alacena: v }), 'Gabinete con puertas sobre la TV, del ancho de la consola.')}
     </div>
   );
 }

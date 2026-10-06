@@ -18,7 +18,7 @@ import {
 // ---------- enums ----------
 export const currencyEnum = pgEnum('currency', ['USD', 'DOP']);
 export const roleEnum = pgEnum('user_role', ['admin', 'disenador', 'taller', 'lectura']);
-export const projectTypeEnum = pgEnum('project_type', ['cocina', 'closet']);
+export const projectTypeEnum = pgEnum('project_type', ['cocina', 'closet', 'tv']);
 export const projectStatusEnum = pgEnum('project_status', ['borrador', 'diseno', 'enviado', 'cambios_solicitados', 'aprobado']);
 export const moduleSourceEnum = pgEnum('module_source', ['parametrico', 'modelo3d']);
 export const materialKindEnum = pgEnum('material_kind', ['madera', 'solido', 'piedra', 'metal', 'vidrio']);

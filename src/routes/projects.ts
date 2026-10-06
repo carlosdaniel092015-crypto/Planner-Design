@@ -38,7 +38,7 @@ const ProjectSummary = z
   .object({
     id: z.uuid(),
     name: z.string(),
-    type: z.enum(['cocina', 'closet']),
+    type: z.enum(['cocina', 'closet', 'tv']),
     status: Status,
     phase: z.number().int(),
     ownerId: z.uuid(),
@@ -71,7 +71,7 @@ const CreateBody = z
   .object({
     name: z.string().min(1).max(160).optional(),
     clientId: z.uuid().nullable().optional(),
-    ptype: z.enum(['cocina', 'closet', 'vestidor']).optional().openapi({ description: 'Si no envías data, se crea con la plantilla del tipo.' }),
+    ptype: z.enum(['cocina', 'closet', 'vestidor', 'tv']).optional().openapi({ description: 'Si no envías data, se crea con la plantilla del tipo.' }),
     currency: Currency.optional(),
     data: DataField.optional(),
     clientRef: z
@@ -202,7 +202,7 @@ export function projectRoutes() {
       request: {
         query: z.object({
           status: Status.optional(),
-          type: z.enum(['cocina', 'closet']).optional(),
+          type: z.enum(['cocina', 'closet', 'tv']).optional(),
           scope: z.enum(['todos', 'mios', 'compartidos']).default('todos').openapi({ description: 'Tus proyectos, los que te compartieron o ambos.' }),
           q: z.string().max(100).optional(),
           ...paginationQuery,

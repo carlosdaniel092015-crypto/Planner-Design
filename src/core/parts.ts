@@ -113,6 +113,14 @@ export function placedPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'panels' 
   });
 }
 
+/** A loose board cut from the fronts' board (TV panel, floating shelf): drawn in the fronts' finish. */
+export const isLooseFrontBoard = (m: Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb'>>) =>
+  !m.fr?.length && !m.glb && !!m.panels?.length && m.panels.every((b) => b.slot === 'frentes');
+
+/** Material code of a module's body (carcass) as drawn. */
+export const bodyMaterialOf = (m: Pick<ModuleInstance, 'cue' | 'fre'> & Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb'>>, mats: { cuerpo: string; frentes: string }) =>
+  m.cue || (isLooseFrontBoard(m) ? m.fre || mats.frentes : mats.cuerpo);
+
 /** An uploaded model drawn as a native module: built from boards unless set otherwise, or converted by hand. */
 export function drawsNative(m: Pick<ModuleInstance, 'glb' | 'panels' | 'draw'>): boolean {
   return (m.draw ?? (m.panels?.length ? 'nativo' : 'modelo')) === 'nativo';
