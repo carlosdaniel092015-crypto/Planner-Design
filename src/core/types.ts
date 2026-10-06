@@ -54,6 +54,8 @@ export interface ModuleShape {
 
 export interface MaterialDefinition {
   code: string;
+  /** Another user's personal texture: kept for pricing, not offered. */
+  hidden?: boolean;
   name: string;
   /** Display type, e.g. "Melamina", "Chapa natural", "Cuarzo 20 mm". Part labels use its first word. */
   type: string;
@@ -94,6 +96,8 @@ export interface ModuleDefinition extends ModuleShape {
   active: boolean;
   /** Default location in the generated layout (MODULE_PLACES key), set in Bibliotecas → Módulos. */
   place?: string;
+  /** Another user's personal module: kept for pricing, never offered or placed automatically. */
+  hidden?: boolean;
 }
 
 export interface PricingSettings {

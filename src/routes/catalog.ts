@@ -1,4 +1,5 @@
 import { createRoute, z } from '@hono/zod-openapi';
+import { hiddenCodes, visibleTo } from '../services/library-scope';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { GROUPS, round2 } from '../core';
 import { files, hardwarePrices, materials, moduleDefinitions } from '../db/schema';
@@ -52,6 +53,7 @@ export async function materialsWithMaps(db: Db, orgId: string, onlyActive: boole
     ...serialize(r),
     id: r.id,
     source: r.source,
+    ownerUserId: r.ownerUserId,
     maps: { baseColor: mapOf(r.baseColorFileId), normal: mapOf(r.normalFileId), roughness: mapOf(r.roughnessFileId), ao: mapOf(r.aoFileId), metalness: mapOf(r.metalnessFileId) },
   }));
 }
@@ -91,21 +93,27 @@ export function catalogRoutes() {
       // New standard modules (appliances…) for organisations created before they existed.
       await ensureDefaultModules(db, a.org);
       const [mods, mats, hw, context] = await Promise.all([
-        db.select().from(moduleDefinitions).where(and(eq(moduleDefinitions.organizationId, a.org.id), eq(moduleDefinitions.active, true))).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.name)),
+        db.select().from(moduleDefinitions).where(and(visibleTo(moduleDefinitions, a), eq(moduleDefinitions.active, true))).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.name)),
         materialsWithMaps(db, a.org.id, true),
         db.select().from(hardwarePrices).where(and(eq(hardwarePrices.organizationId, a.org.id), eq(hardwarePrices.active, true))).orderBy(asc(hardwarePrices.code)),
         loadPricingContext(db, a.org),
       ]);
+      // Other users' personal items: out of the lists and marked hidden in the context (still priced there for shared projects).
+      const hidden = await hiddenCodes(db, a);
       const payload = {
         modules: mods.map((m) => withPrice(serialize(m), 'unitPrice', a.org, cur)),
-        materials: mats.map((m) => withPrice(m, 'priceM2', a.org, cur)),
+        materials: mats.filter((m) => !m.ownerUserId || m.ownerUserId === a.user.id).map((m) => withPrice(m, 'priceM2', a.org, cur)),
         hardware: hw.map((h) => withPrice(serialize(h), 'unitPrice', a.org, cur)),
         groups: GROUPS.map((g) => ({ k: g.k, label: g.label })),
         pricing: pricingJson(a.org),
         // Own modules the generated layout uses in new projects (Especificaciones → Módulos de la propuesta).
         moduleDefaults: moduleDefaultsOf(a.org),
         // Exactly what the server feeds to src/core (computeEstimate / validateProject), so the editor matches it.
-        context,
+        context: {
+          ...context,
+          modules: Object.fromEntries(Object.entries(context.modules).map(([k, m]) => [k, hidden.modules.has(k) ? { ...m, hidden: true } : m])),
+          materials: Object.fromEntries(Object.entries(context.materials).map(([k, m]) => [k, hidden.materials.has(k) ? { ...m, hidden: true } : m])),
+        },
       };
       const text = JSON.stringify(payload);
       const etag = `"${sha256(text).slice(0, 32)}"`;
@@ -124,7 +132,7 @@ export function catalogRoutes() {
   r.openapi(createRoute({ method: 'get', path: '/admin/modules', ...admin('Catálogo (admin)'), summary: 'Listar módulos (incluye inactivos)', responses: { 200: json(Items), ...authErrors } }), async (c) => {
     const a = requireAuth(c);
     assertCan(a.user, 'catalog:admin');
-    const rows = await c.var.deps.db.select().from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, a.org.id)).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.code));
+    const rows = await c.var.deps.db.select().from(moduleDefinitions).where(visibleTo(moduleDefinitions, a)).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.code));
     return c.json({ items: rows.map(serialize) }, 200);
   });
   r.openapi(

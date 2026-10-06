@@ -66,6 +66,8 @@ export const lib = {
 
 export interface LibTexture {
   id: string;
+  /** Personal texture («Solo yo»): its owner; null = the company's. */
+  ownerUserId?: string | null;
   code: string;
   name: string;
   type: string;
@@ -99,6 +101,8 @@ export interface LibModule {
   thumbnailUrl: string | null;
   modelFileId: string | null;
   recipe: Record<string, unknown> | null;
+  /** Personal item («Solo yo»): its owner; null = the company's. */
+  ownerUserId?: string | null;
   /** place: default location in the generated layout (MODULE_PLACES key). */
   anchor?: { place?: string } | null;
   projectType?: 'cocina' | 'closet' | 'tv';

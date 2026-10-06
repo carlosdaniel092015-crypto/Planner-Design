@@ -3,6 +3,18 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.29.0 · 2026-10-06
+
+### Biblioteca de la empresa y biblioteca personal
+- En **Bibliotecas**, cada tablero y cada módulo tiene **«Visible para»**:
+  - **Toda la empresa:** como hasta ahora.
+  - **Solo yo:** solo tú lo ves en tu biblioteca, en la paleta del editor y en el asistente. Ni siquiera el administrador lo ve.
+- **«Guardar lo nuevo en»** elige dónde van tus subidas, importaciones y módulos nuevos: la biblioteca de la empresa o la tuya.
+- **«Mostrar»** filtra la lista: todo, de la empresa o solo los míos.
+- **Compartir con la empresa:** pasa algo tuyo a «Toda la empresa» cuando quieras. Quitarle algo a la empresa (pasarlo a «Solo yo») solo lo hace un administrador.
+- Si alguien borra su cuenta o se cambia de organización, sus módulos y tableros personales se quedan en la biblioteca de la empresa.
+- Un proyecto compartido que usa un módulo personal de otra persona se ve y se cotiza igual para todos. Ese módulo simplemente no aparece en tu paleta.
+
 ## 1.28.0 · 2026-10-06
 
 ### Lista de corte con el formato de cada empresa

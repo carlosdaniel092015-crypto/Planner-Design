@@ -36,6 +36,7 @@ Antes de dar algo por terminado: `npm run typecheck && npm run lint && npm test 
   Cargar siempre con `getProject` (trae `access`) y pasar `{ access }` a los `assertCan('project:…')`; sin `access` se niega.
   Añadir una acción nueva = añadirla a la matriz y a `tests/permissions.test.ts`.
   **Plataforma** (`src/routes/platform.ts`): fuera de la matriz por rol; solo los correos de `PLATFORM_ADMIN_EMAILS` (403 al resto). Ven todas las organizaciones.
+- **Biblioteca personal**: módulos y texturas con `owner_user_id` solo los ve y edita su dueño (`src/services/library-scope.ts`: `visibleTo`, `assertVisible`); a los demás, 404. El catálogo los manda marcados `hidden` en `context` (precios iguales en proyectos compartidos) y el núcleo nunca ofrece ni coloca un módulo `hidden`.
 - **Planes**: los límites se aplican siempre (con o sin Stripe). Sin Stripe el plan lo asigna la plataforma (`plan_status = manual`). Cuentas nuevas: Gratis.
 - **Correo**: tras una transacción ya confirmada usar `trySend` (`src/services/mailer.ts`), nunca `mailer.send` directo: un fallo del proveedor no debe dar 500.
 - **Auditoría**: crear/actualizar/eliminar/enviar/aprobar/precios/roles → `audit(...)` dentro de la misma transacción.

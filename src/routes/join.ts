@@ -1,4 +1,5 @@
 import { createRoute, z } from '@hono/zod-openapi';
+import { releasePersonalLibrary } from '../services/library-scope';
 import { and, count, eq, gt, isNull, ne, notLike } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbOrTx } from '../db/client';
@@ -120,6 +121,8 @@ export function joinRoutes() {
         const [target] = await tx.select().from(organizations).where(eq(organizations.id, req.organizationId)).limit(1);
         if (!target) throw notFound('La organización');
         await requireOrgRoom(tx, target, 'users');
+        // Their personal library stays with the organisation they leave.
+        await releasePersonalLibrary(tx, a.org.id, a.user.id);
         const [u] = await tx.update(users).set({ organizationId: target.id, role: req.role, updatedAt: new Date() }).where(eq(users.id, a.user.id)).returning();
         await tx.update(orgJoinRequests).set({ acceptedAt: new Date() }).where(eq(orgJoinRequests.id, req.id));
         // Shares belong to the organisation being left.

@@ -1,4 +1,5 @@
 import { createRoute, z } from '@hono/zod-openapi';
+import { assertVisible, ownerFor, visibleTo } from '../services/library-scope';
 import { and, asc, eq } from 'drizzle-orm';
 import { bodyLimit } from 'hono/body-limit';
 import { materials, moduleDefinitions } from '../db/schema';
@@ -35,7 +36,7 @@ export function libraryRoutes() {
     const a = requireAuth(c);
     assertCan(a.user, 'library:read');
     const all = await materialsWithMaps(c.var.deps.db, a.org.id, false);
-    return c.json({ items: all.filter((m) => m.source === 'subido') }, 200);
+    return c.json({ items: all.filter((m) => m.source === 'subido' && (!m.ownerUserId || m.ownerUserId === a.user.id)) }, 200);
   });
   r.openapi(
     createRoute({
@@ -52,7 +53,13 @@ export function libraryRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const row = await db.transaction((tx) => createTexture(tx, storage, a, c.req.valid('json')));
+      const { personal, ...input } = c.req.valid('json');
+      const row = await db.transaction(async (tx) => {
+        const created = await createTexture(tx, storage, a, input);
+        if (!personal) return created;
+        const [own] = await tx.update(materials).set({ ownerUserId: a.user.id }).where(eq(materials.id, created.id)).returning();
+        return own!;
+      });
       const [withMaps] = (await materialsWithMaps(db, a.org.id, false)).filter((m) => m.id === row.id);
       return c.json(withMaps ?? serialize(row), 201);
     },
@@ -63,8 +70,15 @@ export function libraryRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const patch = await sentOnly(c, c.req.valid('json'));
-      const row = await db.transaction((tx) => updateTexture(tx, storage, a, c.req.valid('param').id, patch));
+      const { personal, ...patch } = await sentOnly(c, c.req.valid('json'));
+      const id = c.req.valid('param').id;
+      const [cur] = await db.select({ ownerUserId: materials.ownerUserId }).from(materials).where(and(eq(materials.id, id), eq(materials.organizationId, a.org.id)));
+      assertVisible(cur, a, 'La textura');
+      const row = await db.transaction(async (tx) => {
+        let out = Object.keys(patch).length ? await updateTexture(tx, storage, a, id, patch) : undefined;
+        if (personal !== undefined) [out] = await tx.update(materials).set({ ownerUserId: ownerFor(personal, cur!, a) }).where(eq(materials.id, id)).returning();
+        return out ?? (await tx.select().from(materials).where(eq(materials.id, id)))[0]!;
+      });
       return c.json(serialize(row), 200);
     },
   );
@@ -75,8 +89,9 @@ export function libraryRoutes() {
       assertCan(a.user, 'library:write');
       const { db } = c.var.deps;
       const id = c.req.valid('param').id;
-      const [cur] = await db.select({ id: materials.id, source: materials.source }).from(materials).where(and(eq(materials.id, id), eq(materials.organizationId, a.org.id)));
+      const [cur] = await db.select({ id: materials.id, source: materials.source, ownerUserId: materials.ownerUserId }).from(materials).where(and(eq(materials.id, id), eq(materials.organizationId, a.org.id)));
       if (!cur || cur.source !== 'subido') throw notFound('La textura');
+      assertVisible(cur, a, 'La textura');
       await db.transaction((tx) => updateMaterial(tx, a, id, { active: false }));
       return c.body(null, 204);
     },
@@ -86,7 +101,7 @@ export function libraryRoutes() {
   r.openapi(createRoute({ method: 'get', path: '/modules', tags, summary: 'Módulos de la biblioteca (incluye inactivos)', security, responses: { 200: json(z.object({ items: z.array(Any) })), ...authErrors } }), async (c) => {
     const a = requireAuth(c);
     assertCan(a.user, 'library:read');
-    const rows = await c.var.deps.db.select().from(moduleDefinitions).where(eq(moduleDefinitions.organizationId, a.org.id)).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.code));
+    const rows = await c.var.deps.db.select().from(moduleDefinitions).where(visibleTo(moduleDefinitions, a)).orderBy(asc(moduleDefinitions.sort), asc(moduleDefinitions.code));
     return c.json({ items: rows.map(serialize) }, 200);
   });
   r.openapi(
@@ -105,7 +120,13 @@ export function libraryRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const out = await db.transaction((tx) => createLibraryModule(tx, storage, a, c.req.valid('json')));
+      const { personal, ...input } = c.req.valid('json');
+      const out = await db.transaction(async (tx) => {
+        const created = await createLibraryModule(tx, storage, a, input);
+        if (!personal) return created;
+        const [own] = await tx.update(moduleDefinitions).set({ ownerUserId: a.user.id }).where(eq(moduleDefinitions.id, created.module.id)).returning();
+        return { ...created, module: own! };
+      });
       return c.json({ module: serialize(out.module), model: out.model }, 201);
     },
   );
@@ -115,8 +136,16 @@ export function libraryRoutes() {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
       const { db, storage } = c.var.deps;
-      const patch = await sentOnly(c, c.req.valid('json'));
-      const out = await db.transaction((tx) => updateLibraryModule(tx, storage, a, c.req.valid('param').id, patch));
+      const { personal, ...patch } = await sentOnly(c, c.req.valid('json'));
+      const id = c.req.valid('param').id;
+      const [cur] = await db.select({ ownerUserId: moduleDefinitions.ownerUserId }).from(moduleDefinitions).where(and(eq(moduleDefinitions.id, id), eq(moduleDefinitions.organizationId, a.org.id)));
+      assertVisible(cur, a, 'El módulo');
+      const out = await db.transaction(async (tx) => {
+        const res = await updateLibraryModule(tx, storage, a, id, patch);
+        if (personal === undefined) return res;
+        const [own] = await tx.update(moduleDefinitions).set({ ownerUserId: ownerFor(personal, cur!, a) }).where(eq(moduleDefinitions.id, id)).returning();
+        return { ...res, module: own! };
+      });
       return c.json({ module: serialize(out.module), model: out.model }, 200);
     },
   );
@@ -125,7 +154,10 @@ export function libraryRoutes() {
     async (c) => {
       const a = requireAuth(c);
       assertCan(a.user, 'library:write');
-      await c.var.deps.db.transaction((tx) => updateModule(tx, a, c.req.valid('param').id, { active: false }));
+      const id = c.req.valid('param').id;
+      const [cur] = await c.var.deps.db.select({ ownerUserId: moduleDefinitions.ownerUserId }).from(moduleDefinitions).where(and(eq(moduleDefinitions.id, id), eq(moduleDefinitions.organizationId, a.org.id)));
+      assertVisible(cur, a, 'El módulo');
+      await c.var.deps.db.transaction((tx) => updateModule(tx, a, id, { active: false }));
       return c.body(null, 204);
     },
   );
@@ -225,7 +257,7 @@ export function libraryRoutes() {
       const raw = (c.req.valid('query').items ?? 'textures,modules').split(',').map((s) => s.trim());
       const items = raw.filter((x): x is ExportItem => x === 'textures' || x === 'modules');
       if (!items.length) throw unprocessable('ITEMS_INVALIDOS', 'items debe incluir "textures" y/o "modules".');
-      const zip = await exportLibrary(c.var.deps.db, c.var.deps.storage, a.org.id, items);
+      const zip = await exportLibrary(c.var.deps.db, c.var.deps.storage, a.org.id, items, a.user.id);
       const date = new Date().toISOString().slice(0, 10);
       return c.body(zip as Uint8Array<ArrayBuffer>, 200, {
         'Content-Type': 'application/zip',
