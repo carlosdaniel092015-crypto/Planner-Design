@@ -17,9 +17,10 @@ import {
   plan,
   type ProjectData,
   type ValidationIssue,
+  PRESET_CUT_TEMPLATES,
 } from '@core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type CatalogMaterial, type Currency, type ProjectDetail } from '../api';
+import { ApiError, type Approval, type ApprovalLink, api, type Catalog, type CatalogMaterial, type Currency, type ProjectDetail, request } from '../api';
 import { handleOf, sceneCfg } from '../editor/engine';
 import { Dialog, fmtMoney, Icon, MUTED, relativeTime, Svg } from '../ui';
 import { CameraDialog } from './CameraDialog';
@@ -70,6 +71,27 @@ export function ApprovalView(props: {
   const errors = props.issues.filter((i) => i.st === 'err');
   const [tab, setTab] = useState<Tab>('galeria');
   const [expOpen, setExpOpen] = useState(false);
+  // Cut list template for the CSV (Administración → Lista de corte), remembered on this device.
+  const [cutTpls, setCutTpls] = useState<{ id: string; name: string }[]>(PRESET_CUT_TEMPLATES.map((t) => ({ id: t.id, name: t.name })));
+  const [cutTpl, setCutTplState] = useState(() => {
+    try {
+      return localStorage.getItem('planner.plantillaCorte') || 'estandar';
+    } catch {
+      return 'estandar';
+    }
+  });
+  const setCutTpl = (id: string) => {
+    setCutTplState(id);
+    try {
+      localStorage.setItem('planner.plantillaCorte', id);
+    } catch {}
+  };
+  useEffect(() => {
+    request<{ cutTemplates?: { id: string; name: string }[] }>('GET', '/organization')
+      .then((o) => setCutTpls([...PRESET_CUT_TEMPLATES.map((t) => ({ id: t.id, name: t.name })), ...(o.cutTemplates ?? []).map((t) => ({ id: t.id, name: t.name }))]))
+      .catch(() => {});
+  }, []);
+  const cutTplId = cutTpls.some((t) => t.id === cutTpl) ? cutTpl : 'estandar';
   const [sendOpen, setSendOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -176,8 +198,11 @@ export function ApprovalView(props: {
         }
       } else {
         if (!(await guard())) return;
-        const name = kind === 'csv' ? await downloadApi(`/projects/${project.id}/cutlist.csv`, 'lista-de-corte.csv') : await downloadApi(`/projects/${project.id}/pieces.dxf`, 'piezas.dxf');
-        flash(kind === 'csv' ? `Lista de corte descargada (${name}, compatible con Excel)` : `Piezas en DXF descargadas (${name}, en mm)`);
+        const name =
+          kind === 'csv'
+            ? await downloadApi(`/projects/${project.id}/cutlist.csv?plantilla=${encodeURIComponent(cutTplId)}`, 'lista-de-corte.csv')
+            : await downloadApi(`/projects/${project.id}/pieces.dxf`, 'piezas.dxf');
+        flash(kind === 'csv' ? `Lista de corte descargada (${name}, plantilla «${cutTpls.find((t) => t.id === cutTplId)?.name ?? 'Estándar'}»)` : `Piezas en DXF descargadas (${name}, en mm)`);
       }
     } catch (e) {
       flash(`No se pudo exportar: ${e instanceof Error ? e.message : 'error'}`);
@@ -402,6 +427,16 @@ export function ApprovalView(props: {
               <div style={{ fontSize: 14, color: SOFT }}>
                 {cut.reduce((a, g) => a + g.pieces, 0)} piezas · {cut.reduce((a, g) => a + g.area, 0).toFixed(1).replace('.', ',')} m² · {cut.length} materiales · agrupado por material y espesor
               </div>
+            </div>
+            <div className="field" style={{ minWidth: 200 }}>
+              <label htmlFor="cut-tpl">Plantilla</label>
+              <select id="cut-tpl" className="input" value={cutTplId} onChange={(e) => setCutTpl(e.target.value)} title="Formato del CSV (se configuran en Administración → Lista de corte)">
+                {cutTpls.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <button type="button" className="btn btn-secondary" onClick={() => doExport('csv')}>
               <Icon name="file-spreadsheet" size={15} />

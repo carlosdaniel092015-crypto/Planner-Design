@@ -3,6 +3,16 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.28.0 · 2026-10-06
+
+### Lista de corte con el formato de cada empresa
+- Nueva sección **Administración → Lista de corte** para armar **plantillas** con el formato que pide cada optimizador o formulario de pedido:
+  - **Columnas:** eliges qué dato va en cada una, con el **nombre de encabezado** que quieras y en el orden que quieras. Puedes agregar cantos por lado (L1, L2, A1, A2), número de fila, proyecto, cliente, un texto fijo o columnas vacías.
+  - **Formato del archivo:** unidad (mm, cm, m o pulgadas), punto o coma decimal, separador (coma, punto y coma o tabulador), una fila por pieza, y formato de veta y de cantos (texto, Sí/No o 1/0).
+  - **Vista previa** al momento con una cocina de ejemplo.
+- Vienen 4 plantillas listas: **Estándar Planner, Optimizador (largo, ancho, cantidad), Con cantos por lado y Excel en centímetros**. Duplica cualquiera para adaptarla.
+- En **Aprobación → Lista de corte** eliges la plantilla antes de **Descargar CSV**. Cada dispositivo recuerda la última que usaste.
+
 ## 1.27.0 · 2026-10-06
 
 ### Nuevo: Mueble de TV

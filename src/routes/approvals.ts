@@ -1,6 +1,8 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { computeEstimate, corte, cutlistCsv, elev, hasErrors, nestingCsv, optimizeCut, plan, validateProject } from '../core';
+import { computeEstimate, corte, cutlistCsv, cutTemplateCsv, elev, hasErrors, nestingCsv, optimizeCut, PRESET_CUT_TEMPLATES, plan, validateProject } from '../core';
+import { notFound } from '../lib/errors';
+import { cutTemplatesOf } from '../services/catalog';
 import { approvalLinks, approvals, files, organizations } from '../db/schema';
 import { MoneySchema } from '../lib/money';
 import { authErrors, body, CurrencyQuery, IdParam, json, pick, router, security } from '../lib/openapi';
@@ -255,16 +257,36 @@ export function approvalRoutes() {
   const exportRoute = (path: string, summary: string, type: string) =>
     createRoute({ method: 'get', path, tags: ['Exportaciones'], summary, security, request: { params: IdParam }, responses: { 200: { description: summary, content: { [type]: { schema: z.string() } } }, ...authErrors } });
 
-  r.openapi(exportRoute('/projects/{id}/cutlist.csv', 'Lista de corte en CSV (compatible con Excel)', 'text/csv'), async (c) => {
-    const a = requireAuth(c);
-    const { db } = c.var.deps;
-    const row = await getProject(db, a, c.req.valid('param').id);
-    assertCan(a.user, 'project:export', { access: row.access, status: row.status });
-    requireFeature(c.var.deps.config, a, 'exports');
-    const { ctx } = await pricingFor(db, a, row);
-    const csv = cutlistCsv(corte(parseProjectData(row.data), ctx.materials));
-    return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="lista-de-corte-${slug(row.name)}.csv"` });
-  });
+  r.openapi(
+    createRoute({
+      method: 'get',
+      path: '/projects/{id}/cutlist.csv',
+      tags: ['Exportaciones'],
+      summary: 'Lista de corte en CSV (compatible con Excel), con la plantilla elegida',
+      description:
+        '`plantilla`: id de una plantilla predefinida (estandar, optimizador, cantos-por-lado, excel-cm) o de las de la organización ' +
+        '(Administración → Lista de corte). Sin `plantilla`, el formato estándar.',
+      security,
+      request: { params: IdParam, query: z.object({ plantilla: z.string().max(40).optional() }) },
+      responses: { 200: { description: 'CSV', content: { 'text/csv': { schema: z.string() } } }, ...authErrors },
+    }),
+    async (c) => {
+      const a = requireAuth(c);
+      const { db } = c.var.deps;
+      const row = await getProject(db, a, c.req.valid('param').id);
+      assertCan(a.user, 'project:export', { access: row.access, status: row.status });
+      requireFeature(c.var.deps.config, a, 'exports');
+      const { ctx } = await pricingFor(db, a, row);
+      const data = parseProjectData(row.data);
+      const groups = corte(data, ctx.materials);
+      const id = c.req.valid('query').plantilla;
+      const tpl = id ? [...PRESET_CUT_TEMPLATES, ...cutTemplatesOf(a.org)].find((t) => t.id === id) : undefined;
+      if (id && !tpl) throw notFound('La plantilla de lista de corte');
+      const csv = tpl ? cutTemplateCsv(groups, tpl, { proyecto: row.name, cliente: data.client?.nombre }) : cutlistCsv(groups);
+      const name = `lista-de-corte-${slug(row.name)}${tpl && tpl.id !== 'estandar' ? `-${tpl.id}` : ''}.csv`;
+      return c.body(csv, 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"` });
+    },
+  );
 
   r.openapi(exportRoute('/projects/{id}/pieces.dxf', 'Piezas de la lista de corte en DXF (mm)', 'application/dxf'), async (c) => {
     const a = requireAuth(c);
