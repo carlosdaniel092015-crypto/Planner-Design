@@ -10,6 +10,7 @@ import {
   distOf,
   type Drawing,
   ESTILOS,
+  fromLeft,
   type FurnitureWall,
   moduleRolesFor,
   placedFor,
@@ -305,6 +306,20 @@ export function SpecWizard(props: {
   ] as const;
   const pickMat = (g: (typeof matGroups)[number][0], code: string) => set({ prefs: { ...s.prefs, estilo: CUSTOM_STYLE, mats: { ...s.mats, ...ownMats, [g]: code } }, mats: { ...s.mats, [g]: code } });
   const colorOf = (code: string) => props.materials.find((m) => m.code === code)?.color ?? '#ccc';
+  const seg = (title: string, value: string | undefined, opts: string[], note: string, pick: (v: string) => void, name: string) => (
+    <div key={name}>
+      <h6 style={{ margin: '0 0 10px' }}>{title}</h6>
+      <div className="seg">
+        {opts.map((l) => (
+          <label key={l} className="seg-opt">
+            <input type="radio" name={name} checked={value === l} onChange={() => pick(l)} disabled={readOnly} />
+            {l}
+          </label>
+        ))}
+      </div>
+      <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>{note}</p>
+    </div>
+  );
   const styleBlock = (
     <div>
       <h6 style={{ margin: '0 0 10px' }}>Estilo</h6>
@@ -330,45 +345,42 @@ export function SpecWizard(props: {
           <span style={{ fontSize: 12, color: 'color-mix(in srgb,var(--color-text) 65%,transparent)' }}>Elige tú cada material (incluye tus texturas).</span>
         </button>
       </div>
-      {s.prefs.estilo === CUSTOM_STYLE && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12, marginTop: 14 }}>
-          {matGroups.map(([g, label]) => {
-            const opts = props.materials.filter((m) => m.uses.includes(g));
-            const cur = ownMats[g] ?? s.mats[g];
-            return (
-              <div key={g} className="field">
-                <label htmlFor={`mat-${g}`}>{label}</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ width: 32, height: 32, flex: 'none', background: colorOf(cur), boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)' }} />
-                  <select id={`mat-${g}`} className="input" value={cur} disabled={readOnly} onChange={(e) => pickMat(g, e.target.value)} style={{ flex: 1, minWidth: 0 }}>
-                    {!opts.some((m) => m.code === cur) && <option value={cur}>{cur}</option>}
-                    {opts.map((m) => (
-                      <option key={m.code} value={m.code}>
-                        {m.name}
-                        {m.source === 'subido' ? ' (tu textura)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      <h6 style={{ margin: '22px 0 4px' }}>Colores y texturas</h6>
+      <p style={{ fontSize: 12, margin: '0 0 10px', color: MUTED }}>Toca un color o textura para cada parte (pasa a estilo Personalizado). Las texturas que subas a la biblioteca de tableros aparecen aquí.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {matGroups.map(([g, label]) => {
+          const opts = props.materials.filter((m) => m.uses.includes(g));
+          const cur = ownMats[g] ?? s.mats[g];
+          const curName = props.materials.find((m) => m.code === cur)?.name ?? cur;
+          return (
+            <div key={g} role="radiogroup" aria-label={label}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                <b>{label}</b> <span style={{ color: MUTED }}>· {curName}</span>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-  const seg = (title: string, value: string | undefined, opts: string[], note: string, pick: (v: string) => void, name: string) => (
-    <div key={name}>
-      <h6 style={{ margin: '0 0 10px' }}>{title}</h6>
-      <div className="seg">
-        {opts.map((l) => (
-          <label key={l} className="seg-opt">
-            <input type="radio" name={name} checked={value === l} onChange={() => pick(l)} disabled={readOnly} />
-            {l}
-          </label>
-        ))}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {opts.map((m) => {
+                  const thumb = m.maps.baseColor?.thumb ?? m.maps.baseColor?.url;
+                  const on = m.code === cur;
+                  return (
+                    <button
+                      type="button"
+                      key={m.code}
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={`${label}: ${m.name}`}
+                      title={`${m.name}${m.source === 'subido' ? ' (tu textura)' : ''}`}
+                      disabled={readOnly}
+                      onClick={() => pickMat(g, m.code)}
+                      style={{ width: 40, height: 40, padding: 0, cursor: 'pointer', background: thumb ? `center/cover url("${thumb}") ${m.color}` : m.color, border: 'none', boxShadow: on ? '0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent)' : 'inset 0 0 0 1px rgba(0,0,0,.18)' }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>{note}</p>
+      {seg('Separación entre puertas', `${s.prefs.junta ?? 4} mm`, ['2 mm', '3 mm', '4 mm', '5 mm'], 'Despegue (junta) entre frentes vecinos; se descuenta del tamaño de puertas y cajones en el corte.', (v) => set({ prefs: { ...s.prefs, junta: parseInt(v, 10) } }), 'junta')}
     </div>
   );
   /** Preset buttons plus a field to type any other measure in cm (stored as "80 cm", like the presets). */
@@ -661,8 +673,8 @@ export function SpecWizard(props: {
                           ))}
                         </select>
                         a
-                        <Num label="Distancia desde la esquina en cm" value={p.pos} onCommit={(v) => updPt(p, { pos: v })} disabled={readOnly} style={{ padding: '3px 4px', width: 60, fontSize: 13 }} />
-                        cm
+                        <Num label="Distancia desde la esquina izquierda en cm (mirando el muro de frente)" value={fromLeft(p.wall, p.pos, 0, s.room)} onCommit={(v) => updPt(p, { pos: fromLeft(p.wall, v, 0, s.room) })} disabled={readOnly} style={{ padding: '3px 4px', width: 60, fontSize: 13 }} />
+                        cm desde la izquierda
                         {!readOnly && (
                           <button
                             type="button"

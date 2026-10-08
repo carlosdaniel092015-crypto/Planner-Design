@@ -161,6 +161,9 @@ export function ApprovalView(props: {
   const isoOf = (ang: number, focus?: [number, number, number, number]) => iso(data, props.materialsByCode as never, { ang, cotas: false, altos: true, focus });
   const planD = () => plan(data, { cotas: true });
   const elevD = (w: Wall) => elev(data, w, mats, { cotas: true });
+  // Installation plan of each wall with outlets: distances from the left corner and heights, for the plumber / electrician.
+  const instWalls = (['A', 'B', 'C', 'D'] as const).filter((w) => data.pts.some((q) => q.wall === w));
+  const instD = (w: Wall) => elev(data, w, mats, { cotas: true, inst: true });
   const persp = (w: number, h: number) => <Photo cfg={cfg} opts={cams.persp ? { w, h, cam: cams.persp } : { w, h }} fallback={isoOf(45)} title="Render en perspectiva" />;
   const detail = (w: number, h: number) =>
     detMod ? <Photo cfg={cfg} opts={detCam ? { w, h, cam: detCam } : { w, h, ang: 35, focusId: detMod.id }} fallback={isoOf(35, detFocus(detMod))} title={`Detalle · ${detMod.name}`} /> : null;
@@ -349,6 +352,11 @@ export function ApprovalView(props: {
                 <Svg drawing={elevD(w)} title={`Alzado muro ${w}`} />
               </Tile>
             ))}
+            {instWalls.map((w) => (
+              <Tile key={`i${w}`} title={`Instalaciones · muro ${w}`} scale="1:20">
+                <Svg drawing={instD(w)} title={`Instalaciones · muro ${w}`} />
+              </Tile>
+            ))}
             {detMod && (
               <Tile
                 title={`Vista de detalle · ${detLabel}`}
@@ -532,6 +540,7 @@ export function ApprovalView(props: {
             }
             if (k.planta) pages.push({ label: 'Planta acotada', title: 'Planta acotada · instalaciones', art: <Svg drawing={planD()} /> });
             if (k.alzados) for (const w of walls) pages.push({ label: `Alzado muro ${w}`, title: `Alzado muro ${w}`, art: <Svg drawing={elevD(w)} /> });
+            if (k.alzados) for (const w of instWalls) pages.push({ label: `Instalaciones muro ${w}`, title: `Instalaciones · muro ${w} (medidas desde la esquina izquierda y altura del piso, mm)`, art: <Svg drawing={instD(w)} /> });
             if (k.planos)
               for (const m of buildable)
                 pages.push({ label: `Plano módulo ${m.id}`, title: `Módulo ${m.id} · ${m.name} · ${m.w * 10}×${m.h * 10}×${m.d * 10} mm`, art: <Svg drawing={exploded(m, data.mats, mats)} />, parts: parts(m, data.mats, mats) });

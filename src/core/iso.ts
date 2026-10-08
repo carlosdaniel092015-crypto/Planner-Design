@@ -149,8 +149,9 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     }
     box(g.x0, g.x1, g.y0, g.y1, z0, z1, C.b, ex);
     const fh = z1 - z0;
-    const gu = 0.25 / m.w;
-    const gv = 0.25 / fh;
+    const gh = (p.prefs.junta != null && p.prefs.junta >= 0 && p.prefs.junta <= 10 ? p.prefs.junta : 4) / 20;
+    const gu = gh / m.w;
+    const gv = gh / fh;
     let v = 0;
     for (const seg of m.fr) {
       const v0 = v;
@@ -182,7 +183,11 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
         R(0.03, 0.97, v0 + 0.005, v1 - 0.005, shade(C.b, -0.38), shade(C.b, -0.45));
         const k = seg.rod ? 2 : 4;
         for (let i = 1; i < k; i++) L(0.03, v0 + (seg.f * i) / k, 0.97, v0 + (seg.f * i) / k, shade(C.b, -0.05), 1.4);
-        if (seg.rod) L(0.06, v1 - 0.08, 0.94, v1 - 0.08, '#9ea2a3', 1.6);
+        if (seg.rod) L(0.06, v1 - 0.08, 0.94, v1 - 0.08, '#9ea2a3', 1.6);      } else if (seg.t === 'niche') {
+        R(0.03, 0.97, v0 + 0.005, v1 - 0.005, shade(C.b, -0.38), shade(C.b, -0.45));
+        const ex = seg.ap === 'extractor';
+        R(0.06, 0.94, v0 + seg.f * 0.03, ex ? v0 + Math.min(seg.f * 0.95, 8 / fh) : v1 - seg.f * 0.03, seg.ap === 'lavadora' ? '#f2f2f0' : '#c9cccd');
+        if (seg.ap === 'micro') R(0.1, 0.66, v0 + seg.f * 0.15, v1 - seg.f * 0.15, '#2d2c2b');
       }
       if (hstyle === 'gola' && (seg.t === 'door' || seg.t === 'drawer') && m.type !== 'upper') L(0, v1 - gv, 1, v1 - gv, '#2a2928', 1.3);
     }

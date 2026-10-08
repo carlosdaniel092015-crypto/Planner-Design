@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { Catalog, CatalogMaterial } from '../api';
 import { Icon, MUTED, Svg } from '../ui';
 import { frontThumb } from './engine';
+import { WallsPanel } from './WallsPanel';
 
 export type LeftTab = 'modulos' | 'materiales' | 'electro';
 
@@ -28,6 +29,8 @@ export function LeftPanel(props: {
   onPick: (id: number) => void;
   /** Opens Bibliotecas on the given tab (omitted when the role can't upload). */
   onLibrary?: (tab: 'tex' | 'mod') => void;
+  /** Project-level changes (wall finishes, panels, gap between fronts). */
+  onPatch: (patch: Partial<ProjectData>) => void;
 }) {
   const { data, catalog, materialsByCode } = props;
   const defs = useMemo(() => {
@@ -183,6 +186,7 @@ export function LeftPanel(props: {
               </div>
             );
           })}
+          <WallsPanel data={data} materials={catalog.materials} readOnly={props.readOnly} onPatch={props.onPatch} />
         </div>
       )}
       {props.tab === 'electro' && (

@@ -107,7 +107,7 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
       return { ...base, basis: def ? 'catalogo' : 'sin_precio', materials: 0, hardware: 0, labor, total: labor };
     }
     let materials = 0;
-    for (const p of parts(m, project.mats, ctx.materials)) {
+    for (const p of parts(m, project.mats, ctx.materials, project.prefs.junta)) {
       const mat = ctx.materials[p.matCode];
       if (!mat) continue;
       materials += ((p.cant * p.L * p.A) / 1e6) * waste * conv(mat.priceM2, mat.priceCurrency);

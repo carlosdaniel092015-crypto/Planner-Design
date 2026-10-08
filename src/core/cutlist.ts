@@ -1,5 +1,6 @@
 // Cut list — ported from the prototype's allParts()/corte()/exportCsv().
-import { parts } from './parts';
+import { materialLabel } from './materials';
+import { boardThick, parts } from './parts';
 import type { ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
 
@@ -33,12 +34,22 @@ export const BOARD = { L: 2440, A: 1830, areaM2: 4.47, waste: 0.15 } as const;
 export const sheetOf = (mat?: Pick<MaterialDefinition, 'sheet'>): [number, number] => (mat?.sheet && mat.sheet[0] >= 300 && mat.sheet[1] >= 300 ? mat.sheet : [BOARD.L, BOARD.A]);
 
 export function allParts(project: ProjectData, materials: Record<string, MaterialDefinition>) {
-  return project.mods.flatMap((m) => parts(m, project.mats, materials).map((p) => ({ mod: m.id, ...p })));
+  return project.mods.flatMap((m) => parts(m, project.mats, materials, project.prefs.junta).map((p) => ({ mod: m.id, ...p })));
+}
+
+/** Panels (planchas) fixed on the walls, as pieces of their board (mm). They belong to no module (mod 0). */
+export function wallPanelParts(project: ProjectData, materials: Record<string, MaterialDefinition>) {
+  return (project.panels ?? []).map((pn) => {
+    const mat = materials[pn.mat];
+    const L = Math.round(Math.max(pn.w, pn.h) * 10);
+    const A = Math.round(Math.min(pn.w, pn.h) * 10);
+    return { mod: 0, pieza: `Plancha muro ${pn.wall}`, cant: 1, L, A, esp: boardThick(mat), mat: materialLabel(mat, pn.mat), matCode: pn.mat, veta: pn.h >= pn.w ? 'Vertical' : 'Horizontal', cantos: '4L' };
+  });
 }
 
 export function corte(project: ProjectData, materials: Record<string, MaterialDefinition>): CutGroup[] {
   const groups = new Map<string, { mat: string; matCode: string; esp: number; rows: Map<string, CutRow>; pieces: number; area: number }>();
-  for (const p of allParts(project, materials)) {
+  for (const p of [...allParts(project, materials), ...wallPanelParts(project, materials)]) {
     const key = `${p.mat}|${p.esp}`;
     let g = groups.get(key);
     if (!g) groups.set(key, (g = { mat: p.mat, matCode: p.matCode, esp: p.esp, rows: new Map(), pieces: 0, area: 0 }));
@@ -46,7 +57,7 @@ export function corte(project: ProjectData, materials: Record<string, MaterialDe
     let r = g.rows.get(rk);
     if (!r) g.rows.set(rk, (r = { pieza: p.pieza, L: p.L, A: p.A, veta: p.veta, cantos: p.cantos, cant: 0, mods: [] }));
     r.cant += p.cant;
-    if (!r.mods.includes(p.mod)) r.mods.push(p.mod);
+    if (p.mod && !r.mods.includes(p.mod)) r.mods.push(p.mod);
     g.pieces += p.cant;
     g.area += (p.cant * p.L * p.A) / 1e6;
   }

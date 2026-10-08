@@ -79,6 +79,8 @@ export interface Viewer {
   getCamera(): CameraState;
   focus(id: number): void;
   setCamera(c: CameraState): void;
+  /** Camera outside a wall looking in: the wall hides and the backs of the units and the installation show. */
+  viewBehind(wall: 'A' | 'B' | 'C' | 'D'): void;
   /** Move mode: pressing on a module drags it (the camera stays still). */
   setMoveMode(on: boolean): void;
   /** Shows a module at a new place while it is dragged (the editor commits it at the end). */
@@ -151,6 +153,10 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
     ops: p.ops,
     handle: handleOf(p.prefs.apertura),
     zoc: zocaloCm(p.prefs.zocalo),
+    junta: p.prefs.junta ?? 4,
+    pts: p.pts,
+    walls: p.walls,
+    panels: p.panels,
     kitchen: p.ptype === 'cocina',
     sel: extra.sel,
     sels: extra.sels ?? [],

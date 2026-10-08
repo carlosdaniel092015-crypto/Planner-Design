@@ -2,10 +2,12 @@
 import { z } from 'zod';
 
 const frontSegmentSchema = z.object({
-  t: z.enum(['door', 'drawer', 'oven', 'open']),
+  t: z.enum(['door', 'drawer', 'oven', 'open', 'niche']),
   f: z.number().positive().max(1),
   n: z.number().int().min(1).max(6).optional(),
   rod: z.union([z.number(), z.boolean()]).optional(),
+  /** Appliance housed in a niche segment. */
+  ap: z.enum(['nevera', 'lavadora', 'micro', 'extractor']).optional(),
 });
 
 const flag = z.union([z.literal(0), z.literal(1), z.boolean()]).optional();
@@ -135,12 +137,33 @@ export const projectDataSchema = z
     room: z.object({ A: z.number().min(50).max(2000), B: z.number().min(50).max(2000), H: z.number().min(150).max(600) }),
     ops: z.array(openingSchema).max(40).default([]),
     pts: z.array(pointSchema).max(80).default([]),
+    /** Finish of each wall: a material (board / texture of the library) or a plain colour. */
+    walls: z
+      .partialRecord(z.enum(['A', 'B', 'C', 'D']), z.object({ mat: z.string().max(60).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() }))
+      .optional(),
+    /** Panels (planchas) fixed on a wall: a board of the library over a zone (cm, pos from the wall's own corner like modules). */
+    panels: z
+      .array(
+        z.object({
+          id: z.number().int().positive(),
+          wall: z.enum(['A', 'B', 'C', 'D']),
+          pos: z.number().min(0).max(5000),
+          w: z.number().positive().max(1000),
+          z: z.number().min(0).max(500),
+          h: z.number().positive().max(500),
+          mat: z.string().min(1).max(60),
+        }),
+      )
+      .max(40)
+      .optional(),
     appl: z.record(z.string(), z.unknown()).nullable().optional(),
     prefs: z
       .object({
         estilo: z.string().optional(),
         alacena: z.string().optional(),
         apertura: z.enum(['Jaladera', 'Gola', 'Push']).default('Jaladera'),
+        /** Gap between doors and drawers (mm): what each front is cut short of its opening. */
+        junta: z.number().min(0).max(10).optional(),
         zocalo: z.string().optional(),
         presupuesto: z.number().optional(),
         /** Own modules for the generated layout: standard code → catalogue code ('' keeps the standard one). */

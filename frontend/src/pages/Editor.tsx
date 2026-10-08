@@ -613,7 +613,20 @@ export function EditorPage() {
   };
   const turnSelected = () => turnBy(90);
 
-  const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, sels: selIds, altos, cotas }) : null), [data, view, wall, materialsByCode, sel, selIds, altos, cotas]);
+  const [instPlan, setInstPlan] = useState(false);
+  const elevDrawing = useMemo(() => (data && view === 'alzado' ? elev(data, wall, materialsByCode as never, { sel, sels: selIds, altos, cotas, inst: instPlan }) : null), [data, view, wall, materialsByCode, sel, selIds, altos, cotas, instPlan]);
+  // «Ver desde atrás»: each press goes to the next wall with furniture or installations.
+  const behindIdx = useRef(-1);
+  const viewBehind = () => {
+    if (!data) return;
+    const ws = (['A', 'B', 'C', 'D'] as const).filter((w) => data.mods.some((m) => m.wall === w) || data.pts.some((q) => q.wall === w));
+    if (!ws.length) return;
+    behindIdx.current = (behindIdx.current + 1) % ws.length;
+    const w = ws[behindIdx.current]!;
+    setView('3d');
+    viewer.current?.viewBehind(w);
+    flash(`Viendo el muro ${w} desde atrás: el muro se oculta y se ven la parte trasera de los muebles y las instalaciones · toca otra vez para el siguiente muro`);
+  };
 
   if (loadError)
     return (
@@ -727,6 +740,7 @@ export function EditorPage() {
           { k: 'move', icon: 'move', tip: move3d ? 'Terminar de mover' : 'Mover muebles (arrastra en 3D)', key: 'M', on: move3d, act: () => (setView('3d'), setMove3d(!move3d), !move3d && flash('Mover muebles: arrastra un mueble en la vista 3D. Se alinea solo con las esquinas y los vecinos.')) },
           { k: 'turn', icon: 'rotate-cw-square', tip: 'Girar mueble 90° (G: 15°)', key: 'G', act: turnSelected },
         ]),
+    { k: 'behind', icon: 'scan-eye', tip: 'Ver desde atrás (instalaciones)', key: 'V', act: viewBehind },
     { k: 'open', icon: 'door-open', tip: open ? 'Cerrar puertas y cajones' : 'Abrir puertas y cajones', key: 'P', on: open, act: () => (setView('3d'), setOpen(!open), viewer.current?.setOpen(!open)) },
     { k: 'sombras', icon: shadows ? 'sun' : 'sun-dim', tip: shadows ? 'Apagar sombras' : 'Encender sombras', key: 'S', on: shadows, act: toggleShadows },
   ];
@@ -913,6 +927,7 @@ export function EditorPage() {
               readOnly={readOnly}
               onPick={(i) => (setSel(i), setRightOpen(true))}
               onLibrary={canCreate(me) ? setLibTab : undefined}
+              onPatch={(patch) => commit({ ...data, ...patch })}
             />
           ) : (
             <div className="ed-rail ed-rail-left" style={{ width: 48, flex: 'none', borderRight: '2px solid var(--color-divider)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 8 }}>
@@ -982,6 +997,9 @@ export function EditorPage() {
                       Muro {w}
                     </button>
                   ))}
+                  <button type="button" aria-pressed={instPlan} onClick={() => setInstPlan(!instPlan)} title="Plano de instalaciones: cada toma con su distancia desde la izquierda y su altura" style={{ padding: '8px 12px', font: 'inherit', fontSize: 13, fontWeight: 800, border: 0, borderLeft: '1px solid var(--color-divider)', cursor: 'pointer', background: instPlan ? 'var(--color-accent)' : 'transparent', color: instPlan ? '#fff' : 'var(--color-text)' }}>
+                    Instalaciones
+                  </button>
                 </div>
               )}
               {!readOnly && (
