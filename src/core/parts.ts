@@ -219,7 +219,9 @@ export function frontsFromPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'panels' | 
 /** Thickness (mm) of the pieces cut from a material: the board's own, else the usual 18 mm. */
 export const boardThick = (mat?: Pick<MaterialDefinition, 'thick'>) => (mat?.thick && mat.thick >= 3 && mat.thick <= 60 ? mat.thick : 18);
 
-export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>): Part[] {
+/** `junta`: gap between doors and drawers (mm), what each front is cut short of its opening (4 mm unless set). */
+export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>, junta?: number): Part[] {
+  const J = junta != null && junta >= 0 && junta <= 10 ? junta : 4;
   const W = m.w * 10;
   const H = m.h * 10;
   const D = m.d * 10;
@@ -250,7 +252,7 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     return mergeParts(P);
   }
   if (m.appl) {
-    add('Panel frontal', 1, H - 4, W - 4, tf, 'frentes', 'Vertical', '4L', 'door');
+    add('Panel frontal', 1, H - J, W - J, tf, 'frentes', 'Vertical', '4L', 'door');
     return P.map((p, i) => ({ ...p, ref: i + 1 }));
   }
   add('Lateral', 2, H, D, t, 'cuerpo', 'Vertical', '1L', 'lat');
@@ -259,13 +261,16 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
   else add('Techo', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'top');
   add('Trasera', 1, W - 4, H - 4, 6, 'trasera', '—', '—', 'back');
   const fr = frontsOf(m);
-  const nSh = fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
+  const niches = fr.filter((f) => f.t === 'niche').length;
+  // A housing gets one divider per niche (the board between the appliance and the rest) and one shelf behind its doors.
+  if (niches) add('Divisor de hueco', Math.min(niches, Math.max(1, fr.length - 1)), W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
+  const nSh = niches ? (fr.some((f) => f.t === 'door') ? 1 : 0) : fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
   if (nSh) add('Entrepaño', nSh, W - 2 * t - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
   for (const seg of fr) {
     const sh = seg.f * H;
-    if (seg.t === 'door') add('Puerta', seg.n || 1, sh - 4, W / (seg.n || 1) - 4, tf, 'frentes', 'Vertical', '4L', 'door');
-    if (seg.t === 'drawer') add('Frente de cajón', 1, W - 4, sh - 4, tf, 'frentes', 'Horizontal', '4L', 'drawer');
-    if (seg.t === 'oven') add('Remate de horno', 1, W - 4, 60, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+    if (seg.t === 'door') add('Puerta', seg.n || 1, sh - J, W / (seg.n || 1) - J, tf, 'frentes', 'Vertical', '4L', 'door');
+    if (seg.t === 'drawer') add('Frente de cajón', 1, W - J, sh - J, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+    if (seg.t === 'oven') add('Remate de horno', 1, W - J, 60, tf, 'frentes', 'Horizontal', '4L', 'drawer');
   }
   return mergeParts(P);
 }

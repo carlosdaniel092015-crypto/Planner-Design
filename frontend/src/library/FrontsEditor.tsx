@@ -5,21 +5,26 @@ import { useEffect, useState } from 'react';
 import { frontThumb } from '../editor/engine';
 import { Icon, MUTED, Svg } from '../ui';
 
-type Row = { t: FrontSegment['t']; n: number; cm: number };
-const KINDS: [FrontSegment['t'], string][] = [
+type Row = { t: FrontSegment['t']; n: number; cm: number; ap?: FrontSegment['ap'] };
+const KINDS: [string, string][] = [
   ['door', 'Puerta'],
   ['drawer', 'Gaveta'],
   ['open', 'Abierto (repisas)'],
   ['oven', 'Hueco de horno'],
+  ['niche:nevera', 'Hueco para nevera'],
+  ['niche:lavadora', 'Hueco para lavadora'],
+  ['niche:micro', 'Hueco para microondas'],
+  ['niche:extractor', 'Hueco para extractor'],
 ];
+const kindOf = (r: Row) => (r.t === 'niche' ? `niche:${r.ap ?? 'nevera'}` : r.t);
 const PREVIEW_COLORS = { frentes: 'PREVIEW-F', cuerpo: 'PREVIEW-C', encimera: 'PREVIEW-E', jaladeras: 'PREVIEW-J' };
 const PREVIEW_BY_CODE = { 'PREVIEW-F': { color: '#c49a6c' }, 'PREVIEW-C': { color: '#eeebe6' }, 'PREVIEW-E': { color: '#e9e7e2' }, 'PREVIEW-J': { color: '#2a2928' } };
 
-const toRows = (fr: FrontSegment[], h: number): Row[] => [...fr].reverse().map((f) => ({ t: f.t, n: f.n ?? 1, cm: Math.max(1, Math.round(f.f * h)) }));
+const toRows = (fr: FrontSegment[], h: number): Row[] => [...fr].reverse().map((f) => ({ t: f.t, n: f.n ?? 1, cm: Math.max(1, Math.round(f.f * h)), ...(f.ap ? { ap: f.ap } : {}) }));
 /** Rows (top first, heights in cm) → recipe (bottom first, fractions adding up to exactly 1). */
 export function rowsToFronts(rows: Row[]): FrontSegment[] {
   const total = rows.reduce((a, r) => a + Math.max(1, r.cm), 0);
-  const out = [...rows].reverse().map((r) => ({ t: r.t, f: Math.round((Math.max(1, r.cm) / total) * 1000) / 1000, ...(r.t === 'door' ? { n: r.n } : {}) }) as FrontSegment);
+  const out = [...rows].reverse().map((r) => ({ t: r.t, f: Math.round((Math.max(1, r.cm) / total) * 1000) / 1000, ...(r.t === 'door' ? { n: r.n } : {}), ...(r.t === 'niche' ? { ap: r.ap ?? 'nevera' } : {}) }) as FrontSegment);
   if (out.length) out[out.length - 1]!.f = Math.round((1 - out.slice(0, -1).reduce((a, x) => a + x.f, 0)) * 1000) / 1000;
   return out;
 }
@@ -69,7 +74,7 @@ export function FrontsEditor({ w, h, type, fr, onChange, disabled }: { w: number
         {rows.length === 0 && <span style={{ fontSize: 12, color: MUTED }}>Sin frentes: caja abierta.</span>}
         {rows.map((r, i) => (
           <div key={`${i}-${r.t}`} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select className="input" aria-label={`Frente ${i + 1}`} value={r.t} disabled={disabled} onChange={(e) => set(i, { t: e.target.value as Row['t'] })} style={{ width: 150 }}>
+            <select className="input" aria-label={`Frente ${i + 1}`} value={kindOf(r)} disabled={disabled} onChange={(e) => { const [t, ap] = e.target.value.split(':') as [Row['t'], Row['ap']]; set(i, { t, ap }); }} style={{ width: 170 }}>
               {KINDS.map(([k, l]) => (
                 <option key={k} value={k}>
                   {l}

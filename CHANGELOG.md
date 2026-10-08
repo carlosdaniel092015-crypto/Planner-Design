@@ -3,6 +3,28 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.32.0 · 2026-10-08
+
+### Instalaciones vistas desde atrás
+- Nuevo botón **«Ver desde atrás (instalaciones)»** (tecla **V**) en el 3D. Pone la cámara detrás del muro con muebles o puntos y muestra las tuberías de agua y desagüe, el gas, la salida de campana y el tubo eléctrico de cada punto. Cada clic pasa al siguiente muro.
+- En **Alzado**, el botón **«Instalaciones»** convierte el dibujo en el **plano de instalaciones**: cada punto lleva su distancia **desde la esquina izquierda** y su altura desde el piso, en mm. En **Aprobación** el plano sale en la galería y en el PDF, una página por muro.
+- Los alzados acotan también **el ancho de las alacenas y la campana**, arriba del dibujo. Los muros B y D ya se dibujan como se ven de frente.
+
+### Especificaciones
+- **Paso 3:** la distancia de cada punto dice **«cm desde la izquierda»**, mirando el muro de frente, en todos los muros.
+- **Paso 5:** nueva sección **«Colores y texturas»**. Tocas el color o la textura de frentes, cuerpo, encimera y jaladeras. Aparecen también las texturas que subiste a la biblioteca de tableros.
+
+### Separación entre puertas
+- Eliges cuánto **despegan las puertas y cajones** entre sí: **2, 3, 4 o 5 mm**. Está en el paso 5 y en **Materiales**. Se ve en el 3D y en los dibujos, y **se descuenta del tamaño de puertas y cajones** en el despiece y el corte. Por defecto son 4 mm, como hasta ahora.
+
+### Muebles para electrodomésticos
+- En el catálogo hay **Mueble para nevera** (columna con puertas arriba), **Mueble para lavadora** (bajo la encimera), **Mueble para microondas** y **Mueble para extractor** (alacenas). El electrodoméstico se ve dentro de su hueco en el 3D, el alzado y el isométrico. El hueco no lleva puerta en el despiece.
+- En **Bibliotecas → módulos**, los frentes tienen las opciones **«Hueco para nevera / lavadora / microondas / extractor»** para crear tus propias versiones.
+
+### Paredes y planchas
+- En **Materiales → Paredes**, cada muro (A–D) puede llevar **un color de pintura o una textura** de la biblioteca de tableros.
+- Con **«Agregar plancha»** cubres una zona del muro con un tablero, por ejemplo un salpicadero, un panel decorativo o un respaldo de TV. Indicas su distancia desde la izquierda, ancho, altura desde el piso y alto. Las planchas se ven en el 3D y en el alzado, y salen en el **despiece y la optimización de corte**.
+
 ## 1.31.0 · 2026-10-06
 
 ### 3D más realista

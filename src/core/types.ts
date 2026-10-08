@@ -8,7 +8,9 @@ export type Currency = 'USD' | 'DOP';
 /** A–D are room walls (A top, B left, C right, D bottom); F is free-standing (island). */
 export type WallId = 'A' | 'B' | 'C' | 'D' | 'F';
 export type ModuleType = 'base' | 'upper' | 'tall' | 'fridge' | 'hood';
-export type FrontKind = 'door' | 'drawer' | 'oven' | 'open';
+export type FrontKind = 'door' | 'drawer' | 'oven' | 'open' | 'niche';
+/** Appliance a niche (hueco) is made for. */
+export type NicheAppliance = 'nevera' | 'lavadora' | 'micro' | 'extractor';
 export type MaterialGroup = 'cuerpo' | 'frentes' | 'encimera' | 'jaladeras';
 export type MaterialKind = 'madera' | 'solido' | 'piedra' | 'metal' | 'vidrio';
 export type Rounding = 'ninguno' | 'unidad' | 'decena' | 'centena';
@@ -22,6 +24,8 @@ export interface FrontSegment {
   n?: number;
   /** Hanging rod (open segments). */
   rod?: number | boolean;
+  /** Appliance housed in a niche segment. */
+  ap?: NicheAppliance;
 }
 
 /** Everything the part builder needs about a module, shared by catalogue entries and placed modules. */

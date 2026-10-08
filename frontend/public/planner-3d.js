@@ -307,7 +307,7 @@ function buildModule(m, ctx) {
     bx(g, .3, Math.max(.1, ctx.H - yb - .06), .28, st, W / 2 - .15, yb + .06, 0);
     return g;
   }
-  const FT = .018, TT = .018, gap = .0025, cd = D - FT, hh = yt - yb;
+  const FT = .018, TT = .018, gap = (ctx.junta != null ? ctx.junta : 4) / 2000, cd = D - FT, hh = yt - yb;
   if (m.type !== 'upper' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
   const body = (w, h) => texMat(bodyId, w, h, false, seed++);
   bx(g, TT, hh, cd, body(cd, hh), 0, yb, 0); bx(g, TT, hh, cd, body(cd, hh), W - TT, yb, 0);
@@ -373,9 +373,44 @@ function buildModule(m, ctx) {
         }
       }
     }
+    if (seg.t === 'niche') nicheAppl(g, seg.ap || 'nevera', W, s0, s1, cd, TT, v < .999 ? body(W, cd) : null);
     if (gc) bx(g, W, gc, .03, mats.gola(), 0, s1 - gc, cd - .012);
   });
   return g;
+}
+/** Appliance standing in a housing niche (fridge, washer, microwave, slide-out extractor), plus the divider above it. */
+function nicheAppl(g, ap, W, s0, s1, cd, TT, divider) {
+  const sh = s1 - s0, iw = W - 2 * TT - .012, x0 = TT + .006;
+  if (divider) bx(g, W - 2 * TT, TT, cd, divider, TT, s1 - TT, 0);
+  if (ap === 'extractor') {
+    const st = mats.steel();
+    bx(g, iw, Math.min(.06, sh * .8), cd - .02, st, x0, s0, .01);
+    bx(g, iw - .02, .004, .3, mats.led(), x0 + .01, s0 - .002, cd - .33, { noCast: 1 });
+    return;
+  }
+  if (ap === 'micro') {
+    const h = Math.min(.32, sh - .02), d = Math.min(.38, cd - .02), w = Math.min(iw, .56), x = (W - w) / 2, y = s0 + TT;
+    bx(g, w, h, d, mats.steel(), x, y, cd - d);
+    bx(g, w * .7, h - .04, .004, mats.blackGlass(), x + .02, y + .02, cd);
+    bx(g, w * .22, h - .04, .004, std('microPanel', { color: 0x2d2c2b, roughness: .4 }), x + w * .75, y + .02, cd);
+    return;
+  }
+  if (ap === 'lavadora') {
+    const w = Math.min(iw, .6), h = Math.min(.85, sh - .02), d = Math.min(.58, cd - .01), x = (W - w) / 2;
+    bx(g, w, h, d, std('applWhite', { color: 0xf2f2f0, roughness: .35 }), x, s0 + TT, cd - d);
+    const r = Math.min(w, h) * .3, ring = new T.Mesh(new T.CylinderGeometry(r, r, .02, 40), mats.chrome());
+    ring.rotation.x = Math.PI / 2; ring.position.set(W / 2, s0 + TT + h * .45, cd + .01); g.add(ring);
+    const glass = new T.Mesh(new T.CylinderGeometry(r * .78, r * .78, .024, 40), mats.blackGlass());
+    glass.rotation.x = Math.PI / 2; glass.position.set(W / 2, s0 + TT + h * .45, cd + .012); g.add(glass);
+    bx(g, w - .04, .08, .004, std('applPanel', { color: 0xd9d9d6, roughness: .4 }), x + .02, s0 + TT + h - .1, cd);
+    return;
+  }
+  // Fridge: steel body filling the niche, two doors (freezer below) and handles.
+  const st = mats.steel(), w = iw, h = sh - TT - .02, d = cd - .02, y = s0 + TT;
+  bx(g, w, h, d, st, x0, y, .01);
+  bx(g, w, .006, .004, mats.blackGlass(), x0, y + h * .34, cd - .01 + .002, { noCast: 1 });
+  vbar(g, x0 + w - .05, y + h * .62, Math.min(.5, h * .3), cd - .01, mats.chrome());
+  vbar(g, x0 + w - .05, y + h * .18, Math.min(.3, h * .2), cd - .01, mats.chrome());
 }
 /** Bowls of a sink across the module: one, or two side by side with a 6 cm bridge. */
 function sinkBowls(W, bowls) {
@@ -508,7 +543,11 @@ function buildWall(root, wall, cfg, splash) {
   const ops = (cfg.ops || []).filter(o => o.wall === wall).map(o => { const a = o.pos / 100, b = (o.pos + o.w) / 100; return { ...o, a: Math.min(loc(a), loc(b)), b: Math.max(loc(a), loc(b)) }; });
   const cuts = [0, len]; ops.forEach(o => cuts.push(o.a, o.b));
   const pts = [...new Set(cuts)].filter(p => p >= 0 && p <= len).sort((a, b) => a - b);
-  const put = (p, q, y0, y1) => { if (q - p < .001 || y1 - y0 < .001) return; const me = bx(g, q - p, y1 - y0, t, mats.wall(), p, y0, -t); if (me) me.castShadow = false; };
+  // Finish of this wall: a board / texture of the library, a plain colour, or the default paint.
+  const fin = (cfg.walls || {})[wall] || {};
+  const wallMat = (w, h, seed) => (fin.mat ? texMat(fin.mat, w, h, false, seed) : fin.color ? std('wall' + fin.color, { map: plainTex(fin.color, 5), roughness: .95 }) : mats.wall());
+  let wseed = 1;
+  const put = (p, q, y0, y1) => { if (q - p < .001 || y1 - y0 < .001) return; const me = bx(g, q - p, y1 - y0, t, wallMat(q - p, y1 - y0, wseed++), p, y0, -t); if (me) me.castShadow = false; };
   for (let i = 0; i < pts.length - 1; i++) {
     const p = pts[i], q = pts[i + 1], o = ops.find(o => o.a <= p + 1e-4 && o.b >= q - 1e-4);
     if (!o) { put(p, q, 0, H); continue; }
@@ -516,7 +555,12 @@ function buildWall(root, wall, cfg, splash) {
     put(p, q, 0, z0); put(p, q, z0 + o.h / 100, H);
   }
   // Corner post so walls meet without a gap.
-  bx(g, t, H, t, mats.wall(), -t, 0, -t, { noCast: 1 });
+  bx(g, t, H, t, wallMat(t, H, 0), -t, 0, -t, { noCast: 1 });
+  // Panels (planchas) fixed on the wall over a zone, in front of the paint.
+  (cfg.panels || []).filter(pn => pn.wall === wall).forEach((pn, i) => {
+    const a0 = Math.min(loc(pn.pos / 100), loc((pn.pos + pn.w) / 100)), w = pn.w / 100, h = pn.h / 100;
+    bx(g, w, h, .012, texMat(pn.mat, w, h, false, 50 + i), a0, pn.z / 100, 0, { noCast: 1 });
+  });
   ops.forEach(o => {
     const a = o.a, ow = o.b - o.a, z0 = o.t === 'ventana' ? (o.z || 110) / 100 : 0, oh = o.h / 100, f = .05;
     if (o.t === 'ventana') {
@@ -551,11 +595,43 @@ function buildWall(root, wall, cfg, splash) {
   });
   return g;
 }
+/**
+ * Installation points (water, drain, power, gas, hood outlet) with their pipe or conduit inside the wall. They live
+ * outside the wall group, so they stay in view when the wall is hidden to look at the room from behind it.
+ */
+function buildPoints(root, cfg) {
+  const R = { A: cfg.room.A / 100, B: cfg.room.B / 100 }, H = cfg.room.H / 100, ZDEF = { agua: 55, desague: 45, elec: 110, gas: 60, campana: 210 };
+  const COL = { agua: 0x2f7fd6, desague: 0x6b6b6b, elec: 0xf2f2f0, gas: 0xe2b100, campana: 0x9aa0a3 };
+  ['A', 'B', 'C', 'D'].forEach(wall => {
+    const list = (cfg.pts || []).filter(q => q.wall === wall);
+    if (!list.length) return;
+    const fr = wallFrame(wall, R), loc = a => (fr.mirror ? fr.len - a : a);
+    const g = new T.Group(); g.rotation.y = fr.rot; g.position.set(...fr.pos); g.userData.points = wall; root.add(g);
+    list.forEach(q => {
+      const a = loc(q.pos / 100), y = (q.z != null ? q.z : ZDEF[q.t] || 50) / 100, m = std('pt' + q.t, { color: COL[q.t] || 0xcccccc, roughness: .45, metalness: q.t === 'elec' ? 0 : .3 });
+      if (q.t === 'elec') {
+        bx(g, .08, .08, .012, m, a - .04, y - .04, 0);
+        bx(g, .03, .012, .004, std('ptslot', { color: 0x333333 }), a - .015, y - .006, .012, { noCast: 1 });
+        bx(g, .016, H - y - .04, .016, std('ptconduit', { color: 0xd8d6d0, roughness: .8 }), a - .008, y + .04, -.03, { noCast: 1 });
+      } else if (q.t === 'campana') {
+        bx(g, .16, .16, .02, m, a - .08, y - .08, 0);
+        bx(g, .12, .12, .02, std('pthole', { color: 0x2a2928 }), a - .06, y - .06, .005, { noCast: 1 });
+      } else {
+        const r = q.t === 'desague' ? .025 : .012;
+        const stub = new T.Mesh(new T.CylinderGeometry(r, r, .06, 18), m); stub.rotation.x = Math.PI / 2; stub.position.set(a, y, .03); stub.castShadow = true; g.add(stub);
+        if (q.t !== 'desague') { const v = new T.Mesh(new T.CylinderGeometry(.006, .006, .05, 10), std('ptvalve', { color: q.t === 'gas' ? 0xd02020 : 0x2a2928 })); v.rotation.z = Math.PI / 2; v.position.set(a, y, .06); g.add(v); }
+        // Pipe inside the wall, down to the floor.
+        const pipe = new T.Mesh(new T.CylinderGeometry(r * .8, r * .8, y, 14), m); pipe.position.set(a, y / 2, -.03); g.add(pipe);
+      }
+    });
+  });
+}
 function buildRoom(root, cfg, ctx, runs) {
   const A = cfg.room.A / 100, Bw = cfg.room.B / 100;
   const fl = new T.Mesh(new T.PlaneGeometry(A, Bw), tiledMat(floorTex(), A, Bw, 1.8, { physical: true, roughness: .5, clearcoat: .25, clearcoatRoughness: .4, bump: .25 }));
   fl.rotation.x = -Math.PI / 2; fl.position.set(A / 2, 0, Bw / 2); fl.receiveShadow = true; fl.userData.room = 1; root.add(fl);
   const edge = bx(root, A + 2 * WALL_T, .05, Bw + 2 * WALL_T, mats.edge(), -WALL_T, -.0501, -WALL_T, { noCast: 1 }); if (edge) edge.userData.room = 1;
+  buildPoints(root, cfg);
   return ['A', 'B', 'C', 'D'].map(w => buildWall(root, w, cfg, ctx.kitchen ? runs : []));
 }
 /** Hides the walls standing between the camera and the room (dynamic cut-away), so any side can be viewed. */
@@ -581,7 +657,7 @@ function addLights(root, cfg, mods) {
   });
 }
 function buildScene(root, cfg) {
-  const ctx = { handle: cfg.handle || 'bar', zoc: cfg.zoc == null ? 10 : cfg.zoc, mats: cfg.mats, H: cfg.room.H / 100, kitchen: cfg.kitchen !== false };
+  const ctx = { handle: cfg.handle || 'bar', zoc: cfg.zoc == null ? 10 : cfg.zoc, junta: cfg.junta, mats: cfg.mats, H: cfg.room.H / 100, kitchen: cfg.kitchen !== false };
   const groups = {}, list = cfg.mods || [];
   list.forEach(m => { if (m.glb) glbCache[m.glb + '_scene'] = glbCache[m.glb + '_scene'] || null; });
   list.forEach(m => { const g = buildModule(m, ctx); place(g, m); root.add(g); groups[m.id] = g; });
@@ -730,7 +806,7 @@ class Viewer {
     const light = JSON.stringify([cfg.sel, cfg.sels, cfg.cotas, cfg.altos, cfg.bg]);
     const E = window.SPEngine;
     const texSig = Object.keys(E.MATS).filter(k => E.MATS[k].img).map(k => k + E.MATS[k].tile + E.MATS[k].rough).join();
-    const sig = JSON.stringify([cfg.mods, cfg.mats, cfg.room, cfg.ops, cfg.handle, cfg.zoc, cfg.kitchen, texSig]);
+    const sig = JSON.stringify([cfg.mods, cfg.mats, cfg.room, cfg.ops, cfg.handle, cfg.zoc, cfg.kitchen, cfg.junta, cfg.pts, cfg.walls, cfg.panels, texSig]);
     if (sig === this.sig && light === this.light) return;
     this.light = light; this.scene.background = new T.Color(cfg.bg || '#d3cec6');
     if (sig !== this.sig) {
@@ -750,6 +826,8 @@ class Viewer {
   renderNow() { this.dirty = false; if (this.cfg) cutaway(this.root.userData.walls, this.cam, this.cfg); this.r.render(this.scene, this.cam); this.placeLabels(); }
   /** Opens (true) or closes every door and drawer with a short animation. */
   setOpen(open) { this.openTo = open ? 1 : 0; this.dirty = true; }
+  /** Camera outside the given wall looking into the room: the wall is hidden (cut-away) and the backs of the units and the installation behind them are in view. */
+  viewBehind(wall) { const az = { A: Math.PI, B: -Math.PI / 2, C: Math.PI / 2, D: 0 }[wall]; if (az == null) return; this.fit(false, az); }
   /** Turns cast shadows on or off (lighter on slow devices); materials recompile once for the new shadow map state. */
   setShadows(on) {
     on = !!on;

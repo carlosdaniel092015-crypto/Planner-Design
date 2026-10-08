@@ -66,7 +66,7 @@ export function exploded(m: ModuleInstance, mats: ProjectData['mats'], materials
       const z0 = v * H;
       const z1 = (v + seg.f) * H;
       v += seg.f;
-      if (seg.t === 'open') continue;
+      if (seg.t === 'open' || seg.t === 'niche') continue;
       const n = seg.t === 'door' ? seg.n || 1 : 1;
       for (let i = 0; i < n; i++) boxes.push([(W * i) / n + 2, (W * (i + 1)) / n - 2, D + e * 1.3, D + e * 1.3 + 18, z0 + 2, z1 - 2, seg.t === 'oven' ? '#2d2c2b' : C.f, ref(seg.t === 'door' ? 'door' : 'drawer')]);
     }

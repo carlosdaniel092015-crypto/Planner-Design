@@ -192,11 +192,12 @@ export const burnerSpots = (n?: number | boolean): (readonly [number, number])[]
     ? [[0.2, 0.3], [0.5, 0.3], [0.8, 0.3], [0.2, 0.7], [0.5, 0.7], [0.8, 0.7]]
     : [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
 
-export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, C: Colors, hstyle: string, it: DrawItem[], mid?: number) {
+export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: number, C: Colors, hstyle: string, it: DrawItem[], mid?: number, junta?: number) {
   const rect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, sw?: number) =>
     it.push({ d: `M${P(x, y)}L${P(x + w, y)}L${P(x + w, y + h)}L${P(x, y + h)}Z`, fill, stroke: stroke || shade(fill, -0.35), sw: sw == null ? 0.6 : sw, mid });
   const ln = (x1: number, y1: number, x2: number, y2: number, stroke: string, sw: number) => it.push({ d: `M${P(x1, y1)}L${P(x2, y2)}`, stroke, sw });
-  const g = 0.3;
+  // Half the gap between fronts (cm): the project's junta in mm, 4 mm unless set.
+  const g = gapOf(junta) / 20;
   if (m.type === 'fridge' && m.fd === 2) {
     rect(X, Y, W, H, '#c5c8c9', '#8f9394');
     ln(X + W * 0.45, Y, X + W * 0.45, Y + H, '#8f9394', 0.8);
@@ -264,12 +265,39 @@ export function front2D(m: ModuleInstance, X: number, Y: number, W: number, H: n
       const k = seg.rod ? 2 : 4;
       for (let i = 1; i < k; i++) ln(X + 1.8, y0 + (sh * i) / k, X + W - 1.8, y0 + (sh * i) / k, shade(C.b, -0.05), 1.6);
       if (seg.rod) ln(X + 4, y0 + 7, X + W - 4, y0 + 7, '#9ea2a3', 1.6);
+    } else if (seg.t === 'niche') {
+      rect(X + 1.8, y0 + 0.5, W - 3.6, sh - 1, shade(C.b, -0.3));
+      const ap = APPL_2D[seg.ap ?? 'nevera'];
+      const ih = seg.ap === 'extractor' ? Math.min(sh - 2, 8) : sh - 3;
+      rect(X + 3, seg.ap === 'extractor' ? y0 + sh - ih - 1 : y0 + 1.5, W - 6, ih, ap.c);
+      if (seg.ap === 'lavadora') it.push({ t: 'c', cx: X + W / 2, cy: y0 + sh * 0.55, r: Math.min(W, sh) * 0.28, fill: '#3d4246', stroke: '#9ea2a3', sw: 1 });
+      else if (seg.ap === 'micro') rect(X + 5, y0 + 4, W * 0.62, sh - 8, '#2d2c2b');
+      else if (!seg.ap || seg.ap === 'nevera') ln(X + W - 7, y0 + sh * 0.35, X + W - 7, y0 + sh * 0.6, '#6b6f72', 1.6);
+      it.push({ t: 'text', x: X + W / 2, y: y0 + Math.min(sh / 2, 12), s: ap.n, fs: 6, fill: '#2a2928', anchor: 'middle', halo: '#ffffff' });
     }
     if (hstyle === 'gola' && (seg.t === 'door' || seg.t === 'drawer') && m.type !== 'upper') ln(X, y0 + 0.6, X + W, y0 + 0.6, '#2a2928', 1.2);
   }
 }
 
-export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; sel?: number | null; sels?: number[] } = {}): Drawing {
+/** How an appliance inside a niche is drawn in elevation: body colour and label. */
+const APPL_2D = { nevera: { c: '#c9cccd', n: 'Nevera' }, lavadora: { c: '#f2f2f0', n: 'Lavadora' }, micro: { c: '#c9cccd', n: 'Microondas' }, extractor: { c: '#c9cccd', n: 'Extractor' } } as const;
+
+/** Gap between doors and drawers (mm, total between two fronts). */
+export const gapOf = (junta?: number) => (junta != null && junta >= 0 && junta <= 10 ? junta : 4);
+
+/** Default height (cm) of an installation point by type, when it was placed without one. */
+const PT_ZDEF: Record<string, number> = { agua: 55, desague: 45, elec: 110, gas: 60, campana: 210 };
+const PT_CODE: Record<string, string> = { agua: 'AG', desague: 'DS', elec: 'EL', gas: 'GS', campana: 'CP' };
+
+/** Distance (cm) from the LEFT corner of a wall seen from inside the room, for a stored `pos` (walls B and D store it from their right corner). */
+export const fromLeft = (wall: 'A' | 'B' | 'C' | 'D', pos: number, w: number, room: { A: number; B: number }) =>
+  wall === 'B' || wall === 'D' ? Math.round(((wall === 'D' ? room.A : room.B) - pos - w) * 10) / 10 : pos;
+
+/**
+ * Wall elevation as seen standing in the room facing it (left of the drawing = your left). `inst` adds the
+ * installation plan: every point with its distance from the left corner and its height from the floor.
+ */
+export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Record<string, MaterialDefinition>, opts: { altos?: boolean; cotas?: boolean; inst?: boolean; sel?: number | null; sels?: number[] } = {}): Drawing {
   const isSel = (id: number) => opts.sel === id || !!opts.sels?.includes(id);
   const it: DrawItem[] = [];
   const len = wall === 'A' || wall === 'D' ? p.room.A : p.room.B;
@@ -277,56 +305,96 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
   const zoc = zocaloCm(p.prefs.zocalo);
   const hstyle = handleOf(p.prefs.apertura);
   const Y = (z: number) => H - z;
+  // Walls B and D store positions from the corner on your right when you face them: drawn mirrored back.
+  const X = (pos: number, w = 0) => (wall === 'B' || wall === 'D' ? len - pos - w : pos);
   const rect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, sw?: number) =>
     it.push({ d: `M${P(x, y)}L${P(x + w, y)}L${P(x + w, y + h)}L${P(x, y + h)}Z`, fill, stroke, sw });
-  const ln = (x1: number, y1: number, x2: number, y2: number, stroke: string, sw: number) => it.push({ d: `M${P(x1, y1)}L${P(x2, y2)}`, stroke, sw });
+  const ln = (x1: number, y1: number, x2: number, y2: number, stroke: string, sw: number, dash?: string) => it.push({ d: `M${P(x1, y1)}L${P(x2, y2)}`, stroke, sw, ...(dash ? { dash } : {}) });
   const tx = (x: number, y: number, s: string, ex: Partial<DrawItem> = {}) => it.push({ t: 'text', x, y, s, fs: 8, ...ex });
-  rect(0, 0, len, H, '#f2efea', 'none', 0);
+  const fin = p.walls?.[wall];
+  rect(0, 0, len, H, fin?.color ?? (fin?.mat ? (materials[fin.mat]?.color ?? '#f2efea') : '#f2efea'), 'none', 0);
   rect(-10, -10, 10, H + 10, INK);
   rect(len, -10, 10, H + 10, INK);
   rect(-10, -10, len + 20, 10, INK);
   ln(-30, H, len + 30, H, INK, 2);
   for (const op of p.ops.filter((o) => o.wall === wall)) {
     const z0 = op.t === 'ventana' ? (op.z ?? 110) : 0;
-    rect(op.pos, Y(z0 + op.h), op.w, op.h, op.t === 'ventana' ? '#dfe6e8' : '#e3ddd4', INK, 0.8);
-    if (op.t === 'ventana') ln(op.pos + op.w / 2, Y(z0 + op.h), op.pos + op.w / 2, Y(z0), INK, 0.6);
+    const x0 = X(op.pos, op.w);
+    rect(x0, Y(z0 + op.h), op.w, op.h, op.t === 'ventana' ? '#dfe6e8' : '#e3ddd4', INK, 0.8);
+    if (op.t === 'ventana') ln(x0 + op.w / 2, Y(z0 + op.h), x0 + op.w / 2, Y(z0), INK, 0.6);
+  }
+  // Panels (planchas) fixed on the wall, under the furniture, with their size.
+  for (const pn of (p.panels ?? []).filter((q) => q.wall === wall)) {
+    const x0 = X(pn.pos, pn.w);
+    const c = materials[pn.mat]?.color ?? '#d9cfc0';
+    rect(x0, Y(pn.z + pn.h), pn.w, pn.h, c, shade(c, -0.35), 0.8);
+    ln(x0, Y(pn.z + pn.h), x0 + pn.w, Y(pn.z), shade(c, -0.2), 0.4, '3 3');
+    tx(x0 + pn.w / 2, Y(pn.z + pn.h / 2) + 3, `Plancha ${Math.round(pn.w * 10)} × ${Math.round(pn.h * 10)}`, { fs: 6.5, fill: INK, halo: '#ffffff' });
   }
   const ms = p.mods.filter((m) => m.wall === wall && (opts.altos !== false || (m.type !== 'upper' && m.type !== 'hood')));
   for (const m of ms) {
     const C = cols(m, p.mats, materials);
     const [z0r, z1] = zr(m, zoc);
+    const x0 = X(m.pos!, m.w);
     // A freestanding range stands on the floor (no plinth) up to the worktop, with its own top.
     const z0 = m.range ? 0 : z0r;
-    if ((m.type === 'base' || m.type === 'tall') && zoc > 0 && !m.range) rect(m.pos!, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
-    front2D({ ...m, fr: frontsOf(m) }, m.pos!, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id);
-    if (m.type === 'hood') rect(m.pos! + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
-    if (m.type === 'base' && !m.range) rect(m.pos!, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
-    if (m.range) rect(m.pos!, Y(z1 + 2), m.w, 2, '#2a2928', '#1d1c1b', 0.4);
+    if ((m.type === 'base' || m.type === 'tall') && zoc > 0 && !m.range) rect(x0, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
+    front2D({ ...m, fr: frontsOf(m) }, x0, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id, p.prefs.junta);
+    if (m.type === 'hood') rect(x0 + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
+    if (m.type === 'base' && !m.range) rect(x0, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
+    if (m.range) rect(x0, Y(z1 + 2), m.w, 2, '#2a2928', '#1d1c1b', 0.4);
     const top = m.type === 'base' ? z1 + (m.range ? 2 : 4) : z1;
     const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
-    if (isSel(m.id)) rect(m.pos!, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
+    if (isSel(m.id)) rect(x0, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {
-      it.push({ t: 'c', cx: m.pos! + m.w / 2, cy: Y(top) - 11, r: 7, fill: isSel(m.id) ? ACC : INK, mid: m.id });
-      tx(m.pos! + m.w / 2, Y(top) - 10.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
+      it.push({ t: 'c', cx: x0 + m.w / 2, cy: Y(top) - 11, r: 7, fill: isSel(m.id) ? ACC : INK, mid: m.id });
+      tx(x0 + m.w / 2, Y(top) - 10.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
     }
   }
-  if (opts.cotas !== false) {
-    const fl = ms.filter((m) => m.type !== 'upper' && m.type !== 'hood').sort((a, b) => a.pos! - b.pos!);
-    const seg = (t0: number, t1: number, y: number, lbl: string) => {
-      ln(t0, y, t1, y, INK, 0.6);
-      ln(t0, y - 4, t0, y + 4, INK, 0.6);
-      ln(t1, y - 4, t1, y + 4, INK, 0.6);
-      tx((t0 + t1) / 2, y + 8, lbl, { fs: 7.5 });
+  // Installation points on this wall (always shown; with their measures in the installation plan).
+  const pts = p.pts.filter((q) => q.wall === wall).map((q) => ({ q, x: X(q.pos), z: q.z ?? PT_ZDEF[q.t] ?? 50 })).sort((a, b) => a.x - b.x);
+  for (const { q, x, z } of pts) {
+    const y = Y(z);
+    if (q.t === 'agua') it.push({ t: 'c', cx: x, cy: y, r: 6, fill: ACC });
+    else if (q.t === 'desague') it.push({ t: 'c', cx: x, cy: y, r: 6, fill: '#ffffff', stroke: ACC, sw: 1.6 });
+    else if (q.t === 'elec') rect(x - 6, y - 6, 12, 12, ACC);
+    else if (q.t === 'gas') it.push({ d: `M${P(x, y - 7)}L${P(x + 7, y + 5)}L${P(x - 7, y + 5)}Z`, fill: ACC });
+    else it.push({ d: `M${P(x, y - 7)}L${P(x + 7, y)}L${P(x, y + 7)}L${P(x - 7, y)}Z`, fill: ACC });
+    tx(x, y + (q.t === 'gas' ? 1.5 : 0.5), PT_CODE[q.t] ?? '', { fill: q.t === 'desague' ? ACC : '#ffffff', fs: 5, fw: 800 });
+    if (opts.inst) {
+      ln(x, y + 8, x, Y(0), ACC, 0.5, '2 2');
+      tx(x + 9, y - 2, `${Math.round(x * 10)} · h ${Math.round(z * 10)}`, { fs: 6.5, anchor: 'start', fill: ACC, fw: 700 });
+    }
+  }
+  let bottom = H + 90;
+  if (opts.cotas !== false || opts.inst) {
+    const seg = (t0: number, t1: number, y: number, lbl: string, col = INK) => {
+      ln(t0, y, t1, y, col, 0.6);
+      ln(t0, y - 4, t0, y + 4, col, 0.6);
+      ln(t1, y - 4, t1, y + 4, col, 0.6);
+      tx((t0 + t1) / 2, y + 8, lbl, { fs: 7.5, ...(col !== INK ? { fill: col } : {}) });
     };
-    for (const m of fl) seg(m.pos!, m.pos! + m.w, H + 16, String(m.w * 10));
-    seg(0, len, H + 38, `${len * 10} mm`);
-    const x = len + 24;
-    const marks = [0, zoc, zoc + 80, 150, 220, H].filter((v, i, a) => a.indexOf(v) === i);
-    ln(x, Y(0), x, Y(H), INK, 0.6);
-    for (const z of marks) {
-      ln(x - 4, Y(z), x + 4, Y(z), INK, 0.6);
-      tx(x + 8, Y(z), String(z * 10), { fs: 7.5, anchor: 'start' });
+    if (opts.cotas !== false) {
+      const fl = ms.filter((m) => m.type !== 'upper' && m.type !== 'hood');
+      for (const m of fl) seg(X(m.pos!, m.w), X(m.pos!, m.w) + m.w, H + 16, String(m.w * 10));
+      // Widths of the wall units, above the ceiling line.
+      for (const m of ms.filter((m) => m.type === 'upper' || m.type === 'hood')) seg(X(m.pos!, m.w), X(m.pos!, m.w) + m.w, -22, String(m.w * 10));
+      seg(0, len, H + 38, `${len * 10} mm`);
+      const x = len + 24;
+      const marks = [0, zoc, zoc + 80, 150, 220, H].filter((v, i, a) => a.indexOf(v) === i);
+      ln(x, Y(0), x, Y(H), INK, 0.6);
+      for (const z of marks) {
+        ln(x - 4, Y(z), x + 4, Y(z), INK, 0.6);
+        tx(x + 8, Y(z), String(z * 10), { fs: 7.5, anchor: 'start' });
+      }
     }
+    // Installation plan: each point measured from the left corner, one row each.
+    if (opts.inst)
+      pts.forEach(({ q, x }, i) => {
+        const y = H + 58 + i * 16;
+        seg(0, x, y, `${PT_CODE[q.t]} ${Math.round(x * 10)} mm desde la izquierda`, ACC);
+        bottom = Math.max(bottom, y + 26 - H + H);
+      });
   }
-  return { items: it, vb: [-40, -30, len + 110, H + 90] };
+  return { items: it, vb: [-40, -42, len + 110, Math.max(H + 102, bottom + 12)] };
 }
