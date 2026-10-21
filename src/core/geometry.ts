@@ -10,7 +10,7 @@ interface Placeable {
   d: number;
   h: number;
   type: ModuleType;
-  /** Bottom height (cm) of a wall-hung unit placed off the usual 150 cm line, e.g. over the fridge. */
+  /** Bottom height (cm): a wall-hung unit off the usual 150 cm line (e.g. over the fridge), or a floor module raised off its plinth. */
   z?: number;
   /** Free module turned (degrees, any angle): 0 faces wall D, 90 wall C, 180 wall A, 270 wall B. x/y = corner of the box it takes. */
   rot?: number;
@@ -66,8 +66,16 @@ export function zr(m: Pick<Placeable, 'type' | 'h' | 'z'>, zoc: number): [number
   if (m.type === 'upper') return [m.z ?? 150, (m.z ?? 150) + m.h];
   if (m.type === 'fridge') return [0, m.h];
   if (m.type === 'hood') return [m.z ?? 150, (m.z ?? 150) + m.h];
+  // A floor module moved up or down floats at its own height (no plinth under it).
+  if (m.z != null) return [m.z, m.z + m.h];
   return [zoc, zoc + m.h];
 }
+
+/** Floor modules that can be moved up or down (appliances that stand on the floor can't). */
+export const liftable = (m: { type: ModuleType; range?: number | boolean }) => m.type !== 'fridge' && !m.range;
+
+/** A floor module standing on the plinth (not raised or lowered by hand). */
+export const onPlinth = (m: { type: ModuleType; z?: number; range?: number | boolean }) => (m.type === 'base' || m.type === 'tall') && m.z == null && !m.range;
 
 /** Point along a wall at distance t, n cm into the room. */
 export function wallPt(wall: WallId, t: number, n: number, A: number, B: number): [number, number] {

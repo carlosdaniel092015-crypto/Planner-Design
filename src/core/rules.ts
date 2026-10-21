@@ -36,6 +36,7 @@ export function validateProject(s: ProjectData, ctx?: PricingContext): Validatio
     } else out.push({ st: 'err', code: 'SIN_TOMA_AGUA', text: 'No hay toma de agua definida para el fregadero' });
   }
 
+  const zocS = zocaloCm(s.prefs.zocalo);
   // Corner ownership: A takes the A–B and A–C corners, B the B–D corner and C the C–D corner.
   const floorAt = (w: string, at: 'start' | 'end', len: number) =>
     mods.find((m) => m.wall === w && isFloor(m) && (at === 'start' ? m.pos === 0 : Math.abs((m.pos ?? 0) + m.w - len) < 0.5));
@@ -62,7 +63,9 @@ export function validateProject(s: ProjectData, ctx?: PricingContext): Validatio
           text: prev ? `Espacio sobrante de ${gap} cm entre módulos ${prev.id} y ${m.id} — agregar relleno` : `Espacio sobrante de ${gap} cm al inicio del muro ${w} — agregar relleno`,
           id: m.id,
         });
-      if (gap < 0) out.push({ st: 'err', code: 'TRASLAPE', text: `Los módulos ${prev ? prev.id : ''} y ${m.id} se traslapan ${-gap} cm`, id: m.id });
+      // A module raised above (or lowered under) its neighbour doesn't collide with it.
+      const stacked = prev && (zr(prev, zocS)[1] <= zr(m, zocS)[0] + 0.05 || zr(m, zocS)[1] <= zr(prev, zocS)[0] + 0.05);
+      if (gap < 0 && !stacked) out.push({ st: 'err', code: 'TRASLAPE', text: `Los módulos ${prev ? prev.id : ''} y ${m.id} se traslapan ${-gap} cm`, id: m.id });
       cur = Math.max(cur, m.pos! + m.w);
       prev = m;
     }

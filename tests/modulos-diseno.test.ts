@@ -8,6 +8,7 @@ import {
   DEFAULT_MODULES,
   elev,
   fitCover,
+  iso,
   freeSpot,
   isAppliance,
   type ModuleInstance,
@@ -20,6 +21,7 @@ import {
   templateOf,
   uploadedKind,
   validateProject,
+  zr,
 } from '../src/core';
 import { moduleDefToRow, moduleRowToDef } from '../src/services/catalog';
 import { setup, type Ctx } from './helpers';
@@ -77,13 +79,41 @@ describe('cubre falta superior', () => {
 });
 
 describe('mover hacia arriba o abajo', () => {
-  it('sube y baja alacenas y campanas sin pasar del piso ni del techo; los de piso no cambian', () => {
-    const p = kitchen([place('A-1P', 1, 0), place('CM-80', 2, 100), place('B-1P', 3, 200)]);
+  it('sube y baja alacenas y campanas sin pasar del piso ni del techo', () => {
+    const p = kitchen([place('A-1P', 1, 0), place('CM-80', 2, 100)]);
     expect(setElevation(p, 1, 160).mods[0]!.z).toBe(160);
     expect(setElevation(p, 1, 500).mods[0]!.z).toBe(260 - 70);
     expect(setElevation(p, 1, -20).mods[0]!.z).toBe(0);
     expect(setElevation(p, 2, 180).mods[1]!.z).toBe(180);
-    expect(setElevation(p, 3, 50)).toBe(p);
+  });
+
+  it('los muebles de piso también suben y bajan: flotan sin zócalo y vuelven a él', () => {
+    const p = kitchen([place('B-1P', 1, 0, { w: 45 }), place('C-DE', 2, 45), place('RF-75', 3, 100), place('ET-76', 4, 200)]);
+    const up = setElevation(p, 1, 40);
+    expect(up.mods[0]!.z).toBe(40);
+    expect(zr(up.mods[0]!, 10)).toEqual([40, 116]);
+    expect(zr(p.mods[0]!, 10)).toEqual([10, 86]);
+    expect(setElevation(p, 2, 0).mods[1]!.z).toBe(0);
+    expect(setElevation(p, 2, 100).mods[1]!.z).toBe(260 - 210);
+    // Back on the plinth.
+    expect(setElevation(up, 1, null).mods[0]).not.toHaveProperty('z');
+    // Fridges and freestanding ranges stand on the floor.
+    expect(setElevation(p, 3, 30)).toBe(p);
+    expect(setElevation(p, 4, 30)).toBe(p);
+    // Raised: no plinth in the elevation; still under the ceiling for validation.
+    const d = elev(up, 'A', ctx.materials);
+    const plinths = (q: typeof d) => q.items.filter((i) => i.fill === '#3b3936').length;
+    expect(plinths(d)).toBe(plinths(elev(p, 'A', ctx.materials)) - 1);
+    expect(setElevation(p, 1, 500).mods[0]!.z).toBe(260 - 76 - 4);
+    expect(validateProject(setElevation(p, 1, 500)).filter((i) => i.code === 'EXCEDE_ALTURA')).toEqual([]);
+    expect(() => iso(up, ctx.materials)).not.toThrow();
+  });
+
+  it('un mueble levantado sobre otro no cuenta como traslape', () => {
+    const p = kitchen([place('B-1P', 1, 0, { w: 45 }), place('B-1P', 2, 20, { w: 45 })]);
+    expect(validateProject(p).some((i) => i.code === 'TRASLAPE')).toBe(true);
+    const stacked = setElevation(p, 2, 120);
+    expect(validateProject(stacked).some((i) => i.code === 'TRASLAPE')).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
-import { corners, geo, shade, wallPt, zocaloCm, zr } from './geometry';
+import { corners, geo, onPlinth, shade, wallPt, zocaloCm, zr } from './geometry';
 import { bodyMaterialOf, frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
@@ -338,13 +338,13 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
     const x0 = X(m.pos!, m.w);
     // A freestanding range stands on the floor (no plinth) up to the worktop, with its own top.
     const z0 = m.range ? 0 : z0r;
-    if ((m.type === 'base' || m.type === 'tall') && zoc > 0 && !m.range) rect(x0, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
+    if (onPlinth(m) && zoc > 0) rect(x0, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
     front2D({ ...m, fr: frontsOf(m) }, x0, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id, p.prefs.junta);
     if (m.type === 'hood') rect(x0 + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
     if (m.type === 'base' && !m.range) rect(x0, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
     if (m.range) rect(x0, Y(z1 + 2), m.w, 2, '#2a2928', '#1d1c1b', 0.4);
     const top = m.type === 'base' ? z1 + (m.range ? 2 : 4) : z1;
-    const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
+    const bot = m.type === 'upper' || m.type === 'hood' || m.z != null ? z0 : 0;
     if (isSel(m.id)) rect(x0, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {
       // A filler reaches the ceiling: its number goes on the board, not above it.

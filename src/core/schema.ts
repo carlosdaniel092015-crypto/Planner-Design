@@ -73,7 +73,7 @@ export const moduleSchema = z
     open: z.enum(['der', 'izq']).optional(),
     /** Free modules only: turned this many degrees (0–359.9; 90 faces wall C, 180 wall A, 270 wall B). */
     rot: z.number().min(0).lt(360).optional(),
-    /** Bottom height (cm) of a wall-hung unit (upper, hood) off the 150 cm line: over the fridge, moved up or down. */
+    /** Bottom height (cm): a wall-hung unit (upper, hood) off the 150 cm line, or a floor module raised off its plinth (0 = on the floor). */
     z: z.number().min(0).max(500).optional(),
     /** Per-module material overrides (material codes). */
     cue: z.string().max(60).optional(),

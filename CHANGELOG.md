@@ -11,7 +11,9 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 - Va en el color de los frentes, sale en el 3D y el alzado, y en el despiece como **una sola pieza**.
 
 ### Mover hacia arriba o hacia abajo
-- Las **alacenas, campanas y cubre faltas** ahora se suben y se bajan: en **Propiedades → Ubicación** está **«Altura desde el piso»**, con botones para mover 1 o 5 cm, y te dice cuánto queda hasta el techo. Nunca pasan del piso ni del techo.
+- Los módulos ahora se suben y se bajan: en **Propiedades → Ubicación** está **«Altura desde el piso»**, con botones para mover 1 o 5 cm, y te dice cuánto queda hasta el techo. Nunca pasan del piso ni del techo.
+- Sirve para **alacenas, campanas y cubre faltas**, y también para **los muebles de piso** (bajos y columnas): un bajo levantado queda **flotando, sin zócalo**, con su propia encimera, en el 3D, el alzado y el isométrico. **«Volver al zócalo»** lo regresa a su lugar.
+- Un mueble levantado por encima de otro ya no se marca como traslape. Las neveras y las estufas de piso se quedan en el piso.
 
 ### Muebles para electrodomésticos
 - Un **modelo 3D alto que subes** (por ejemplo un mueble para nevera hecho en Polyboard) ya **no se toma como nevera**: entra como **Columna**, con su despiece, zócalo y frentes editables. Solo se toma como electrodoméstico si su nombre lo dice («Nevera Samsung», «Campana inox»…).

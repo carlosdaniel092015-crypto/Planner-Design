@@ -1,6 +1,6 @@
 // Editor actions — ported 1:1 from the prototype (setDim, ranges, freeSpot, addFromLib, remove, applyMat, fronts).
 // Pure functions: they take the project and return a new one (the caller keeps undo history).
-import { footprint, geo, zocaloCm, zr } from './geometry';
+import { footprint, geo, liftable, zocaloCm, zr } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialGroup, ModuleDefinition, ModuleShape, WallId } from './types';
 
@@ -109,15 +109,23 @@ export function addModule(p: ProjectData, tpl: ModuleShape): { project: ProjectD
 }
 
 /** Replaces a module keeping its id and position; width is clamped to the new template's range. */
-/** Height (cm from the floor) a wall-hung unit can be moved to: from the floor up to the ceiling minus its height. */
-export function elevationRange(p: ProjectData, m: Pick<ModuleInstance, 'h'>): [number, number] {
-  return [0, Math.max(0, Math.round(p.room.H - m.h))];
+/** Height (cm from the floor) a module can be moved to: from the floor up to the ceiling minus its height (and a base's worktop). */
+export function elevationRange(p: ProjectData, m: Pick<ModuleInstance, 'h' | 'type'>): [number, number] {
+  return [0, Math.max(0, Math.round(p.room.H - m.h - (m.type === 'base' ? 4 : 0)))];
 }
 
-/** Moves a wall-hung unit (upper, hood, filler) up or down: its bottom at `z` cm from the floor, kept under the ceiling. */
-export function setElevation(p: ProjectData, id: number, z: number): ProjectData {
+/**
+ * Moves a module up or down: its bottom at `z` cm from the floor, kept under the ceiling. Wall-hung units (upper, hood,
+ * filler) and floor furniture (a raised base floats, without plinth); fridges and freestanding ranges stay on the floor.
+ * `null` puts a floor module back on its plinth (and a wall unit back on the 150 cm line).
+ */
+export function setElevation(p: ProjectData, id: number, z: number | null): ProjectData {
   const m = p.mods.find((x) => x.id === id);
-  if (!m || isFloor(m)) return p;
+  if (!m || !liftable(m)) return p;
+  if (z == null) {
+    const { z: _z, ...rest } = m;
+    return { ...p, mods: p.mods.map((x) => (x.id === id ? (rest as ModuleInstance) : x)) };
+  }
   const [lo, hi] = elevationRange(p, m);
   const v = Math.max(lo, Math.min(hi, Math.round(z)));
   return { ...p, mods: p.mods.map((x) => (x.id === id ? { ...x, z: v } : x)) };

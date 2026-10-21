@@ -217,7 +217,8 @@ function buildModule(m, ctx) {
   const bodyId = m.cue || ctx.mats.cuerpo, frId = m.fre || ctx.mats.frentes, hdMat = baseMat(ctx.mats.jaladeras);
   let seed = m.id * 97 + Math.round(m.pos || m.x || 0);
   // Uploaded modules stand on the plinth like the parametric ones (recessed 6 cm; islands on both faces).
-  const plinth = () => { if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
+  // A floor module moved up or down (m.z) floats: no plinth under it.
+  const plinth = () => { if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && m.z == null && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
   if (m.boards && m.boards.length) {
     plinth();
     // Uploaded model built from boards: each board where it is, in the project's body / front material.
@@ -313,7 +314,7 @@ function buildModule(m, ctx) {
     return g;
   }
   const FT = .018, TT = .018, gap = (ctx.junta != null ? ctx.junta : 4) / 2000, cd = D - FT, hh = yt - yb;
-  if (m.type !== 'upper' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
+  if (m.type !== 'upper' && m.z == null && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
   const body = (w, h) => texMat(bodyId, w, h, false, seed++);
   bx(g, TT, hh, cd, body(cd, hh), 0, yb, 0); bx(g, TT, hh, cd, body(cd, hh), W - TT, yb, 0);
   bx(g, W - 2 * TT, TT, cd, body(W, cd), TT, yb, 0); bx(g, W - 2 * TT, TT, cd, body(W, cd), TT, yt - TT, 0);
@@ -501,7 +502,7 @@ function counters(root, mods, ctx, groups) {
   // Free-standing modules (islands, peninsulas, any angle): the worktop is built in their own frame and turns with them.
   mods.filter(m => m.type === 'base' && !m.range && m.wall === 'F').forEach(m => {
     const g = groups[m.id]; if (!g) return;
-    const W = m.w / 100, Dm = m.d / 100, top = (ctx.zoc + m.h) / 100, hz0 = Dm - .08 - .42;
+    const W = m.w / 100, Dm = m.d / 100, top = E.zr(m, ctx.zoc)[1] / 100, hz0 = Dm - .08 - .42;
     const holes = m.sink ? sinkBowls(W, m.sink).map(({ hx, hw }) => ({ a0: hx, a1: hx + hw, d0: hz0, d1: hz0 + .42 })) : [];
     slab(g, 'A', -.02, W + .02, -.02, Dm + .02, top, th, holes, ctx.mats.encimera);
     if (m.sink) addSink(g, W, Dm, top + th, m.sink); if (m.cook) addCooktop(g, W, Dm, top + th, m.cook);
@@ -514,9 +515,11 @@ function counters(root, mods, ctx, groups) {
   Object.keys(by).forEach(k => {
     const list = by[k].sort((a, b) => (a.pos || a.x) - (b.pos || b.x)), wall = list[0].wall;
     const runs = [];
-    list.forEach(m => { const s = (m.wall === 'F' ? E.geo(m).x0 : m.pos) / 100, e = m.wall === 'F' ? E.geo(m).x1 / 100 : s + m.w / 100, last = runs[runs.length - 1]; if (last && s - last.e < .011) { last.e = Math.max(last.e, e); last.ms.push(m); } else runs.push({ s, e, ms: [m] }); });
+    // A run of side-by-side bases at the same height shares one worktop; a raised or lowered base gets its own.
+    const topOf = m => E.zr(m, ctx.zoc)[1] / 100;
+    list.forEach(m => { const s = (m.wall === 'F' ? E.geo(m).x0 : m.pos) / 100, e = m.wall === 'F' ? E.geo(m).x1 / 100 : s + m.w / 100, last = runs[runs.length - 1]; if (last && s - last.e < .011 && Math.abs(topOf(m) - topOf(last.ms[0])) < .005) { last.e = Math.max(last.e, e); last.ms.push(m); } else runs.push({ s, e, ms: [m] }); });
     runs.forEach(r => {
-      const top = Math.max(...r.ms.map(m => (ctx.zoc + m.h) / 100)), D = Math.max(...r.ms.map(m => m.d)) / 100;
+      const top = Math.max(...r.ms.map(topOf)), D = Math.max(...r.ms.map(m => m.d)) / 100;
       let a0 = r.s, a1 = r.e, d0 = 0, d1 = D + .02;
       if (wall === 'F') { const gm = E.geo(r.ms[0]); d0 = gm.y0 / 100 - .02; d1 = gm.y1 / 100 + .02; a0 -= .02; a1 += .02; }
       if (wall === 'B' && aCorner) a0 = Math.max(a0, aCorner.d / 100 + .02);
