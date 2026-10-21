@@ -92,7 +92,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const isB = m.wall === 'B' || (m.wall === 'F' && m.rot === 90);
     const ex: Partial<DrawItem> = { mid: m.id };
     if (o.sel === m.id) selM = m;
-    if (m.type !== 'upper' && m.type !== 'hood') poly([[g.x0, g.y0, 0], [g.x1 + 5, g.y0, 0], [g.x1 + 5, g.y1 + 6, 0], [g.x0, g.y1 + 6, 0]], 'rgba(70,50,30,.16)');
+    if (m.type !== 'upper' && m.type !== 'hood' && !m.z) poly([[g.x0, g.y0, 0], [g.x1 + 5, g.y0, 0], [g.x1 + 5, g.y1 + 6, 0], [g.x0, g.y1 + 6, 0]], 'rgba(70,50,30,.16)');
     const FP = (u: number, v: number): V3 => (isB ? [g.x1 + 0.3, g.y0 + u * m.w, z0 + v * (z1 - z0)] : [g.x0 + u * m.w, g.y1 + 0.3, z0 + v * (z1 - z0)]);
     const R = (u0: number, u1: number, a0: number, a1: number, fill: string, st?: string, sw?: number) => poly([FP(u0, a0), FP(u1, a0), FP(u1, a1), FP(u0, a1)], fill, st || shade(fill, -0.3), sw || 0.4, ex);
     const L = (u0: number, a0: number, u1: number, a1: number, st: string, sw: number) => line([FP(u0, a0), FP(u1, a1)], st, sw, ex);
@@ -143,7 +143,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
       L(0.1, 0.66, 0.1, 0.8, '#6f7374', 2.2);
       continue;
     }
-    if (m.type !== 'upper' && zoc > 0) {
+    if (m.type !== 'upper' && m.z == null && zoc > 0) {
       if (isB) box(g.x0, g.x1 - 5, g.y0, g.y1, 0, zoc, '#3b3936');
       else box(g.x0, g.x1, g.y0 + (m.wall === 'F' ? 5 : 0), g.y1 - 5, 0, zoc, '#3b3936');
     }
@@ -220,7 +220,7 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
     const g = geo(m, p.room);
     const [z0, z1b] = zr(m, zoc);
     const zt = m.type === 'base' ? z1b + 4 : z1b;
-    const zb = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
+    const zb = m.type === 'upper' || m.type === 'hood' || m.z != null ? z0 : 0;
     const f = 'rgba(236,48,19,.1)';
     poly([[g.x0, g.y0, zt], [g.x1, g.y0, zt], [g.x1, g.y1, zt], [g.x0, g.y1, zt]], f, ACC, 1.6);
     poly([[g.x0, g.y1, zb], [g.x1, g.y1, zb], [g.x1, g.y1, zt], [g.x0, g.y1, zt]], f, ACC, 1.6);

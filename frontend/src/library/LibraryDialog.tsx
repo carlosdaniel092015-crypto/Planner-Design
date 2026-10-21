@@ -1,11 +1,12 @@
 // Bibliotecas: the organisation's own textures and modules (JSON, GLB and 3DS/OBJ/DAE/FBX converted to GLB), stored on the server.
 import { useAuth } from '../auth';
-import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel, placesFor } from '@core';
+import { DEFAULT_MODULES, type FrontSegment, frontsFromPanels, type ModelPanel, placesFor, uploadedKind } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
 import { Icon, MUTED } from '../ui';
 import { formatOf, MODEL_EXT, toGlb } from './convert';
 import { FrontsEditor } from './FrontsEditor';
+import { draftOf, draftToBody, emptyDraft, type ModuleDraft, ModuleDesigner } from './ModuleDesigner';
 import { type LibModule, type LibTexture, lib, uploadFile } from './upload';
 
 type Tab = 'tex' | 'mod';
@@ -31,13 +32,6 @@ function guessTexture(name: string) {
 const finishOf = (t: LibTexture & { roughness?: number | null }) => ((t.roughness ?? 0.6) < 0.3 ? 'Brillante' : (t.roughness ?? 0.6) < 0.5 ? 'Satinado' : 'Mate');
 const prettyName = (file: string) => file.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 120);
 
-type Montaje = 'base' | 'upper' | 'tall';
-/** Starting point of a module created in the app, per mounting. */
-const NEW_DEFAULTS: Record<Montaje, { defW: number; minW: number; maxW: number; fixedH: number; fixedD: number; category: string; fr: FrontSegment[] }> = {
-  base: { defW: 60, minW: 30, maxW: 120, fixedH: 76, fixedD: 60, category: 'Bajos', fr: [{ t: 'door', n: 1, f: 1 }] },
-  upper: { defW: 60, minW: 30, maxW: 120, fixedH: 70, fixedD: 35, category: 'Altos', fr: [{ t: 'door', n: 1, f: 1 }] },
-  tall: { defW: 60, minW: 40, maxW: 90, fixedH: 210, fixedD: 60, category: 'Columnas', fr: [{ t: 'door', n: 1, f: 0.6 }, { t: 'door', n: 1, f: 0.4 }] },
-};
 const fieldsOf = (m: LibModule) => {
   const r = (m.recipe ?? {}) as { fr?: FrontSegment[]; panels?: ModelPanel[]; pdim?: [number, number, number]; draw?: 'nativo' | 'modelo' };
   const panels = r.panels ?? [];
@@ -144,14 +138,15 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
         setBusy(`Subiendo ${name}…`);
         const up = await uploadFile('modelo3d', glb, name);
         const info = await lib.inspect(up.id);
-        const tall = info.bbox.h > 120;
+        // Furniture unless the name says it's an appliance: a tall «Mueble para nevera» is a column, not the fridge.
+        const kind = uploadedKind(f.name, info.bbox.h);
         const r = await lib.createModule({
           personal,
           name: prettyName(f.name),
           source: 'modelo3d',
           modelFileId: up.id,
-          type: tall ? 'fridge' : 'base',
-          category: tall ? 'Electro' : 'Mis módulos',
+          type: kind.type,
+          category: kind.cat,
           compressDraco: glb.size > 4 * 1048576,
           unitPrice: 0,
           priceCurrency: 'DOP',
@@ -199,19 +194,22 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
     }
   };
 
-  const [creating, setCreating] = useState<null | { name: string; type: Montaje; category: string; defW: number; minW: number; maxW: number; fixedH: number; fixedD: number; unitPrice: number; fr: FrontSegment[] }>(null);
-  const startNew = (type: Montaje = 'base') => setCreating({ name: '', type, unitPrice: 0, ...NEW_DEFAULTS[type] });
-  const createNew = async () => {
-    if (!creating) return;
-    const { name, ...rest } = creating;
-    if (!name.trim()) return setMsgs(['Ponle un nombre al módulo.']);
-    if (rest.minW > rest.defW || rest.defW > rest.maxW) return setMsgs(['El ancho debe estar entre el ancho mínimo y el máximo.']);
-    setBusy('Creando el módulo…');
+  // Module designer: a new module (id null) or an existing parametric one.
+  const [designing, setDesigning] = useState<null | { id: string | null; draft: ModuleDraft }>(null);
+  const saveDesign = async (d: ModuleDraft) => {
+    if (!designing) return;
+    const body = draftToBody(d);
+    setBusy(designing.id ? 'Guardando el módulo…' : 'Creando el módulo…');
     try {
-      const r = await lib.createModule({ personal, source: 'parametrico', name: name.trim(), type: rest.type, category: rest.category, defW: rest.defW, minW: rest.minW, maxW: rest.maxW, fixedH: rest.fixedH, fixedD: rest.fixedD, unitPrice: rest.unitPrice, priceCurrency: 'DOP', recipe: { fr: rest.fr } });
+      if (designing.id) {
+        const r = await lib.updateModule(designing.id, body);
+        setMsgs([`Módulo "${r.module.name}" guardado. Los proyectos lo toman así al colocarlo de nuevo.`]);
+      } else {
+        const r = await lib.createModule({ ...body, personal, source: 'parametrico', priceCurrency: 'DOP' });
+        setMsgs([`Módulo "${r.module.name}" creado (${r.module.code}). Ya aparece en la pestaña Módulos, en «${r.module.category}».`]);
+      }
       touch();
-      setCreating(null);
-      setMsgs([`Módulo "${r.module.name}" creado (${r.module.code}). Ya aparece en la pestaña Módulos, en «${r.module.category}».`]);
+      setDesigning(null);
       await load();
     } catch (e) {
       setMsgs([errText(e)]);
@@ -479,8 +477,8 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                 <span style={{ flex: 1, minWidth: 240 }}>
                   Crea tus módulos aquí mismo, o sube los que diseñas en <b>Polyboard</b> (exporta 3DS o DAE) o <b>SketchUp</b> (.skp): si vienen por tablas con su nombre (Puerta, Gaveta, Lateral…) se convierten en módulos nativos con su despiece real.
                 </span>
-                {canWrite && !creating && (
-                  <button type="button" className="btn btn-primary" onClick={() => startNew()}>
+                {canWrite && (
+                  <button type="button" className="btn btn-primary" onClick={() => setDesigning({ id: null, draft: emptyDraft() })}>
                     <Icon name="plus" size={15} />
                     Crear módulo
                   </button>
@@ -490,61 +488,6 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                   Descargar plantilla JSON
                 </button>
               </div>
-              {creating && (
-                <div role="group" aria-label="Nuevo módulo" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, border: '2px solid var(--color-accent)', background: 'var(--color-bg)' }}>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>Nuevo módulo</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10 }}>
-                    <div className="field" style={{ gridColumn: 'span 2' }}>
-                      <label htmlFor="nm-name">Nombre</label>
-                      <input id="nm-name" className="input" value={creating.name} maxLength={120} placeholder="Bajo 2 puertas con gaveta" onChange={(e) => setCreating({ ...creating, name: e.target.value })} />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="nm-type">Montaje</label>
-                      <select id="nm-type" className="input" value={creating.type} onChange={(e) => setCreating({ name: creating.name, type: e.target.value as Montaje, unitPrice: creating.unitPrice, ...NEW_DEFAULTS[e.target.value as Montaje] })}>
-                        <option value="base">Bajo (con encimera)</option>
-                        <option value="upper">Alto (a 150 cm)</option>
-                        <option value="tall">Columna</option>
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="nm-cat">Categoría</label>
-                      <select id="nm-cat" className="input" value={creating.category} onChange={(e) => setCreating({ ...creating, category: e.target.value })}>
-                        {CATS.map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {(
-                      [
-                        ['defW', 'Ancho cm', 10, 400],
-                        ['minW', 'Ancho mín.', 10, 400],
-                        ['maxW', 'Ancho máx.', 10, 400],
-                        ['fixedH', 'Alto cm', 10, 300],
-                        ['fixedD', 'Fondo cm', 10, 120],
-                        ['unitPrice', 'Precio (RD$)', 0, 10_000_000],
-                      ] as const
-                    ).map(([k, l, lo, hi]) => (
-                      <div key={k} className="field">
-                        <label htmlFor={`nm-${k}`}>{l}</label>
-                        <input id={`nm-${k}`} className="input" type="number" min={lo} max={hi} value={creating[k]} onChange={(e) => setCreating({ ...creating, [k]: Math.max(lo, Math.min(hi, Math.round(Number(e.target.value) || 0))) })} />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, marginBottom: 6, color: MUTED }}>Frentes</div>
-                    <FrontsEditor w={creating.defW} h={creating.fixedH} type={creating.type} fr={creating.fr} onChange={(fr) => setCreating((c) => (c ? { ...c, fr } : c))} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button type="button" className="btn btn-secondary" onClick={() => setCreating(null)}>
-                      Cancelar
-                    </button>
-                    <button type="button" className="btn btn-primary" onClick={createNew} disabled={!!busy}>
-                      <Icon name="check" size={15} />
-                      Crear módulo
-                    </button>
-                  </div>
-                </div>
-              )}
               {mods?.length === 0 && <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Aún no hay módulos propios.</p>}
               {mods?.filter(shown).map((m) => (
                 <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 36px', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'start' }}>
@@ -668,12 +611,13 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
                       <Icon name="trash-2" size={16} />
                     </button>
                   )}
-                  <ModuleFronts m={m} canWrite={canWrite} onRecipe={(patch) => setRecipe(m, patch)} />
+                  <ModuleFronts m={m} canWrite={canWrite} onRecipe={(patch) => setRecipe(m, patch)} onDesign={m.source === 'parametrico' && canWrite ? () => setDesigning({ id: m.id, draft: draftOf(m) }) : undefined} />
                 </div>
               ))}
             </>
           )}
         </div>
+        {designing && <ModuleDesigner initial={designing.draft} title={designing.id ? `Editar «${designing.draft.name}»` : 'Nuevo módulo'} cats={CATS} busy={!!busy} onCancel={() => setDesigning(null)} onSave={saveDesign} />}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderTop: '2px solid var(--color-divider)' }}>
           <span style={{ flex: 1, fontSize: 13, color: MUTED }}>{tab === 'tex' ? 'Los tableros aparecen en la pestaña Materiales según su uso; su plancha y espesor se usan en la lista de corte y su optimización.' : 'Los módulos aparecen en la pestaña Módulos, en su categoría.'}</span>
           <button type="button" className="btn btn-primary" onClick={close}>
@@ -686,7 +630,7 @@ export function LibraryDialog({ onClose, onChanged, canWrite, initialTab = 'tex'
 }
 
 /** Fronts of a library module and, for uploaded models, whether it is drawn as a native module or as-is. */
-function ModuleFronts({ m, canWrite, onRecipe }: { m: LibModule; canWrite: boolean; onRecipe: (patch: Record<string, unknown>) => void }) {
+function ModuleFronts({ m, canWrite, onRecipe, onDesign }: { m: LibModule; canWrite: boolean; onRecipe: (patch: Record<string, unknown>) => void; onDesign?: () => void }) {
   const [open, setOpen] = useState(false);
   const f = fieldsOf(m);
   const uploaded = m.source === 'modelo3d';
@@ -698,7 +642,9 @@ function ModuleFronts({ m, canWrite, onRecipe }: { m: LibModule; canWrite: boole
     const doors = fr.filter((x) => x.t === 'door').reduce((a, x) => a + (x.n ?? 1), 0);
     const drawers = fr.filter((x) => x.t === 'drawer').length;
     const open = fr.some((x) => x.t === 'open');
-    return [doors && `${doors} ${doors === 1 ? 'puerta' : 'puertas'}`, drawers && `${drawers} ${drawers === 1 ? 'gaveta' : 'gavetas'}`, open && 'abierto'].filter(Boolean).join(', ');
+    const niche = fr.find((x) => x.t === 'niche');
+    const AP = { nevera: 'nevera', lavadora: 'lavadora', micro: 'microondas', extractor: 'extractor' } as const;
+    return [doors && `${doors} ${doors === 1 ? 'puerta' : 'puertas'}`, drawers && `${drawers} ${drawers === 1 ? 'gaveta' : 'gavetas'}`, open && 'abierto', niche && `hueco para ${AP[niche.ap ?? 'nevera']}`].filter(Boolean).join(', ');
   };
   return (
     <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: MUTED }}>
@@ -711,6 +657,12 @@ function ModuleFronts({ m, canWrite, onRecipe }: { m: LibModule; canWrite: boole
               ? `Se dibuja como módulo nativo (${summary(f.fr.length ? f.fr : detected)})${f.panels.length ? `; sus ${f.panels.length} piezas reales van al despiece` : ''}.`
               : 'Se dibuja con su modelo en el 3D, con su forma y sus colores (o el material que elijas).'}
         </span>
+        {onDesign && (
+          <button type="button" className="btn btn-secondary" onClick={onDesign} style={{ fontSize: 12, height: 30 }}>
+            <Icon name="ruler" size={14} />
+            Editar en el diseñador
+          </button>
+        )}
         {!electro && (
           <button type="button" className="btn btn-ghost" aria-expanded={open} onClick={() => setOpen(!open)} style={{ fontSize: 12, height: 30 }}>
             <Icon name={open ? 'chevron-up' : 'sliders-horizontal'} size={14} />
