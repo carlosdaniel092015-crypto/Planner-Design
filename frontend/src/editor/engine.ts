@@ -167,9 +167,9 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
 }
 
 type Colors = { f: string; b: string; c: string; hd: string };
-export function colorsFor(m: Pick<ModuleInstance, 'cue' | 'fre'>, mats: ProjectData['mats'], byCode: Record<string, { color: string }>): Colors {
+export function colorsFor(m: Pick<ModuleInstance, 'cue' | 'fre'> & Partial<ModuleInstance>, mats: ProjectData['mats'], byCode: Record<string, { color: string }>): Colors {
   const col = (code: string, fb: string) => byCode[code]?.color ?? fb;
-  return { f: col(m.fre || mats.frentes, '#c49a6c'), b: col(m.cue || mats.cuerpo, '#eeebe6'), c: col(mats.encimera, '#e9e7e2'), hd: col(mats.jaladeras, '#2a2928') };
+  return { f: col(m.fre || mats.frentes, '#c49a6c'), b: col(bodyMaterialOf(m, mats), '#eeebe6'), c: col(mats.encimera, '#e9e7e2'), hd: col(mats.jaladeras, '#2a2928') };
 }
 
 /** Prototype frontThumb(): the module's front elevation with some padding. */

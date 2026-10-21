@@ -108,7 +108,7 @@ export function placedFor(code: string, catalog: Record<string, ModuleDefinition
   const keys = new Set(MODULE_PLACES.filter((p) => p.roles.includes(code)).map((p) => p.key));
   if (!std || !keys.size) return [];
   return Object.values(catalog)
-    .filter((m) => m.active && !m.hidden && m.place && keys.has(m.place) && m.code !== code && m.projectType === std.projectType && m.type === std.type)
+    .filter((m) => m.active && !m.hidden && !m.cover && m.place && keys.has(m.place) && m.code !== code && m.projectType === std.projectType && m.type === std.type)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -117,15 +117,18 @@ export const moduleRolesFor = (p: Pick<ProjectData, 'ptype' | 'layout'>) =>
   MODULE_ROLES.filter((r) => r.ptype === (p.ptype === 'cocina' || p.ptype === 'tv' ? p.ptype : p.ptype === 'vestidor' || p.layout === 'abierto' ? 'vestidor' : 'closet'));
 
 /** Catalogue modules that can stand in for a standard one: same kind of project and same module type. */
+/** A unit made to house an appliance (mueble para nevera, lavadora…): furniture with a niche, whatever its category. */
+export const isHousing = (m: Partial<Pick<ModuleDefinition, 'fr'>>) => !!m.fr?.some((f) => f.t === 'niche');
 /** Bought appliances (fridges, hoods, ranges, dishwashers…), not furniture. */
-export const isAppliance = (m: Pick<ModuleDefinition, 'type' | 'appl' | 'range' | 'cat'>) => m.type === 'fridge' || m.type === 'hood' || !!m.appl || !!m.range || m.cat === 'Electro';
+export const isAppliance = (m: Pick<ModuleDefinition, 'type' | 'appl' | 'range' | 'cat'> & Partial<Pick<ModuleDefinition, 'fr'>>) =>
+  !isHousing(m) && (m.type === 'fridge' || m.type === 'hood' || !!m.appl || !!m.range || m.cat === 'Electro');
 
 export function moduleChoicesFor(code: string, catalog: Record<string, ModuleDefinition>): ModuleDefinition[] {
   const std = catalog[code] ?? FALLBACK[code];
   if (!std) return [];
   return Object.values(catalog)
     // Appliances are chosen in Especificaciones → Electrodomésticos, not as furniture; sink / cooktop bases only for their role.
-    .filter((m) => m.active && !m.hidden && m.code !== code && m.type === std.type && m.projectType === std.projectType && !isAppliance(m) && (!m.sink || !!std.sink) && (!m.cook || !!std.cook))
+    .filter((m) => m.active && !m.hidden && !m.cover && m.code !== code && m.type === std.type && m.projectType === std.projectType && !isAppliance(m) && (!m.sink || !!std.sink) && (!m.cook || !!std.cook))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 const wallLen = (w: Wall, p: ProjectData) => (w === 'A' || w === 'D' ? p.room.A : p.room.B);
@@ -149,7 +152,7 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
   /** Own module for a spot only own modules fill (corner upper, over the fridge). */
   const special = (key: string) =>
     Object.values(catalog)
-      .filter((m) => m.active && !m.hidden && m.place === key && m.projectType === 'cocina' && m.type === 'upper')
+      .filter((m) => m.active && !m.hidden && !m.cover && m.place === key && m.projectType === 'cocina' && m.type === 'upper')
       .sort((a, b) => a.name.localeCompare(b.name))[0];
   /** Placed modules that keep their own depth (the over-fridge unit is usually deeper than the uppers). */
   const keepDepth = new Set<Placed>();

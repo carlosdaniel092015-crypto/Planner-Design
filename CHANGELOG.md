@@ -3,6 +3,30 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.33.0 · 2026-10-21
+
+### Cubre falta superior
+- Nuevo módulo **«Cubre falta superior»** (categoría Altos): un tablero que tapa el espacio entre las alacenas o columnas y el techo.
+- Al agregarlo se coloca **sobre el módulo seleccionado** (o sobre la primera alacena) con su mismo ancho, y se ajusta solo: arranca en el techo de la alacena, llega hasta el techo del cuarto y queda al ras del frente. Si cambias la altura de la alacena, usa **«Ajustar hasta el techo»** en sus propiedades.
+- Va en el color de los frentes, sale en el 3D y el alzado, y en el despiece como **una sola pieza**.
+
+### Mover hacia arriba o hacia abajo
+- Las **alacenas, campanas y cubre faltas** ahora se suben y se bajan: en **Propiedades → Ubicación** está **«Altura desde el piso»**, con botones para mover 1 o 5 cm, y te dice cuánto queda hasta el techo. Nunca pasan del piso ni del techo.
+
+### Muebles para electrodomésticos
+- Un **modelo 3D alto que subes** (por ejemplo un mueble para nevera hecho en Polyboard) ya **no se toma como nevera**: entra como **Columna**, con su despiece, zócalo y frentes editables. Solo se toma como electrodoméstico si su nombre lo dice («Nevera Samsung», «Campana inox»…).
+- Los módulos que ya habías subido con «mueble», «módulo», «gabinete», «alacena»… en el nombre y que quedaron como electrodoméstico se corrigen solos la próxima vez que abras un proyecto.
+- Un mueble con **hueco** para nevera, lavadora, microondas o extractor siempre cuenta como mueble, aunque lo pongas en la categoría Electro.
+
+### Diseñador de módulos
+- **Bibliotecas → Módulos → «Crear módulo»** abre una ventana completa, al estilo Polyboard:
+  - **Izquierda:** todos los parámetros. Nombre, categoría, proyecto, montaje (bajo, alto, columna o cubre falta), precio y ubicación predeterminada; ancho (con mínimo y máximo), alto y fondo; **entrepaños** por compartimento, **divisiones verticales**, **trasera** sí o no; fregadero, parrilla y horno.
+  - **Centro:** vista **frontal, lateral (corte) y planta**, con sus medidas, y el editor de **frentes**.
+  - **Derecha:** el **despiece al momento**, con piezas, medidas, m² de tablero, bisagras y correderas.
+  - **«Partir de un módulo del catálogo»** copia las medidas y los frentes de cualquier módulo estándar para empezar.
+- En cada módulo propio, **«Editar en el diseñador»** abre la misma ventana con sus valores para cambiar cualquier parámetro.
+- Las divisiones, los entrepaños y la trasera se ven en el 3D y salen en el despiece y la optimización de corte.
+
 ## 1.32.0 · 2026-10-08
 
 ### Instalaciones vistas desde atrás

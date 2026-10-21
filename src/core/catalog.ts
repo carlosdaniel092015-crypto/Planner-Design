@@ -94,6 +94,8 @@ const LIB: ModuleShape[] = [
   { code: 'C-HO', name: 'Columna horno', cat: 'Columnas', rw: [60, 60], w: 60, h: 210, d: 60, type: 'tall', oven: 1, fr: OVEN_COL },
   { code: 'C-DE', name: 'Columna despensa', cat: 'Columnas', rw: [40, 60], w: 50, h: 210, d: 60, type: 'tall', fr: [{ t: 'door', n: 1, f: 0.45 }, { t: 'door', n: 1, f: 0.55 }] },
   { code: 'E-L', name: 'Esquinero en L', cat: 'Esquinas', rw: [80, 110], w: 90, h: 76, d: 60, type: 'base', fr: D1 },
+  // Filler board from the top of the uppers to the ceiling; the editor fits it over the module it covers.
+  { code: 'CF-SUP', name: 'Cubre falta superior', cat: 'Altos', rw: [15, 400], w: 60, h: 30, d: 35, type: 'upper', fr: [], cover: 1 },
   { code: 'E-AL', name: 'Alacena esquinera', cat: 'Esquinas', rw: [60, 80], w: 65, h: 70, d: 35, type: 'upper', fr: D1 },
   // Appliances: freestanding ranges, side-by-side fridge, double sink and a 6-burner built-in cooktop.
   { code: 'ET-76', name: 'Estufa tradicional 4 hornillas', cat: 'Electro', rw: [76, 76], w: 76, h: 76, d: 65, type: 'base', fr: [], cook: 4, range: 1, appl: 1 },
@@ -116,7 +118,7 @@ const APPLIANCE_PRICE: Record<string, number> = { 'RF-75': 1828, 'RF-70': 1780, 
 const EXTRA: (m: ModuleShape) => number = (m) => (m.sink ? (m.sink === 2 ? 90 : 60) : 0) + (m.cook ? (m.cook === 6 ? 60 : 40) : 0) + (m.oven ? 70 : 0);
 
 function toDefinition(m: ModuleShape): ModuleDefinition {
-  const unitPrice = APPLIANCE_PRICE[m.code] ?? LABOR[m.type] + EXTRA(m);
+  const unitPrice = APPLIANCE_PRICE[m.code] ?? (m.cover ? 12 : LABOR[m.type] + EXTRA(m));
   return {
     ...clone(m),
     rw: m.rw ?? [m.w, m.w],
@@ -136,11 +138,26 @@ export const DEFAULT_MODULES: ModuleDefinition[] = (() => {
   for (const m of [...KITCHEN_T, ...ISLAND_EXTRA, ...LINEAL_T, ...CLOSET_T, ...VESTIDOR_T, ...TV_T]) {
     if (byCode.has(m.code)) continue;
     const shape: ModuleShape = { code: m.code, name: m.name, cat: m.cat, type: m.type, w: m.w, h: m.h, d: m.d, fr: m.fr, rw: m.rw, ...(m.panels ? { panels: m.panels, pdim: m.pdim } : {}) };
-    for (const k of ['sink', 'cook', 'appl', 'oven', 'range', 'fd'] as const) if (m[k]) shape[k] = m[k];
+    for (const k of ['sink', 'cook', 'appl', 'oven', 'range', 'fd', 'cover', 'shelves', 'div'] as const) if (m[k]) shape[k] = m[k];
     byCode.set(m.code, shape);
   }
   return [...byCode.values()].map(toDefinition);
 })();
+
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/**
+ * Montaje and category an uploaded 3D model starts with. Furniture by default (tall ones are columns, also a
+ * "Mueble para nevera" exported from Polyboard); an appliance only when its name says so and not that it's a unit.
+ */
+/** The name says it is a piece of furniture (mueble, módulo, alacena…), also when it names an appliance it houses. */
+export const isFurnitureName = (name: string) => /mueble|modulo|gabinete|alacena|columna|despensa|closet|hueco|torre|cajonera|repisa|estante|librero|cabinet|unit/.test(fold(name));
+export function uploadedKind(name: string, h: number): { type: ModuleType; cat: string } {
+  const n = fold(name);
+  const furniture = isFurnitureName(name);
+  if (!furniture && /campana|extractor|hood/.test(n)) return { type: 'hood', cat: 'Electro' };
+  if (!furniture && /nevera|refri|frigo|fridge|freezer|congelador|horno|estufa|lavadora|secadora|lavavajilla|microondas|oven|washer/.test(n)) return { type: h > 120 ? 'fridge' : 'base', cat: 'Electro' };
+  return h > 120 ? { type: 'tall', cat: 'Columnas' } : { type: 'base', cat: 'Mis módulos' };
+}
 
 export const DEFAULT_HARDWARE: HardwareDefinition[] = [
   { code: 'BISAGRA', name: 'Bisagra cierre suave', unitPrice: 2.5, priceCurrency: 'USD', active: true },

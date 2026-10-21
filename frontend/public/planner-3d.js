@@ -307,12 +307,21 @@ function buildModule(m, ctx) {
     bx(g, .3, Math.max(.1, ctx.H - yb - .06), .28, st, W / 2 - .15, yb + .06, 0);
     return g;
   }
+  if (m.cover) {
+    // Cubre falta superior: one board flush with the front of the units below, up to the ceiling.
+    bx(g, W, H, .018, texMat(frId, W, H, true, seed++), 0, yb, D - .018);
+    return g;
+  }
   const FT = .018, TT = .018, gap = (ctx.junta != null ? ctx.junta : 4) / 2000, cd = D - FT, hh = yt - yb;
   if (m.type !== 'upper' && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
   const body = (w, h) => texMat(bodyId, w, h, false, seed++);
   bx(g, TT, hh, cd, body(cd, hh), 0, yb, 0); bx(g, TT, hh, cd, body(cd, hh), W - TT, yb, 0);
   bx(g, W - 2 * TT, TT, cd, body(W, cd), TT, yb, 0); bx(g, W - 2 * TT, TT, cd, body(W, cd), TT, yt - TT, 0);
-  bx(g, W - 2 * TT, hh - 2 * TT, .006, body(W, hh), TT, yb + TT, .006);
+  if (m.back !== 0) bx(g, W - 2 * TT, hh - 2 * TT, .006, body(W, hh), TT, yb + TT, .006);
+  // Designer's construction: vertical dividers and a fixed number of shelves in every compartment.
+  const nDiv = Math.max(0, Math.min(6, m.div || 0)), cw = (W - 2 * TT - nDiv * TT) / (nDiv + 1);
+  for (let i = 1; i <= nDiv; i++) bx(g, TT, hh - 2 * TT, cd - .02, body(cd, hh), TT + i * cw + (i - 1) * TT, yb + TT, .006);
+  if (m.shelves != null) for (let c = 0; c <= nDiv; c++) for (let i = 1; i <= m.shelves; i++) bx(g, cw, TT, cd - .02, body(cw, cd), TT + c * (cw + TT), yb + TT + (hh - 2 * TT) * i / (m.shelves + 1), .006);
   if (m.type === 'upper') bx(g, W - .04, .004, .012, mats.led(), .02, yb - .004, cd - .06, { noCast: 1 });
   let v = 0;
   m.fr.forEach(seg => {
@@ -321,7 +330,7 @@ function buildModule(m, ctx) {
     if (seg.t === 'door') {
       const n = seg.n || 1, w = W / n;
       // An inner shelf, so an open door doesn't reveal an empty box.
-      if (sh > .4) bx(g, W - 2 * TT, TT, cd - .02, body(W, cd), TT, s0 + sh / 2, .006);
+      if (sh > .4 && m.shelves == null && !nDiv) bx(g, W - 2 * TT, TT, cd - .02, body(W, cd), TT, s0 + sh / 2, .006);
       const L = m.type === 'tall' ? .32 : .16;
       let cy = m.type === 'upper' ? s0 + .03 + L / 2 : s1 - .04 - L / 2;
       if (m.type === 'tall') cy = Math.min(s1 - .06 - L / 2, Math.max(s0 + .06 + L / 2, 1.05));

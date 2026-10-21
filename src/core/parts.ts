@@ -26,7 +26,7 @@ export interface Part {
 }
 
 type Mats = ProjectData['mats'];
-type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim'>;
+type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim' | 'cover' | 'shelves' | 'div' | 'back'>;
 
 // ---------- boards read from an uploaded 3D model ----------
 /** Thickest a mesh can be to count as a board (mm); both other sides must be at least BOARD_MIN_SIDE. */
@@ -114,11 +114,11 @@ export function placedPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'panels' 
 }
 
 /** A loose board cut from the fronts' board (TV panel, floating shelf): drawn in the fronts' finish. */
-export const isLooseFrontBoard = (m: Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb'>>) =>
-  !m.fr?.length && !m.glb && !!m.panels?.length && m.panels.every((b) => b.slot === 'frentes');
+export const isLooseFrontBoard = (m: Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb' | 'cover'>>) =>
+  !!m.cover || (!m.fr?.length && !m.glb && !!m.panels?.length && m.panels.every((b) => b.slot === 'frentes'));
 
 /** Material code of a module's body (carcass) as drawn. */
-export const bodyMaterialOf = (m: Pick<ModuleInstance, 'cue' | 'fre'> & Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb'>>, mats: { cuerpo: string; frentes: string }) =>
+export const bodyMaterialOf = (m: Pick<ModuleInstance, 'cue' | 'fre'> & Partial<Pick<ModuleInstance, 'fr' | 'panels' | 'glb' | 'cover'>>, mats: { cuerpo: string; frentes: string }) =>
   m.cue || (isLooseFrontBoard(m) ? m.fre || mats.frentes : mats.cuerpo);
 
 /** An uploaded model drawn as a native module: built from boards unless set otherwise, or converted by hand. */
@@ -240,6 +240,11 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
   };
   // Appliances (fridge, hood, freestanding range) are bought, not cut.
   if (m.type === 'fridge' || m.type === 'hood' || m.range) return [];
+  // Cubre falta superior: one board in the fronts' finish, as wide and tall as the gap.
+  if (m.cover) {
+    add('Cubre falta superior', 1, W, H, tf, 'frentes', 'Horizontal', '4L', 'door');
+    return mergeParts(P);
+  }
   const placed = usesBoards(m) ? placedPanels(m) : [];
   if (placed.length) {
     for (const pp of placed) {
@@ -259,13 +264,17 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
   add('Base', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'base');
   if (m.type === 'base') add('Travesaño', 2, W - 2 * t, 100, t, 'cuerpo', 'Horizontal', '1L', 'trav');
   else add('Techo', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'top');
-  add('Trasera', 1, W - 4, H - 4, 6, 'trasera', '—', '—', 'back');
+  if (m.back !== 0) add('Trasera', 1, W - 4, H - 4, 6, 'trasera', '—', '—', 'back');
   const fr = frontsOf(m);
   const niches = fr.filter((f) => f.t === 'niche').length;
   // A housing gets one divider per niche (the board between the appliance and the rest) and one shelf behind its doors.
   if (niches) add('Divisor de hueco', Math.min(niches, Math.max(1, fr.length - 1)), W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
-  const nSh = niches ? (fr.some((f) => f.t === 'door') ? 1 : 0) : fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
-  if (nSh) add('Entrepaño', nSh, W - 2 * t - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
+  // Vertical dividers split the inside into equal compartments; each one gets its own shelves.
+  const div = Math.max(0, Math.min(6, m.div ?? 0));
+  if (div) add('División', div, H - 2 * t, D - 20, t, 'cuerpo', 'Vertical', '1L', 'lat');
+  const usual = niches ? (fr.some((f) => f.t === 'door') ? 1 : 0) : fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
+  const nSh = m.shelves ?? usual;
+  if (nSh) add('Entrepaño', nSh * (div + 1), (W - 2 * t - div * t) / (div + 1) - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
   for (const seg of fr) {
     const sh = seg.f * H;
     if (seg.t === 'door') add('Puerta', seg.n || 1, sh - J, W / (seg.n || 1) - J, tf, 'frentes', 'Vertical', '4L', 'door');

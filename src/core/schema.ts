@@ -29,6 +29,17 @@ export const panelSchema = z.object({
   s: z.tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()]),
   slot: z.enum(['cuerpo', 'frentes', 'trasera']).optional(),
 });
+/** Construction details set in the module designer (Bibliotecas → Módulos). */
+const buildFields = {
+  /** Cubre falta superior: a single board from the top of the uppers to the ceiling. */
+  cover: flag,
+  /** Shelves inside the box; omitted = the usual count for its fronts. */
+  shelves: z.number().int().min(0).max(12).optional(),
+  /** Vertical dividers (equal compartments). */
+  div: z.number().int().min(0).max(6).optional(),
+  /** 0 = no back panel. */
+  back: z.union([z.literal(0), z.literal(1)]).optional(),
+};
 /** How an uploaded model is drawn: as a native module (fronts that open) or as its own 3D model. */
 const drawField = z.enum(['nativo', 'modelo']).optional();
 const panelsFields = {
@@ -62,7 +73,7 @@ export const moduleSchema = z
     open: z.enum(['der', 'izq']).optional(),
     /** Free modules only: turned this many degrees (0–359.9; 90 faces wall C, 180 wall A, 270 wall B). */
     rot: z.number().min(0).lt(360).optional(),
-    /** Bottom height (cm) of an upper placed off the 150 cm line (e.g. over the fridge). */
+    /** Bottom height (cm) of a wall-hung unit (upper, hood) off the 150 cm line: over the fridge, moved up or down. */
     z: z.number().min(0).max(500).optional(),
     /** Per-module material overrides (material codes). */
     cue: z.string().max(60).optional(),
@@ -71,6 +82,7 @@ export const moduleSchema = z
     glb: z.string().max(2000).optional(),
     ...panelsFields,
     draw: drawField,
+    ...buildFields,
     /** Library module base price (base currency) and the width it refers to. */
     pBase: z.number().min(0).optional(),
     w0: z.number().positive().optional(),
@@ -225,6 +237,7 @@ export const recipeSchema = z.object({
   /** Set once the stored model was read for boards (models uploaded before boards were saved). */
   pscan: flag,
   draw: drawField,
+  ...buildFields,
 }).refine((r) => r.fr.length === 0 || Math.abs(r.fr.reduce((a, s) => a + s.f, 0) - 1) < 0.02, {
   message: 'Las fracciones de los frentes (f) deben sumar 1.',
   path: ['fr'],

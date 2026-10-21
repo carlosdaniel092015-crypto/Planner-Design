@@ -54,6 +54,14 @@ export interface ModuleShape {
   pdim?: [number, number, number];
   /** Uploaded model drawn as a native module ('nativo', default when built from boards) or as-is ('modelo'). */
   draw?: 'nativo' | 'modelo';
+  /** Cubre falta superior: one board closing the gap between the uppers (or columns) and the ceiling. */
+  cover?: number;
+  /** Shelves (entrepaños) inside the box, instead of the usual count for its fronts. */
+  shelves?: number;
+  /** Vertical dividers (divisiones) splitting the box into equal compartments. */
+  div?: number;
+  /** Back panel: 0 = none (open back); anything else has the usual 6 mm back. */
+  back?: number;
 }
 
 export interface MaterialDefinition {

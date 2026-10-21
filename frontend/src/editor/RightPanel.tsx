@@ -1,4 +1,4 @@
-import { type Currency, type Dim, type Estimate, frontInfo, type ModuleInstance, type Place, placeOf, type ProjectData, ranges, usesBoards } from '@core';
+import { type Currency, type Dim, type Estimate, elevationRange, frontInfo, type ModuleInstance, type Place, placeOf, type ProjectData, ranges, usesBoards, zr } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import type { CatalogMaterial } from '../api';
 import { fmtMoney, Icon, MUTED, Svg } from '../ui';
@@ -52,6 +52,10 @@ export function RightPanel(props: {
   onReplace: () => void;
   onRemove: () => void;
   onMove: (to: Place) => void;
+  /** Moves a wall-hung unit up or down: its bottom at this height (cm from the floor). */
+  onLift: (z: number) => void;
+  /** Fits a cubre falta superior from the units under it to the ceiling. */
+  onFitCover: () => void;
   /** Turns the module by `deg` on itself (floor modules come off their wall; uppers go to the next wall). */
   onTurn: (deg: number) => void;
   /** Sets its turn (absolute degrees); `preview` while the slider moves, committed on release. */
@@ -135,7 +139,7 @@ export function RightPanel(props: {
           </button>
         </div>
 
-        <Ubicacion sel={sel} room={data.room} readOnly={readOnly} onMove={props.onMove} onTurn={props.onTurn} onRot={props.onRot} />
+        <Ubicacion sel={sel} data={data} readOnly={readOnly} onMove={props.onMove} onLift={props.onLift} onFitCover={props.onFitCover} onTurn={props.onTurn} onRot={props.onRot} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
           <h6 style={{ margin: 0 }}>Medidas</h6>
@@ -404,7 +408,8 @@ export function RotateControl({ sel, disabled, onTurn, onRot, compact }: { sel: 
   );
 }
 
-function Ubicacion({ sel, room, readOnly, onMove, onTurn, onRot }: { sel: ModuleInstance; room: ProjectData['room']; readOnly: boolean; onMove: (to: Place) => void; onTurn: (deg: number) => void; onRot: (deg: number, preview?: boolean) => void }) {
+function Ubicacion({ sel, data, readOnly, onMove, onLift, onFitCover, onTurn, onRot }: { sel: ModuleInstance; data: ProjectData; readOnly: boolean; onMove: (to: Place) => void; onLift: (z: number) => void; onFitCover: () => void; onTurn: (deg: number) => void; onRot: (deg: number, preview?: boolean) => void }) {
+  const room = data.room;
   const at = placeOf(sel);
   const upper = sel.type === 'upper' || sel.type === 'hood';
   const setWall = (w: string) => {
@@ -463,10 +468,44 @@ function Ubicacion({ sel, room, readOnly, onMove, onTurn, onRot }: { sel: Module
           </div>
         </>
       )}
-      <RotateControl sel={sel} disabled={readOnly} onTurn={onTurn} onRot={onRot} />
+      {upper && <Altura sel={sel} data={data} readOnly={readOnly} onLift={onLift} onFitCover={onFitCover} />}
+      {!sel.cover && <RotateControl sel={sel} disabled={readOnly} onTurn={onTurn} onRot={onRot} />}
       <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
-        También puedes arrastrarlo en la vista Planta, o en 3D con el botón «Mover muebles». Se alinea solo con las esquinas y los módulos vecinos.{sel.type === 'upper' || sel.type === 'hood' ? ' Los altos van siempre en un muro.' : ' Con «Mover muebles» lo llevas a donde quieras, también al centro. Al girarlo queda libre; arrímalo de espaldas a un muro (derecho) para pegarlo otra vez.'}
+        También puedes arrastrarlo en la vista Planta, o en 3D con el botón «Mover muebles». Se alinea solo con las esquinas y los módulos vecinos.{sel.type === 'upper' || sel.type === 'hood' ? ' Los altos van siempre en un muro; súbelos o bájalos con «Altura desde el piso».' : ' Con «Mover muebles» lo llevas a donde quieras, también al centro. Al girarlo queda libre; arrímalo de espaldas a un muro (derecho) para pegarlo otra vez.'}
       </p>
+    </div>
+  );
+}
+
+/** Height of a wall-hung unit: its bottom from the floor, with up/down nudges; fillers fit up to the ceiling. */
+function Altura({ sel, data, readOnly, onLift, onFitCover }: { sel: ModuleInstance; data: ProjectData; readOnly: boolean; onLift: (z: number) => void; onFitCover: () => void }) {
+  const [lo, hi] = elevationRange(data, sel);
+  const z = Math.round(zr(sel, 0)[0]);
+  const gap = Math.round(data.room.H - z - sel.h);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <label style={{ fontSize: 13, fontWeight: 600 }}>
+          Altura desde el piso <span style={{ fontWeight: 400, color: MUTED }}>{lo}–{hi} cm</span>
+        </label>
+        <div style={{ position: 'relative', width: 86 }}>
+          <NumberField value={z} min={lo} max={hi} disabled={readOnly} label="Altura desde el piso" onCommit={onLift} style={{ padding: '4px 28px 4px 8px', minHeight: 32, width: '100%' }} />
+          <span style={{ position: 'absolute', right: 8, top: 7, fontSize: 12, opacity: 0.6 }}>cm</span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between' }}>
+        <Nudge label="Bajar 5 cm" icon="chevrons-down" onStep={() => onLift(z - 5)} disabled={readOnly || z <= lo} />
+        <Nudge label="Bajar 1 cm" icon="chevron-down" onStep={() => onLift(z - 1)} disabled={readOnly || z <= lo} />
+        <Nudge label="Subir 1 cm" icon="chevron-up" onStep={() => onLift(z + 1)} disabled={readOnly || z >= hi} />
+        <Nudge label="Subir 5 cm" icon="chevrons-up" onStep={() => onLift(z + 5)} disabled={readOnly || z >= hi} />
+      </div>
+      <span style={{ fontSize: 12, color: MUTED }}>{gap > 0 ? `Quedan ${gap} cm hasta el techo.` : 'Llega hasta el techo.'}</span>
+      {sel.cover && (
+        <button type="button" className="btn btn-secondary" onClick={onFitCover} disabled={readOnly} style={{ alignSelf: 'flex-start' }}>
+          <Icon name="move-vertical" size={15} />
+          Ajustar hasta el techo
+        </button>
+      )}
     </div>
   );
 }

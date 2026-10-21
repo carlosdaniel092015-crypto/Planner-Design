@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
-import { frontsFromPanels, kindOfType, type ModelPanel, modelWidthRange } from '../core';
+import { frontsFromPanels, isFurnitureName, kindOfType, type ModelPanel, modelWidthRange, uploadedKind } from '../core';
 import type { DbOrTx } from '../db/client';
 import { files, materials, moduleDefinitions } from '../db/schema';
 import type { AuthContext } from '../lib/context';
@@ -170,7 +170,8 @@ export async function createLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
       ...rest,
       code,
       source,
-      type: input.type ?? (source === 'modelo3d' ? (h > 150 ? 'fridge' : 'base') : 'base'),
+      // Uploaded furniture is furniture (a tall model is a column, not a fridge) unless its name says it is an appliance.
+      type: input.type ?? (source === 'modelo3d' ? uploadedKind(input.name ?? '', h).type : 'base'),
       // 3D models stretch to the width you give them (half to double); parametric modules keep one width unless set.
       minW: input.minW ?? (source === 'modelo3d' ? modelWidthRange(w)[0] : w),
       maxW: input.maxW ?? (source === 'modelo3d' ? modelWidthRange(w)[1] : w),
@@ -212,7 +213,7 @@ export async function updateLibraryModule(db: DbOrTx, storage: Storage, a: AuthC
  */
 export async function backfillModelPanels(db: DbOrTx, storage: Storage, orgId: string): Promise<number> {
   const rows = await db
-    .select({ id: moduleDefinitions.id, recipe: moduleDefinitions.recipe, modelFileId: moduleDefinitions.modelFileId, defW: moduleDefinitions.defW, minW: moduleDefinitions.minW, maxW: moduleDefinitions.maxW })
+    .select({ id: moduleDefinitions.id, name: moduleDefinitions.name, row: moduleDefinitions.row, category: moduleDefinitions.category, recipe: moduleDefinitions.recipe, modelFileId: moduleDefinitions.modelFileId, defW: moduleDefinitions.defW, fixedH: moduleDefinitions.fixedH, minW: moduleDefinitions.minW, maxW: moduleDefinitions.maxW })
     .from(moduleDefinitions)
     .where(and(eq(moduleDefinitions.organizationId, orgId), eq(moduleDefinitions.source, 'modelo3d')));
   let done = 0;
@@ -241,8 +242,10 @@ export async function backfillModelPanels(db: DbOrTx, storage: Storage, orgId: s
     }
     // Models whose boards were read before they became native modules get their doors and drawers.
     next = withNativeFronts(next);
-    if (next === recipe && !widths) continue;
-    await db.update(moduleDefinitions).set({ recipe: next, ...widths }).where(eq(moduleDefinitions.id, r.id));
+    // Tall furniture uploaded before 1.33.0 was saved as a fridge in «Electro» (a «Mueble para nevera» read as the appliance).
+    const asFurniture = r.row === 'fridge' && r.category === 'Electro' && isFurnitureName(r.name) ? { row: 'tall' as const, category: 'Columnas' } : undefined;
+    if (next === recipe && !widths && !asFurniture) continue;
+    await db.update(moduleDefinitions).set({ recipe: next, ...widths, ...asFurniture }).where(eq(moduleDefinitions.id, r.id));
     done++;
   }
   return done;

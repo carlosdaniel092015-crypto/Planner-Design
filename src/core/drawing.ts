@@ -347,8 +347,10 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
     const bot = m.type === 'upper' || m.type === 'hood' ? z0 : 0;
     if (isSel(m.id)) rect(x0, Y(top), m.w, top - bot, 'rgba(236,48,19,.08)', ACC, 1.8);
     if (m.type !== 'hood') {
-      it.push({ t: 'c', cx: x0 + m.w / 2, cy: Y(top) - 11, r: 7, fill: isSel(m.id) ? ACC : INK, mid: m.id });
-      tx(x0 + m.w / 2, Y(top) - 10.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
+      // A filler reaches the ceiling: its number goes on the board, not above it.
+      const cy = m.cover ? Y((z0 + z1) / 2) : Y(top) - 11;
+      it.push({ t: 'c', cx: x0 + m.w / 2, cy, r: 7, fill: isSel(m.id) ? ACC : INK, mid: m.id });
+      tx(x0 + m.w / 2, cy + 0.5, String(m.id), { fill: '#fff', fs: 7.5, fw: 800 });
     }
   }
   // Installation points on this wall (always shown; with their measures in the installation plan).

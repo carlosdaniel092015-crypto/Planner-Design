@@ -1,6 +1,6 @@
 // Editor actions — ported 1:1 from the prototype (setDim, ranges, freeSpot, addFromLib, remove, applyMat, fronts).
 // Pure functions: they take the project and return a new one (the caller keeps undo history).
-import { footprint, geo } from './geometry';
+import { footprint, geo, zocaloCm, zr } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialGroup, ModuleDefinition, ModuleShape, WallId } from './types';
 
@@ -12,8 +12,10 @@ export type Dim = 'w' | 'h' | 'd';
 /** Width range for a module uploaded as a 3D model: the model is stretched to fit, from half to double its width. */
 export const modelWidthRange = (w: number): [number, number] => [Math.max(10, Math.round(w / 2)), Math.min(1000, Math.max(Math.round(w * 2), 30))];
 
-export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'> & { glb?: string; w?: number }): Record<Dim, [number, number]> {
+export function ranges(m: Pick<ModuleInstance, 'type' | 'rw'> & { glb?: string; w?: number; cover?: ModuleInstance['cover'] }): Record<Dim, [number, number]> {
   const t = m.type;
+  // A filler board: as tall as the gap to the ceiling, as deep as the units it sits on.
+  if (m.cover) return { w: m.rw ?? [15, 400], h: [3, 150], d: [20, 70] };
   // Models uploaded before 1.15.1 were saved with a single width (min = max); they can be resized too.
   const fixedModel = m.glb && (!m.rw || m.rw[0] === m.rw[1]);
   return {
@@ -32,7 +34,8 @@ export function setDim(p: ProjectData, id: number, key: Dim, value: number): Pro
   const delta = key === 'w' ? val - m.w : 0;
   const mods = p.mods.map((x) => {
     if (x.id === m.id) return { ...x, [key]: val };
-    if (delta && x.wall === m.wall && m.wall !== 'F' && isFloor(x) === isFloor(m) && (x.pos ?? 0) >= (m.pos ?? 0) + m.w - 0.5) return { ...x, pos: (x.pos ?? 0) + delta };
+    // Fillers over the uppers neither push nor get pushed.
+    if (delta && !m.cover && !x.cover && x.wall === m.wall && m.wall !== 'F' && isFloor(x) === isFloor(m) && (x.pos ?? 0) >= (m.pos ?? 0) + m.w - 0.5) return { ...x, pos: (x.pos ?? 0) + delta };
     return x;
   });
   return { ...p, mods };
@@ -42,7 +45,8 @@ export type Spot = { wall: WallId; pos: number } | { wall: 'F'; x: number; y: nu
 
 export function freeSpot(p: ProjectData, tpl: Pick<ModuleShape, 'type' | 'w'>): Spot | null {
   const up = tpl.type === 'upper';
-  const lvl = (x: ModuleInstance) => (up ? x.type === 'upper' || x.type === 'hood' || x.type === 'tall' || x.type === 'fridge' : isFloor(x));
+  // Fillers over the uppers don't take wall space at their level.
+  const lvl = (x: ModuleInstance) => !x.cover && (up ? x.type === 'upper' || x.type === 'hood' || x.type === 'tall' || x.type === 'fridge' : isFloor(x));
   const walls: [WallId, number, number][] = [
     ['A', p.room.A, 0],
     ['B', p.room.B, p.mods.some((x) => x.wall === 'A' && lvl(x) && x.pos === 0) ? (up ? 35 : 60) : 0],
@@ -85,6 +89,10 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.glb ? { glb: def.glb } : {}),
     ...(def.panels?.length ? { panels: clone(def.panels), pdim: def.pdim } : {}),
     ...(def.draw ? { draw: def.draw } : {}),
+    ...(def.cover ? { cover: 1 } : {}),
+    ...(def.shelves != null ? { shelves: def.shelves } : {}),
+    ...(def.div ? { div: def.div } : {}),
+    ...(def.back === 0 ? { back: 0 } : {}),
     moduleVersion: def.version,
   };
 }
@@ -101,6 +109,69 @@ export function addModule(p: ProjectData, tpl: ModuleShape): { project: ProjectD
 }
 
 /** Replaces a module keeping its id and position; width is clamped to the new template's range. */
+/** Height (cm from the floor) a wall-hung unit can be moved to: from the floor up to the ceiling minus its height. */
+export function elevationRange(p: ProjectData, m: Pick<ModuleInstance, 'h'>): [number, number] {
+  return [0, Math.max(0, Math.round(p.room.H - m.h))];
+}
+
+/** Moves a wall-hung unit (upper, hood, filler) up or down: its bottom at `z` cm from the floor, kept under the ceiling. */
+export function setElevation(p: ProjectData, id: number, z: number): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m || isFloor(m)) return p;
+  const [lo, hi] = elevationRange(p, m);
+  const v = Math.max(lo, Math.min(hi, Math.round(z)));
+  return { ...p, mods: p.mods.map((x) => (x.id === id ? { ...x, z: v } : x)) };
+}
+
+/** Units under a filler on its wall (uppers, columns, fridges overlapping its width), highest first. */
+function coveredBy(p: ProjectData, m: ModuleInstance) {
+  const zoc = zocaloCm(p.prefs.zocalo);
+  const x0 = m.pos ?? 0;
+  const x1 = x0 + m.w;
+  return p.mods
+    .filter((x) => x.id !== m.id && !x.cover && x.wall === m.wall && x.type !== 'base' && (x.pos ?? 0) < x1 - 0.5 && (x.pos ?? 0) + x.w > x0 + 0.5)
+    .map((x) => ({ x, top: zr(x, zoc)[1] }))
+    .sort((a, b) => b.top - a.top);
+}
+
+/**
+ * Fits a cubre falta superior: from the top of the units under it up to the ceiling, flush with their front
+ * (as deep as the upper it covers). Unchanged when it is not a filler on a wall or there is no gap left.
+ */
+export function fitCover(p: ProjectData, id: number): ProjectData {
+  const m = p.mods.find((x) => x.id === id);
+  if (!m?.cover || m.wall === 'F') return p;
+  const under = coveredBy(p, m);
+  const top = Math.round(under[0]?.top ?? m.z ?? 220);
+  const r = ranges(m);
+  const h = Math.min(r.h[1], Math.round(p.room.H - top));
+  if (h < r.h[0]) return p;
+  const deep = under.find((u) => u.x.type === 'upper')?.x.d ?? under[0]?.x.d ?? m.d;
+  const d = Math.max(r.d[0], Math.min(r.d[1], deep));
+  return { ...p, mods: p.mods.map((x) => (x.id === id ? { ...x, z: top, h, d } : x)) };
+}
+
+/**
+ * Adds a cubre falta superior over `overId` (an upper or column: same wall, position and width) or else over the
+ * first upper of the project, fitted up to the ceiling. Null when there is nothing on a wall to put it over.
+ */
+export function addCover(p: ProjectData, tpl: ModuleShape, overId?: number | null): { project: ProjectData; id: number; spot: Spot } | null {
+  const order = ['A', 'B', 'C', 'D'];
+  const sel = p.mods.find((x) => x.id === overId && x.wall !== 'F' && x.type !== 'base' && !x.cover);
+  const host =
+    sel ??
+    [...p.mods]
+      .filter((x) => x.wall !== 'F' && x.type === 'upper' && !x.cover)
+      .sort((a, b) => order.indexOf(a.wall) - order.indexOf(b.wall) || (a.pos ?? 0) - (b.pos ?? 0))[0];
+  if (!host) return null;
+  const rw = tpl.rw ?? [15, 400];
+  const id = nextId(p);
+  const spot: Spot = { wall: host.wall, pos: host.pos ?? 0 };
+  const nm = { ...clone(tpl), ...spot, id, w: Math.max(rw[0], Math.min(rw[1], host.w)) } as ModuleInstance;
+  const project = fitCover({ ...p, mods: [...p.mods, nm] }, id);
+  return { project, id, spot };
+}
+
 export function replaceModule(p: ProjectData, id: number, tpl: ModuleShape): ProjectData {
   const old = p.mods.find((x) => x.id === id);
   if (!old) return p;

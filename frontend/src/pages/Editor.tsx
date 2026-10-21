@@ -1,5 +1,8 @@
 import {
+  addCover,
   addModule,
+  fitCover,
+  setElevation,
   applyMaterial,
   computeEstimate,
   type Currency,
@@ -651,6 +654,16 @@ export function EditorPage() {
       flash(`Módulo ${sel} reemplazado por ${def.name}`);
       return;
     }
+    if (tpl.cover) {
+      // Over the selected upper or column (else the first upper), from its top to the ceiling.
+      const c = addCover(data, tpl, sel);
+      if (!c) return flash('Primero coloca las alacenas o columnas: el cubre falta va sobre ellas, hasta el techo.');
+      commit(c.project);
+      setSel(c.id);
+      setRightOpen(true);
+      const m = c.project.mods.find((x) => x.id === c.id)!;
+      return flash(`${def.name} sobre el muro ${c.spot.wall}: ${m.h} cm hasta el techo`);
+    }
     const r = addModule(data, tpl);
     if (!r) return flash(`No hay espacio libre en los muros para ${def.name}`);
     commit(r.project);
@@ -1107,6 +1120,14 @@ export function EditorPage() {
                 if (!sel) return;
                 const next = moveModule(data, sel, to);
                 commit(next);
+              }}
+              onLift={(z) => sel && commit(setElevation(data, sel, z))}
+              onFitCover={() => {
+                if (!sel) return;
+                const next = fitCover(data, sel);
+                if (next === data) return flash('No queda espacio entre los módulos y el techo para el cubre falta.');
+                commit(next);
+                flash('Cubre falta ajustado hasta el techo');
               }}
               onRemove={() => {
                 if (!sel) return;
