@@ -3,6 +3,17 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.34.0 · 2026-10-22
+
+### Cubre falta superior en Especificaciones
+- En **Fase 1 → 5. Preferencias**, junto a la altura de alacenas, el tipo de apertura y el zócalo, está **«Cubre falta superior»**. Marca la casilla si lo quieres incluir.
+- Configuras sus medidas:
+  - **Alto:** «Hasta el techo» (se calcula solo) o una **medida fija**. Te dice cuántos centímetros quedan sobre las alacenas.
+  - **Holgura con el techo:** el espacio que se deja abajo del techo para poder instalarlo, de 0 a 10 cm.
+  - **Fondo:** «Igual que las alacenas» (al ras de su frente) o una medida fija.
+- Al generar la distribución propuesta se pone **un cubre falta sobre cada tramo de alacenas y columnas**, del mismo ancho (los tramos de más de 4 m se parten en dos). Si en algún lugar no cabe, no se pone, y si no cabe en ninguno te lo avisa.
+- Sale en el **Resumen** del paso 6. En el editor, «Ajustar hasta el techo» y los cubre faltas nuevos usan también estas medidas.
+
 ## 1.33.0 · 2026-10-21
 
 ### Cubre falta superior

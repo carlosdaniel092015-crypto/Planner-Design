@@ -178,6 +178,18 @@ export const projectDataSchema = z
         junta: z.number().min(0).max(10).optional(),
         zocalo: z.string().optional(),
         presupuesto: z.number().optional(),
+        /**
+         * Cubre falta superior in the generated layout: on, its height (omitted = up to the ceiling), the gap left
+         * under the ceiling and its depth (omitted = as deep as the uppers), in cm.
+         */
+        cubre: z
+          .object({
+            on: z.boolean(),
+            h: z.number().min(3).max(150).optional(),
+            gap: z.number().min(0).max(10).optional(),
+            d: z.number().min(20).max(70).optional(),
+          })
+          .optional(),
         /** Own modules for the generated layout: standard code → catalogue code ('' keeps the standard one). */
         mods: z.record(z.string().max(60), z.string().max(60)).optional(),
       })

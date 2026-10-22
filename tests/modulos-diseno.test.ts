@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   addCover,
+  addCovers,
+  generateDesign,
+  newProject,
   computeEstimate,
   DEFAULT_HARDWARE,
   DEFAULT_KITCHEN,
@@ -182,5 +185,66 @@ describe('API de la biblioteca', () => {
     expect(cat.data.context.modules['CF-SUP']).toMatchObject({ cover: 1, type: 'upper' });
     const bad = await t.req('POST', '/library/modules', { user: t.adminA, body: { ...body, recipe: { fr: [], div: 9 } } });
     expect(bad.status).toBe(422);
+  });
+});
+
+describe('cubre falta en Especificaciones → Preferencias', () => {
+  const gen = (cubre?: object, H = 250) => {
+    const p = projectDataSchema.parse({ ...newProject('cocina'), room: { A: 360, B: 300, H }, prefs: { ...newProject('cocina').prefs, alacena: '70 cm', ...(cubre ? { cubre } : {}) } });
+    return { p, g: generateDesign(p, by(DEFAULT_MODULES)) };
+  };
+
+  it('sin marcar no se agrega', () => {
+    expect(gen().g.mods.some((m) => m.cover)).toBe(false);
+    expect(gen({ on: false }).g.mods.some((m) => m.cover)).toBe(false);
+  });
+
+  it('marcado: uno por tramo de alacenas y columnas, del ancho del tramo y hasta el techo', () => {
+    const { g } = gen({ on: true });
+    const covers = g.mods.filter((m) => m.cover);
+    expect(covers.length).toBeGreaterThan(0);
+    for (const c of covers) {
+      expect(c).toMatchObject({ type: 'upper', code: 'CF-SUP' });
+      // Over units of its wall, flush with their top, reaching the ceiling.
+      expect(c.z! + c.h).toBe(250);
+      const under = g.mods.filter((m) => !m.cover && m.wall === c.wall && (m.type === 'upper' || m.type === 'tall') && m.pos! < c.pos! + c.w && m.pos! + m.w > c.pos!);
+      expect(under.length).toBeGreaterThan(0);
+      expect(under.reduce((a, m) => a + m.w, 0)).toBeGreaterThanOrEqual(c.w);
+    }
+    // Uppers at 150 + 70: 30 cm up to a 250 cm ceiling. Ids stay unique.
+    expect(covers.some((c) => c.z === 220 && c.h === 30)).toBe(true);
+    expect(new Set(g.mods.map((m) => m.id)).size).toBe(g.mods.length);
+  });
+
+  it('respeta alto fijo, holgura con el techo y fondo', () => {
+    const fixed = gen({ on: true, h: 20 }).g.mods.find((m) => m.cover && m.z === 220)!;
+    expect(fixed.h).toBe(20);
+    const gap = gen({ on: true, gap: 2, d: 40 }).g.mods.find((m) => m.cover && m.z === 220)!;
+    expect(gap).toMatchObject({ h: 28, d: 40 });
+    // A fixed height never goes past the ceiling.
+    expect(gen({ on: true, h: 100 }).g.mods.find((m) => m.cover && m.z === 220)!.h).toBe(30);
+  });
+
+  it('donde no queda espacio no se agrega (sí sobre una columna más baja)', () => {
+    // With a low ceiling the uppers leave 5 cm above them; a 5 cm gap under the ceiling takes it all.
+    const { g } = gen({ on: true, gap: 5 }, 220);
+    const covers = g.mods.filter((m) => m.cover);
+    expect(covers.some((c) => c.wall === 'A')).toBe(false);
+    // The oven column tops out at 205 cm: 10 cm left under the gap.
+    expect(covers).toEqual([expect.objectContaining({ wall: 'B', z: 205, h: 10 })]);
+  });
+
+  it('si no cabe en ningún lado, lo avisa', () => {
+    const { g } = gen({ on: true, gap: 10 }, 200);
+    expect(g.mods.some((m) => m.cover)).toBe(false);
+    expect(g.notes.join(' ')).toMatch(/cubre falta/);
+  });
+
+  it('addCovers reemplaza los que ya había y parte los tramos de más de 400 cm', () => {
+    const p = kitchen([place('A-2P', 1, 0, { w: 120 }), place('A-2P', 2, 120, { w: 120 }), place('A-2P', 3, 240, { w: 120 }), place('A-2P', 4, 360, { w: 100 })]);
+    const once = addCovers({ ...p, room: { ...p.room, A: 500 } });
+    const covers = once.mods.filter((m) => m.cover);
+    expect(covers.map((c) => [c.pos, c.w])).toEqual([[0, 400], [400, 60]]);
+    expect(addCovers(once).mods.filter((m) => m.cover)).toHaveLength(2);
   });
 });
