@@ -26,7 +26,7 @@ export interface Part {
 }
 
 type Mats = ProjectData['mats'];
-type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim' | 'cover' | 'shelves' | 'div' | 'back'>;
+type ModuleLike = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'cue' | 'fre' | 'glb' | 'appl' | 'range' | 'panels' | 'pdim' | 'cover' | 'shelves' | 'div' | 'back' | 'build'>;
 
 // ---------- boards read from an uploaded 3D model ----------
 /** Thickest a mesh can be to count as a board (mm); both other sides must be at least BOARD_MIN_SIDE. */
@@ -260,28 +260,146 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     add('Panel frontal', 1, H - J, W - J, tf, 'frentes', 'Vertical', '4L', 'door');
     return P.map((p, i) => ({ ...p, ref: i + 1 }));
   }
-  add('Lateral', 2, H, D, t, 'cuerpo', 'Vertical', '1L', 'lat');
-  add('Base', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'base');
-  if (m.type === 'base') add('Travesaño', 2, W - 2 * t, 100, t, 'cuerpo', 'Horizontal', '1L', 'trav');
-  else add('Techo', 1, W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'top');
-  if (m.back !== 0) add('Trasera', 1, W - 4, H - 4, 6, 'trasera', '—', '—', 'back');
-  const fr = frontsOf(m);
+  for (const b of moduleBoards(m, t, tf, J)) add(b.n, 1, b.L, b.A, b.esp, b.slot, b.veta, b.cantos, b.grp);
+  return mergeParts(P);
+}
+
+/** Which panel of the module a board is (the designer selects and edits them by this). */
+export type BoardRole = 'techo' | 'travesano' | 'suelo' | 'lat-izq' | 'lat-der' | 'trasera' | 'frontal' | 'division' | 'entrepano' | 'divisor' | 'puerta' | 'cajon' | 'horno';
+
+/** One board of a parametric module where it stands: box in mm (x from the left, y from the back, z from its bottom). */
+export interface Board {
+  n: string;
+  role: BoardRole;
+  box: [number, number, number, number, number, number];
+  /** Cut size: length, width and thickness (mm). */
+  L: number;
+  A: number;
+  esp: number;
+  slot: PartSlot;
+  veta: string;
+  cantos: string;
+  grp: PartGroup;
+}
+
+/** The usual number of shelves for a module's fronts (when the designer doesn't set it). */
+export function usualShelves(m: Pick<ModuleInstance, 'type'>, fr: ModuleInstance['fr']): number {
   const niches = fr.filter((f) => f.t === 'niche').length;
-  // A housing gets one divider per niche (the board between the appliance and the rest) and one shelf behind its doors.
-  if (niches) add('Divisor de hueco', Math.min(niches, Math.max(1, fr.length - 1)), W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
+  return niches ? (fr.some((f) => f.t === 'door') ? 1 : 0) : fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
+}
+
+/** The construction with every default filled in (the usual box: rails on top of a base, full top elsewhere). */
+export function buildOf(m: Pick<ModuleInstance, 'type' | 'back' | 'build'>) {
+  const b = m.build ?? {};
+  return {
+    top: b.top ?? (m.type === 'base' ? 'travesanos' : 'completo'),
+    topPos: b.topPos ?? 'entre',
+    bottom: b.bottom ?? 1,
+    bottomPos: b.bottomPos ?? 'entre',
+    left: b.left ?? 1,
+    right: b.right ?? 1,
+    back: m.back === 0 ? 0 : 1,
+    backT: b.backT ?? 6,
+    backPos: b.backPos ?? ((b.backT ?? 6) === 6 ? 'ranura' : 'entre'),
+    front: b.front ?? 0,
+    rail: b.rail ?? 100,
+  } as const;
+}
+
+/**
+ * The boards of a parametric module, panel by panel, where they stand (mm). Built like Polyboard: each panel present
+ * or not, top and bottom over the sides ('total') or between them ('entre'), the back in a groove, over the whole back
+ * or between the sides, and an optional fixed front. `t` body thickness, `tf` fronts thickness, `J` gap between fronts.
+ * The despiece, the 3D and the designer's views all come from here.
+ */
+export function moduleBoards(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'glb' | 'panels' | 'pdim' | 'shelves' | 'div' | 'back' | 'build'>, t = 18, tf = 18, J = 4): Board[] {
+  const W = m.w * 10;
+  const H = m.h * 10;
+  const D = m.d * 10;
+  const b = buildOf(m);
+  const out: Board[] = [];
+  const add = (n: string, role: BoardRole, box: Board['box'], L: number, A: number, esp: number, slot: PartSlot, veta: string, cantos: string, grp: PartGroup) =>
+    out.push({ n, role, box, L: Math.round(L), A: Math.round(A), esp, slot, veta, cantos, grp });
+  const hasTop = b.top !== 'no';
+  // Over-the-sides top/bottom shorten the sides; a back over the whole back or between the sides takes depth.
+  const topOver = hasTop && b.topPos === 'total';
+  const botOver = !!b.bottom && b.bottomPos === 'total';
+  const bt = b.back ? (b.backPos === 'ranura' ? 0 : b.backT) : 0;
+  const yB = b.backPos === 'total' ? bt : 0;
+  const sideZ0 = botOver ? t : 0;
+  const sideZ1 = topOver ? H - t : H;
+  const xi0 = b.left ? t : 0;
+  const xi1 = W - (b.right ? t : 0);
+  if (b.left) add('Lateral', 'lat-izq', [0, t, yB, D, sideZ0, sideZ1], sideZ1 - sideZ0, D - yB, t, 'cuerpo', 'Vertical', '1L', 'lat');
+  if (b.right) add('Lateral', 'lat-der', [W - t, W, yB, D, sideZ0, sideZ1], sideZ1 - sideZ0, D - yB, t, 'cuerpo', 'Vertical', '1L', 'lat');
+  // Top and bottom: the whole width over the sides, or between them; behind them a back between the sides.
+  const yIn = bt && b.backPos !== 'ranura' ? bt : 0;
+  const span = (over: boolean): [number, number] => (over ? [0, W] : [xi0, xi1]);
+  if (b.bottom) {
+    const [x0, x1] = span(botOver);
+    add('Base', 'suelo', [x0, x1, yIn, D, 0, t], x1 - x0, D - yIn, t, 'cuerpo', 'Horizontal', '1L', 'base');
+  }
+  if (b.top === 'travesanos') {
+    const [x0, x1] = span(topOver);
+    add('Travesaño', 'travesano', [x0, x1, yIn, yIn + b.rail, H - t, H], x1 - x0, b.rail, t, 'cuerpo', 'Horizontal', '1L', 'trav');
+    add('Travesaño', 'travesano', [x0, x1, D - b.rail, D, H - t, H], x1 - x0, b.rail, t, 'cuerpo', 'Horizontal', '1L', 'trav');
+  } else if (b.top === 'completo') {
+    const [x0, x1] = span(topOver);
+    add('Techo', 'techo', [x0, x1, yIn, D, H - t, H], x1 - x0, D - yIn, t, 'cuerpo', 'Horizontal', '1L', 'top');
+  }
+  const z0 = b.bottom ? t : 0;
+  const z1 = b.top === 'completo' ? H - t : H;
+  if (b.back) {
+    if (b.backPos === 'ranura') add('Trasera', 'trasera', [2, W - 2, 8, 8 + b.backT, 2, H - 2], W - 4, H - 4, b.backT, b.backT === 6 ? 'trasera' : 'cuerpo', '—', '—', 'back');
+    else if (b.backPos === 'total') add('Trasera', 'trasera', [0, W, 0, bt, 0, H], W, H, bt, bt === 6 ? 'trasera' : 'cuerpo', bt === 6 ? '—' : 'Vertical', bt === 6 ? '—' : '1L', 'back');
+    else add('Trasera', 'trasera', [xi0, xi1, 0, bt, z0, z1], xi1 - xi0, z1 - z0, bt, bt === 6 ? 'trasera' : 'cuerpo', bt === 6 ? '—' : 'Vertical', bt === 6 ? '—' : '1L', 'back');
+  }
+  const fr = b.front ? [] : frontsOf(m);
+  // A housing gets one divider per niche (the board between the appliance and the rest).
+  const niches = fr.filter((f) => f.t === 'niche').length;
+  if (niches) {
+    let v = 0;
+    const cuts: number[] = [];
+    for (const seg of fr) {
+      v += seg.f;
+      if (seg.t === 'niche' && v < 0.999) cuts.push(v);
+      else if (seg.t !== 'niche' && fr[fr.indexOf(seg) + 1]?.t === 'niche') cuts.push(v);
+    }
+    const n = Math.min(niches, Math.max(1, fr.length - 1));
+    for (let i = 0; i < n; i++) {
+      const z = (cuts[i] ?? 0.5) * H;
+      add('Divisor de hueco', 'divisor', [xi0, xi1, yIn, D, z - t / 2, z + t / 2], W - 2 * t, D, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
+    }
+  }
   // Vertical dividers split the inside into equal compartments; each one gets its own shelves.
   const div = Math.max(0, Math.min(6, m.div ?? 0));
-  if (div) add('División', div, H - 2 * t, D - 20, t, 'cuerpo', 'Vertical', '1L', 'lat');
-  const usual = niches ? (fr.some((f) => f.t === 'door') ? 1 : 0) : fr.some((f) => f.t === 'open') ? (fr.some((f) => f.rod) ? 2 : 4) : m.type === 'tall' ? 3 : fr.every((f) => f.t === 'drawer') ? 0 : 1;
-  const nSh = m.shelves ?? usual;
-  if (nSh) add('Entrepaño', nSh * (div + 1), (W - 2 * t - div * t) / (div + 1) - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
-  for (const seg of fr) {
-    const sh = seg.f * H;
-    if (seg.t === 'door') add('Puerta', seg.n || 1, sh - J, W / (seg.n || 1) - J, tf, 'frentes', 'Vertical', '4L', 'door');
-    if (seg.t === 'drawer') add('Frente de cajón', 1, W - J, sh - J, tf, 'frentes', 'Horizontal', '4L', 'drawer');
-    if (seg.t === 'oven') add('Remate de horno', 1, W - J, 60, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+  const cw = (xi1 - xi0 - div * t) / (div + 1);
+  for (let i = 1; i <= div; i++) {
+    const x = xi0 + i * cw + (i - 1) * t;
+    add('División', 'division', [x, x + t, Math.max(yIn, 20), D - 20 + Math.max(yIn, 20) - yIn, z0, z1], H - 2 * t, D - 20, t, 'cuerpo', 'Vertical', '1L', 'lat');
   }
-  return mergeParts(P);
+  const nSh = m.shelves ?? usualShelves(m, frontsOf(m));
+  for (let c = 0; c <= div; c++)
+    for (let i = 1; i <= nSh; i++) {
+      const z = z0 + ((z1 - z0) * i) / (nSh + 1);
+      const x = xi0 + c * (cw + t) + 1;
+      add('Entrepaño', 'entrepano', [x, x + cw - 2, Math.max(yIn, 20), D, z - t / 2, z + t / 2], cw - 2, D - 20, t, 'cuerpo', 'Horizontal', '1L', 'shelf');
+    }
+  // Fronts in front of the box: a fixed frontal, or the doors and drawers.
+  if (b.front) add('Frontal', 'frontal', [J / 2, W - J / 2, D, D + tf, J / 2, H - J / 2], H - J, W - J, tf, 'frentes', 'Vertical', '4L', 'door');
+  let v = 0;
+  for (const seg of fr) {
+    const s0 = v * H;
+    const sh = seg.f * H;
+    v += seg.f;
+    if (seg.t === 'door') {
+      const n = seg.n || 1;
+      for (let i = 0; i < n; i++) add('Puerta', 'puerta', [(i * W) / n + J / 2, ((i + 1) * W) / n - J / 2, D, D + tf, s0 + J / 2, s0 + sh - J / 2], sh - J, W / n - J, tf, 'frentes', 'Vertical', '4L', 'door');
+    }
+    if (seg.t === 'drawer') add('Frente de cajón', 'cajon', [J / 2, W - J / 2, D, D + tf, s0 + J / 2, s0 + sh - J / 2], W - J, sh - J, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+    if (seg.t === 'oven') add('Remate de horno', 'horno', [J / 2, W - J / 2, D, D + tf, s0 + sh - 60, s0 + sh], W - J, 60, tf, 'frentes', 'Horizontal', '4L', 'drawer');
+  }
+  return out;
 }
 
 /** Same piece, size and material → one row with the quantities added. */

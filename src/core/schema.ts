@@ -39,6 +39,21 @@ const buildFields = {
   div: z.number().int().min(0).max(6).optional(),
   /** 0 = no back panel. */
   back: z.union([z.literal(0), z.literal(1)]).optional(),
+  /** Panel by panel construction (top, bottom, sides, back and how they meet). */
+  build: z
+    .object({
+      top: z.enum(['completo', 'travesanos', 'no']).optional(),
+      topPos: z.enum(['entre', 'total']).optional(),
+      bottom: z.union([z.literal(0), z.literal(1)]).optional(),
+      bottomPos: z.enum(['entre', 'total']).optional(),
+      left: z.union([z.literal(0), z.literal(1)]).optional(),
+      right: z.union([z.literal(0), z.literal(1)]).optional(),
+      backT: z.union([z.literal(6), z.literal(18)]).optional(),
+      backPos: z.enum(['ranura', 'total', 'entre']).optional(),
+      front: z.union([z.literal(0), z.literal(1)]).optional(),
+      rail: z.number().int().min(40).max(300).optional(),
+    })
+    .optional(),
 };
 /** How an uploaded model is drawn: as a native module (fronts that open) or as its own 3D model. */
 const drawField = z.enum(['nativo', 'modelo']).optional();
@@ -178,6 +193,18 @@ export const projectDataSchema = z
         junta: z.number().min(0).max(10).optional(),
         zocalo: z.string().optional(),
         presupuesto: z.number().optional(),
+        /**
+         * Cubre falta superior in the generated layout: on, its height (omitted = up to the ceiling), the gap left
+         * under the ceiling and its depth (omitted = as deep as the uppers), in cm.
+         */
+        cubre: z
+          .object({
+            on: z.boolean(),
+            h: z.number().min(3).max(150).optional(),
+            gap: z.number().min(0).max(10).optional(),
+            d: z.number().min(20).max(70).optional(),
+          })
+          .optional(),
         /** Own modules for the generated layout: standard code → catalogue code ('' keeps the standard one). */
         mods: z.record(z.string().max(60), z.string().max(60)).optional(),
       })

@@ -62,6 +62,7 @@ export function moduleRowToDef(r: ModuleRow, modelUrl?: string | null): ModuleDe
     ...(recipe.shelves != null ? { shelves: recipe.shelves } : {}),
     ...(recipe.div ? { div: recipe.div } : {}),
     ...(recipe.back === 0 ? { back: 0 } : {}),
+    ...(recipe.build ? { build: recipe.build } : {}),
     projectType: r.projectType,
     source: r.source,
     // Placed automatically by the generator unless the module is excluded from it.
@@ -91,7 +92,7 @@ export function moduleDefToRow(d: ModuleDefinition) {
     fixedD: d.d,
     doors: counts.doors,
     drawers: counts.drawers,
-    recipe: { fr: d.fr, ...(d.sink ? { sink: d.sink } : {}), ...(d.cook ? { cook: d.cook } : {}), ...(d.range ? { range: 1 } : {}), ...(d.fd ? { fd: d.fd } : {}), ...(d.appl ? { appl: 1 } : {}), ...(d.oven ? { oven: 1 } : {}), ...(d.panels?.length ? { panels: d.panels, pdim: d.pdim } : {}), ...(d.draw ? { draw: d.draw } : {}), ...(d.cover ? { cover: 1 } : {}), ...(d.shelves != null ? { shelves: d.shelves } : {}), ...(d.div ? { div: d.div } : {}), ...(d.back === 0 ? { back: 0 } : {}) },
+    recipe: { fr: d.fr, ...(d.sink ? { sink: d.sink } : {}), ...(d.cook ? { cook: d.cook } : {}), ...(d.range ? { range: 1 } : {}), ...(d.fd ? { fd: d.fd } : {}), ...(d.appl ? { appl: 1 } : {}), ...(d.oven ? { oven: 1 } : {}), ...(d.panels?.length ? { panels: d.panels, pdim: d.pdim } : {}), ...(d.draw ? { draw: d.draw } : {}), ...(d.cover ? { cover: 1 } : {}), ...(d.shelves != null ? { shelves: d.shelves } : {}), ...(d.div ? { div: d.div } : {}), ...(d.back === 0 ? { back: 0 } : {}), ...(d.build ? { build: d.build } : {}) },
     unitPrice: d.unitPrice,
     priceCurrency: d.priceCurrency,
     version: d.version,

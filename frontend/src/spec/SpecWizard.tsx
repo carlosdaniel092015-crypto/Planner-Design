@@ -60,6 +60,82 @@ function Num({ value, onCommit, label, style, disabled }: { value: number; onCom
   );
 }
 
+type Cubre = NonNullable<ProjectData['prefs']['cubre']>;
+/**
+ * Paso 5 (cocina): cubre falta superior. Whether the proposal puts one over the uppers and columns, its height
+ * (up to the ceiling or fixed), the gap left under the ceiling and its depth (as the uppers or fixed).
+ */
+function CoverPrefs({ cubre, roomH, upperTop, onChange, readOnly }: { cubre: Cubre | undefined; roomH: number; upperTop: number; onChange: (c: Cubre) => void; readOnly?: boolean }) {
+  const c: Cubre = cubre ?? { on: false };
+  const set = (patch: Partial<Cubre>) => {
+    const next = { ...c, ...patch };
+    for (const k of ['h', 'gap', 'd'] as const) if (next[k] === undefined) delete next[k];
+    onChange(next);
+  };
+  const auto = Math.max(0, Math.round(roomH - upperTop - (c.gap ?? 0)));
+  const shown = c.h != null ? Math.min(c.h, auto) : auto;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
+  const opt = (name: string, isAuto: boolean, autoLabel: string, pick: (auto: boolean) => void) => (
+    <div className="seg">
+      {[true, false].map((a) => (
+        <label key={String(a)} className="seg-opt">
+          <input type="radio" name={name} checked={isAuto === a} onChange={() => pick(a)} disabled={readOnly} />
+          {a ? autoLabel : 'Medida fija'}
+        </label>
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 24, borderTop: '2px solid var(--color-divider)' }}>
+      <label style={{ display: 'flex', alignItems: 'start', gap: 10, cursor: readOnly ? 'default' : 'pointer' }}>
+        <input type="checkbox" checked={c.on} disabled={readOnly} onChange={() => set({ on: !c.on })} style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', margin: '3px 0 0' }} />
+        <span>
+          <span style={{ fontWeight: 800, fontSize: 16 }}>Cubre falta superior</span>
+          <span style={{ display: 'block', fontSize: 13, color: MUTED }}>
+            Una pieza que tapa el espacio que queda entre los muebles altos y el techo. La propuesta la pone sobre cada tramo de alacenas y columnas, del mismo ancho, en el color de los frentes.
+          </span>
+        </span>
+      </label>
+      {c.on && (
+        <>
+          <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 24 }}>
+            <div>
+              <h6 style={{ margin: '0 0 10px' }}>Alto</h6>
+              {opt('cubre-h', c.h == null, 'Hasta el techo', (a) => set({ h: a ? undefined : Math.max(3, Math.min(150, auto || 30)) }))}
+              {c.h != null && (
+                <div style={{ marginTop: 10, maxWidth: 160 }}>
+                  <CmField label="Alto del cubre falta" value={c.h} onCommit={(v) => set({ h: clamp(v, 3, 150) })} disabled={readOnly} />
+                </div>
+              )}
+              <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>
+                {auto < 3 ? 'Con estas alturas no queda espacio sobre las alacenas.' : `Sobre alacenas de ${upperTop - 150} cm quedan ${shown} cm. Sobre las columnas se mide desde su techo.`}
+              </p>
+            </div>
+            <div>
+              <h6 style={{ margin: '0 0 10px' }}>Holgura con el techo</h6>
+              <div style={{ maxWidth: 160 }}>
+                <CmField label="Holgura con el techo" value={c.gap ?? 0} onCommit={(v) => set({ gap: clamp(v, 0, 10) || undefined })} disabled={readOnly} />
+              </div>
+              <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>Espacio que se deja abajo del techo para poder instalarlo (techos desnivelados). Entre 0 y 10 cm.</p>
+            </div>
+            <div>
+              <h6 style={{ margin: '0 0 10px' }}>Fondo</h6>
+              {opt('cubre-d', c.d == null, 'Igual que las alacenas', (a) => set({ d: a ? undefined : 35 }))}
+              {c.d != null && (
+                <div style={{ marginTop: 10, maxWidth: 160 }}>
+                  <CmField label="Fondo del cubre falta" value={c.d} onCommit={(v) => set({ d: clamp(v, 20, 70) })} disabled={readOnly} />
+                </div>
+              )}
+              <p style={{ fontSize: 12, margin: '8px 0 0', color: MUTED }}>Dónde queda el tablero: al ras del frente de las alacenas, o a otra distancia de la pared (20–70 cm).</p>
+            </div>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: MUTED }}>Se aplica al generar la distribución propuesta. En el editor puedes moverlo, cambiarle el ancho o quitarlo como cualquier módulo.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CmField({ label, value, onCommit, disabled }: { label: string; value: number; onCommit: (v: number) => void; disabled?: boolean }) {
   return (
     <div className="field">
@@ -787,6 +863,7 @@ export function SpecWizard(props: {
                   {seg('Tipo de apertura', s.prefs.apertura, ['Jaladera', 'Gola', 'Push'], 'Se refleja en todos los frentes del 3D.', (v) => setPrefs({ apertura: v as 'Jaladera' }), 'apertura')}
                   {segCm('Zócalo', s.prefs.zocalo, ['10 cm', '15 cm'], 'Altura del rodapié bajo los módulos.', (v) => setPrefs({ zocalo: v }), 'zocalo', 5, 30, 10)}
                 </div>
+                <CoverPrefs cubre={s.prefs.cubre} roomH={s.room.H} upperTop={150 + cmOf(s.prefs.alacena, 70)} onChange={(cubre) => setPrefs({ cubre })} readOnly={readOnly} />
                 <Budget value={s.prefs.presupuesto ?? 400000} currency={props.currency} onChange={(v) => setPrefs({ presupuesto: v })} disabled={readOnly} />
                 {modulePicker}
               </div>
@@ -906,6 +983,7 @@ export function SpecWizard(props: {
                             ['Alacenas', s.prefs.alacena ?? '—'],
                             ['Apertura', s.prefs.apertura],
                             ['Zócalo', s.prefs.zocalo ?? '—'],
+                            ['Cubre falta superior', s.prefs.cubre?.on ? `Sí · ${s.prefs.cubre.h != null ? `${s.prefs.cubre.h} cm` : 'hasta el techo'}${s.prefs.cubre.gap ? ` (holgura ${s.prefs.cubre.gap} cm)` : ''}` : 'No'],
                             ['Módulos propios', ownModules ? String(ownModules) : 'Estándar'],
                           ]
                         : isTv

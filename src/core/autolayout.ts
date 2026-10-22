@@ -2,7 +2,7 @@
 // modules from the organisation's catalogue using the room size, doors, windows, installation points, chosen
 // appliances and preferences. Pure and deterministic: same input → same modules.
 import { DEFAULT_MODULES } from './catalog';
-import { templateOf } from './editing';
+import { addCovers, templateOf } from './editing';
 import { zocaloCm } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
 import { applOf, closetOf, cmOf, distOf, ESTILOS, isCustomAppl, tvOf, tvSize } from './spec';
@@ -262,6 +262,12 @@ export function generateDesign(p: ProjectData, catalog: Record<string, ModuleDef
     .sort((x, y) => walls.indexOf(x.wall) - walls.indexOf(y.wall) || Number(x.tpl.type === 'upper' || x.tpl.type === 'hood') - Number(y.tpl.type === 'upper' || y.tpl.type === 'hood') || x.pos - y.pos)
     .map((x) => ({ ...structuredClone(x.tpl), ...x.patch, id: ++id, wall: x.wall, pos: x.pos, w: x.w }) as ModuleInstance);
   for (const m of islands) mods.push({ ...m, id: ++id });
+  // Especificaciones → Preferencias: a cubre falta superior over every run of uppers and columns.
+  if (isKitchen && p.prefs.cubre?.on) {
+    const covered = addCovers({ ...p, mods }, catalog).mods;
+    if (covered.length === mods.length) notes.push('No quedó espacio entre las alacenas y el techo para el cubre falta superior.');
+    mods.splice(0, mods.length, ...covered);
+  }
   for (const [name, ws] of misfit)
     notes.push(`«${name}» no admite ${[...ws].sort((a, b) => a - b).join(', ')} cm; en ${ws.size === 1 ? 'ese hueco' : 'esos huecos'} se usó el módulo estándar.`);
   return { mods, mats, notes };

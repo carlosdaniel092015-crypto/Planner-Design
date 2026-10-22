@@ -2,6 +2,7 @@
 // Pure functions: they take the project and return a new one (the caller keeps undo history).
 import { footprint, geo, liftable, zocaloCm, zr } from './geometry';
 import type { ModuleInstance, ProjectData } from './schema';
+import { DEFAULT_MODULES } from './catalog';
 import type { MaterialGroup, ModuleDefinition, ModuleShape, WallId } from './types';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -93,6 +94,7 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.shelves != null ? { shelves: def.shelves } : {}),
     ...(def.div ? { div: def.div } : {}),
     ...(def.back === 0 ? { back: 0 } : {}),
+    ...(def.build ? { build: clone(def.build) } : {}),
     moduleVersion: def.version,
   };
 }
@@ -152,9 +154,12 @@ export function fitCover(p: ProjectData, id: number): ProjectData {
   const under = coveredBy(p, m);
   const top = Math.round(under[0]?.top ?? m.z ?? 220);
   const r = ranges(m);
-  const h = Math.min(r.h[1], Math.round(p.room.H - top));
+  // Especificaciones → Preferencias: a fixed height or a gap under the ceiling, and its own depth.
+  const pref = p.prefs.cubre;
+  const room = Math.round(p.room.H - top - (pref?.gap ?? 0));
+  const h = Math.min(r.h[1], room, pref?.h ?? room);
   if (h < r.h[0]) return p;
-  const deep = under.find((u) => u.x.type === 'upper')?.x.d ?? under[0]?.x.d ?? m.d;
+  const deep = pref?.d ?? under.find((u) => u.x.type === 'upper')?.x.d ?? under[0]?.x.d ?? m.d;
   const d = Math.max(r.d[0], Math.min(r.d[1], deep));
   return { ...p, mods: p.mods.map((x) => (x.id === id ? { ...x, z: top, h, d } : x)) };
 }
@@ -178,6 +183,38 @@ export function addCover(p: ProjectData, tpl: ModuleShape, overId?: number | nul
   const nm = { ...clone(tpl), ...spot, id, w: Math.max(rw[0], Math.min(rw[1], host.w)) } as ModuleInstance;
   const project = fitCover({ ...p, mods: [...p.mods, nm] }, id);
   return { project, id, spot };
+}
+
+/**
+ * Puts a cubre falta superior over every run of uppers and columns on the walls (side by side and with the same top),
+ * fitted up to the ceiling as set in the preferences; existing fillers are replaced. Runs wider than the filler's
+ * range are split. Runs without room above are skipped.
+ */
+export function addCovers(p: ProjectData, catalog: Record<string, ModuleDefinition> = {}): ProjectData {
+  const def = catalog['CF-SUP']?.active ? catalog['CF-SUP'] : DEFAULT_MODULES.find((d) => d.code === 'CF-SUP')!;
+  const tpl = templateOf(def);
+  const maxW = tpl.rw?.[1] ?? 400;
+  const zoc = zocaloCm(p.prefs.zocalo);
+  let out: ProjectData = { ...p, mods: p.mods.filter((x) => !x.cover) };
+  for (const wall of ['A', 'B', 'C', 'D'] as const) {
+    const hosts = out.mods.filter((x) => x.wall === wall && (x.type === 'upper' || x.type === 'tall')).sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    const runs: { pos: number; end: number; top: number }[] = [];
+    for (const x of hosts) {
+      const top = zr(x, zoc)[1];
+      const last = runs[runs.length - 1];
+      if (last && (x.pos ?? 0) <= last.end + 0.5 && Math.abs(top - last.top) < 0.5) last.end = Math.max(last.end, (x.pos ?? 0) + x.w);
+      else runs.push({ pos: x.pos ?? 0, end: (x.pos ?? 0) + x.w, top });
+    }
+    for (const r of runs)
+      for (let a = r.pos; a < r.end - 0.5; a += maxW) {
+        const id = nextId(out);
+        const w = Math.round(Math.min(maxW, r.end - a));
+        const next = fitCover({ ...out, mods: [...out.mods, { ...clone(tpl), id, wall, pos: Math.round(a), w } as ModuleInstance] }, id);
+        // fitCover leaves it as it came when there is no room: drop it.
+        if (next.mods.find((x) => x.id === id)?.z != null) out = next;
+      }
+  }
+  return out;
 }
 
 export function replaceModule(p: ProjectData, id: number, tpl: ModuleShape): ProjectData {

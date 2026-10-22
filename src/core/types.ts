@@ -62,6 +62,34 @@ export interface ModuleShape {
   div?: number;
   /** Back panel: 0 = none (open back); anything else has the usual 6 mm back. */
   back?: number;
+  /** Panel by panel construction (module designer, like Polyboard); omitted = the usual box. */
+  build?: ModuleBuild;
+}
+
+/**
+ * Which carcass panels a module has and how they meet, like Polyboard's "Paneles". Each field omitted = the usual:
+ * full top (rails on a base), bottom, both sides, 6 mm back; top and bottom between the sides.
+ */
+export interface ModuleBuild {
+  /** Top: a full board, two rails (travesaños, front and back) or none. */
+  top?: 'completo' | 'travesanos' | 'no';
+  /** 'total' = the top runs over the sides (they are shorter); 'entre' = between them. */
+  topPos?: 'entre' | 'total';
+  bottom?: 0 | 1;
+  bottomPos?: 'entre' | 'total';
+  left?: 0 | 1;
+  right?: 0 | 1;
+  /** Back thickness: 6 mm (HDF) or 18 mm (a body board). */
+  backT?: 6 | 18;
+  /**
+   * Where the back goes: 'ranura' set in a groove inside the box (the usual), 'total' screwed over the whole back
+   * (the other panels are shallower) or 'entre' between the sides, top and bottom.
+   */
+  backPos?: 'ranura' | 'total' | 'entre';
+  /** Frontal: a fixed board closing the whole front (no doors or drawers). */
+  front?: 0 | 1;
+  /** Width of the top rails (mm). */
+  rail?: number;
 }
 
 export interface MaterialDefinition {

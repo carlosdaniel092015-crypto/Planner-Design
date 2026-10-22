@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   addCover,
+  moduleBoards,
+  addCovers,
+  generateDesign,
+  newProject,
   computeEstimate,
   DEFAULT_HARDWARE,
   DEFAULT_KITCHEN,
@@ -182,5 +186,127 @@ describe('API de la biblioteca', () => {
     expect(cat.data.context.modules['CF-SUP']).toMatchObject({ cover: 1, type: 'upper' });
     const bad = await t.req('POST', '/library/modules', { user: t.adminA, body: { ...body, recipe: { fr: [], div: 9 } } });
     expect(bad.status).toBe(422);
+  });
+
+  it('guarda qué es el mueble y su construcción por paneles', async () => {
+    const body = { name: 'MB 2 puertas', kind: 'fregadero', type: 'base', category: 'Bajos', minW: 30, maxW: 120, defW: 95, fixedH: 77, fixedD: 64, recipe: { fr: [{ t: 'door', n: 2, f: 1 }], sink: 1, build: { top: 'travesanos', bottomPos: 'total', backPos: 'total', backT: 18 } } };
+    const created = await t.req('POST', '/library/modules', { user: t.adminA, body });
+    expect(created.status).toBe(201);
+    expect(created.data.module).toMatchObject({ kind: 'fregadero', recipe: { build: { top: 'travesanos', bottomPos: 'total', backPos: 'total', backT: 18 } } });
+    const cat = await t.req('GET', '/catalog', { user: t.adminA });
+    expect(cat.data.context.modules[created.data.module.code].build).toMatchObject({ bottomPos: 'total', backT: 18 });
+    const bad = await t.req('POST', '/library/modules', { user: t.adminA, body: { ...body, recipe: { fr: [], build: { top: 'tal vez' } } } });
+    expect(bad.status).toBe(422);
+  });
+});
+
+describe('cubre falta en Especificaciones → Preferencias', () => {
+  const gen = (cubre?: object, H = 250) => {
+    const p = projectDataSchema.parse({ ...newProject('cocina'), room: { A: 360, B: 300, H }, prefs: { ...newProject('cocina').prefs, alacena: '70 cm', ...(cubre ? { cubre } : {}) } });
+    return { p, g: generateDesign(p, by(DEFAULT_MODULES)) };
+  };
+
+  it('sin marcar no se agrega', () => {
+    expect(gen().g.mods.some((m) => m.cover)).toBe(false);
+    expect(gen({ on: false }).g.mods.some((m) => m.cover)).toBe(false);
+  });
+
+  it('marcado: uno por tramo de alacenas y columnas, del ancho del tramo y hasta el techo', () => {
+    const { g } = gen({ on: true });
+    const covers = g.mods.filter((m) => m.cover);
+    expect(covers.length).toBeGreaterThan(0);
+    for (const c of covers) {
+      expect(c).toMatchObject({ type: 'upper', code: 'CF-SUP' });
+      // Over units of its wall, flush with their top, reaching the ceiling.
+      expect(c.z! + c.h).toBe(250);
+      const under = g.mods.filter((m) => !m.cover && m.wall === c.wall && (m.type === 'upper' || m.type === 'tall') && m.pos! < c.pos! + c.w && m.pos! + m.w > c.pos!);
+      expect(under.length).toBeGreaterThan(0);
+      expect(under.reduce((a, m) => a + m.w, 0)).toBeGreaterThanOrEqual(c.w);
+    }
+    // Uppers at 150 + 70: 30 cm up to a 250 cm ceiling. Ids stay unique.
+    expect(covers.some((c) => c.z === 220 && c.h === 30)).toBe(true);
+    expect(new Set(g.mods.map((m) => m.id)).size).toBe(g.mods.length);
+  });
+
+  it('respeta alto fijo, holgura con el techo y fondo', () => {
+    const fixed = gen({ on: true, h: 20 }).g.mods.find((m) => m.cover && m.z === 220)!;
+    expect(fixed.h).toBe(20);
+    const gap = gen({ on: true, gap: 2, d: 40 }).g.mods.find((m) => m.cover && m.z === 220)!;
+    expect(gap).toMatchObject({ h: 28, d: 40 });
+    // A fixed height never goes past the ceiling.
+    expect(gen({ on: true, h: 100 }).g.mods.find((m) => m.cover && m.z === 220)!.h).toBe(30);
+  });
+
+  it('donde no queda espacio no se agrega (sí sobre una columna más baja)', () => {
+    // With a low ceiling the uppers leave 5 cm above them; a 5 cm gap under the ceiling takes it all.
+    const { g } = gen({ on: true, gap: 5 }, 220);
+    const covers = g.mods.filter((m) => m.cover);
+    expect(covers.some((c) => c.wall === 'A')).toBe(false);
+    // The oven column tops out at 205 cm: 10 cm left under the gap.
+    expect(covers).toEqual([expect.objectContaining({ wall: 'B', z: 205, h: 10 })]);
+  });
+
+  it('si no cabe en ningún lado, lo avisa', () => {
+    const { g } = gen({ on: true, gap: 10 }, 200);
+    expect(g.mods.some((m) => m.cover)).toBe(false);
+    expect(g.notes.join(' ')).toMatch(/cubre falta/);
+  });
+
+  it('addCovers reemplaza los que ya había y parte los tramos de más de 400 cm', () => {
+    const p = kitchen([place('A-2P', 1, 0, { w: 120 }), place('A-2P', 2, 120, { w: 120 }), place('A-2P', 3, 240, { w: 120 }), place('A-2P', 4, 360, { w: 100 })]);
+    const once = addCovers({ ...p, room: { ...p.room, A: 500 } });
+    const covers = once.mods.filter((m) => m.cover);
+    expect(covers.map((c) => [c.pos, c.w])).toEqual([[0, 400], [400, 60]]);
+    expect(addCovers(once).mods.filter((m) => m.cover)).toHaveLength(2);
+  });
+});
+
+describe('construcción por paneles (como Polyboard)', () => {
+  const base = () => place('B-2P', 1, 0, { w: 95, h: 77, d: 64 });
+  const cut = (m: ModuleInstance) => Object.fromEntries(parts(m, DEFAULT_KITCHEN.mats, ctx.materials).map((p) => [p.pieza, p]));
+
+  it('sin cambios es la caja de siempre', () => {
+    const c = cut(base());
+    expect(c.Lateral).toMatchObject({ cant: 2, L: 770, A: 640 });
+    expect(c.Base).toMatchObject({ L: 950 - 36, A: 640 });
+    expect(c['Travesaño']).toMatchObject({ cant: 2, L: 950 - 36, A: 100 });
+    expect(c.Trasera).toMatchObject({ L: 946, A: 766, esp: 6 });
+  });
+
+  it('techo y suelo «Total» sobre los laterales: laterales más cortos, techo y suelo de lado a lado', () => {
+    const c = cut({ ...base(), build: { top: 'completo', topPos: 'total', bottomPos: 'total' } });
+    expect(c.Lateral).toMatchObject({ cant: 2, L: 770 - 36 });
+    expect(c.Techo).toMatchObject({ L: 950, A: 640 });
+    expect(c.Base).toMatchObject({ L: 950 });
+    expect(c['Travesaño']).toBeUndefined();
+  });
+
+  it('sin techo, sin lateral derecho, trasera de 18 mm entre laterales y frontal fijo', () => {
+    const m = { ...base(), build: { top: 'no' as const, right: 0 as const, backT: 18 as const, backPos: 'entre' as const, front: 1 as const } };
+    const c = cut(m);
+    expect(c.Techo).toBeUndefined();
+    expect(c['Travesaño']).toBeUndefined();
+    expect(c.Lateral).toMatchObject({ cant: 1 });
+    expect(c.Trasera).toMatchObject({ esp: 18, slot: 'cuerpo', L: 950 - 18, A: 770 - 18 });
+    // The bottom sits in front of the back.
+    expect(c.Base).toMatchObject({ L: 950 - 18, A: 640 - 18 });
+    expect(c.Frontal).toMatchObject({ cant: 1, L: 770 - 4, A: 950 - 4, slot: 'frentes' });
+    expect(c.Puerta).toBeUndefined();
+  });
+
+  it('trasera «Total» atornillada atrás: cubre todo y los demás paneles quedan menos profundos', () => {
+    const c = cut({ ...base(), build: { backPos: 'total', backT: 18 } });
+    expect(c.Trasera).toMatchObject({ L: 950, A: 770, esp: 18 });
+    expect(c.Lateral).toMatchObject({ A: 640 - 18 });
+  });
+
+  it('cada tablero sabe dónde va (para el 3D y el diseñador)', () => {
+    const bs = moduleBoards({ ...base(), build: { topPos: 'total', top: 'completo' } });
+    const left = bs.find((b) => b.role === 'lat-izq')!;
+    const top = bs.find((b) => b.role === 'techo')!;
+    expect(left.box).toEqual([0, 18, 0, 640, 0, 770 - 18]);
+    expect(top.box).toEqual([0, 950, 0, 640, 752, 770]);
+    expect(bs.filter((b) => b.role === 'puerta')).toHaveLength(2);
+    expect(projectDataSchema.parse({ ...DEFAULT_KITCHEN, mods: [{ ...base(), build: { top: 'no', backPos: 'total' } }] }).mods[0]!.build).toEqual({ top: 'no', backPos: 'total' });
   });
 });
