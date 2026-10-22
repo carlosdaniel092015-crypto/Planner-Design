@@ -1,4 +1,5 @@
 // Cut list — ported from the prototype's allParts()/corte()/exportCsv().
+import { zocaloCm } from './geometry';
 import { materialLabel } from './materials';
 import { boardThick, parts } from './parts';
 import type { ProjectData } from './schema';
@@ -34,7 +35,7 @@ export const BOARD = { L: 2440, A: 1830, areaM2: 4.47, waste: 0.15 } as const;
 export const sheetOf = (mat?: Pick<MaterialDefinition, 'sheet'>): [number, number] => (mat?.sheet && mat.sheet[0] >= 300 && mat.sheet[1] >= 300 ? mat.sheet : [BOARD.L, BOARD.A]);
 
 export function allParts(project: ProjectData, materials: Record<string, MaterialDefinition>) {
-  return project.mods.flatMap((m) => parts(m, project.mats, materials, project.prefs.junta).map((p) => ({ mod: m.id, ...p })));
+  return project.mods.flatMap((m) => parts(m, project.mats, materials, project.prefs.junta, zocaloCm(project.prefs.zocalo)).map((p) => ({ mod: m.id, ...p })));
 }
 
 /** Panels (planchas) fixed on the walls, as pieces of their board (mm). They belong to no module (mod 0). */

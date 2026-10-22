@@ -1,4 +1,4 @@
-import { type Currency, type Dim, type Estimate, elevationRange, frontInfo, liftable, type ModuleInstance, type Place, placeOf, type ProjectData, ranges, usesBoards, zocaloCm, zr } from '@core';
+import { type Currency, type Dim, type Estimate, elevationRange, frontInfo, liftable, type ModuleInstance, type Place, placeOf, type ProjectData, ranges, standOf, usesBoards, zocaloCm, zr } from '@core';
 import { useEffect, useRef, useState } from 'react';
 import type { CatalogMaterial } from '../api';
 import { fmtMoney, Icon, MUTED, Svg } from '../ui';
@@ -514,7 +514,7 @@ function Altura({ sel, data, readOnly, onLift, onFitCover }: { sel: ModuleInstan
         <Nudge label="Subir 5 cm" icon="chevrons-up" onStep={() => onLift(z + 5)} disabled={readOnly || z >= hi} />
       </div>
       <span style={{ fontSize: 12, color: MUTED }}>
-        {floor && sel.z == null ? `Sobre el zócalo de ${zoc} cm. ` : floor ? 'Flotando, sin zócalo. ' : ''}
+        {floor && sel.z == null ? standLabel(standOf(sel, zoc)) : floor ? 'Flotando, sin zócalo. ' : ''}
         {gap > 0 ? `Quedan ${gap} cm hasta el techo.` : 'Llega hasta el techo.'}
       </span>
       {floor && sel.z != null && (
@@ -532,3 +532,7 @@ function Altura({ sel, data, readOnly, onLift, onFitCover }: { sel: ModuleInstan
     </div>
   );
 }
+
+/** What a floor module stands on, for the height note. */
+const standLabel = (s: { h: number; kind: 'zocalo' | 'patas' | 'ninguno' }) =>
+  s.kind === 'patas' ? `Sobre patas de ${s.h} cm. ` : s.kind === 'ninguno' ? 'Apoyado en el piso. ' : `Sobre el zócalo de ${s.h} cm. `;

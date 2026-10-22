@@ -52,6 +52,14 @@ const buildFields = {
       backPos: z.enum(['ranura', 'total', 'entre']).optional(),
       front: z.union([z.literal(0), z.literal(1)]).optional(),
       rail: z.number().int().min(40).max(300).optional(),
+      ext: z
+        .object({
+          bottom: z.object({ t: z.enum(['proyecto', 'zocalo', 'patas', 'ninguno']), h: z.number().min(0).max(400).optional(), set: z.number().min(0).max(200).optional() }).optional(),
+          top: z.object({ t: z.enum(['ninguno', 'cornisa']), h: z.number().min(3).max(150).optional(), over: z.number().min(0).max(200).optional() }).optional(),
+          left: z.object({ t: z.enum(['ninguno', 'panel']), esp: z.number().min(3).max(60).optional(), floor: z.union([z.literal(0), z.literal(1)]).optional() }).optional(),
+          right: z.object({ t: z.enum(['ninguno', 'panel']), esp: z.number().min(3).max(60).optional(), floor: z.union([z.literal(0), z.literal(1)]).optional() }).optional(),
+        })
+        .optional(),
     })
     .optional(),
 };

@@ -2,7 +2,7 @@
 // mm, panel by panel construction, interior, equipment), the module's boards in 3D in the middle (drag to orbit, click
 // a board to edit its panel) with the fronts editor, and the live despiece on the right. Used for library modules
 // (Bibliotecas → Módulos) and for a module already placed in a project (only that copy changes).
-import { type BoardRole, buildOf, DEFAULT_MATERIALS, DEFAULT_MODULES, ESTILOS, type FrontSegment, frontCounts, isAppliance, type ModuleBuild, moduleBoards, type ModuleInstance, parts, placesFor } from '@core';
+import { type BoardRole, buildOf, DEFAULT_MATERIALS, DEFAULT_MODULES, ESTILOS, type FrontSegment, frontCounts, isAppliance, type ModuleBuild, type ModuleExt, moduleBoards, type ModuleInstance, parts, placesFor, standOf } from '@core';
 import { useMemo, useState } from 'react';
 import { Icon, MUTED } from '../ui';
 import { BoardView } from './BoardView';
@@ -252,6 +252,10 @@ const ROLE_PIECES: Record<BoardRole, string[]> = {
   puerta: ['Puerta'],
   cajon: ['Frente de cajón'],
   horno: ['Remate de horno'],
+  'ext-izq': ['Costado exterior'],
+  'ext-der': ['Costado exterior'],
+  cornisa: ['Cornisa'],
+  zocalo: ['Zócalo'],
 };
 /** Properties group each panel is edited in. */
 const ROLE_GROUP: Record<BoardRole, string> = {
@@ -268,6 +272,10 @@ const ROLE_GROUP: Record<BoardRole, string> = {
   puerta: 'frentes',
   cajon: 'frentes',
   horno: 'frentes',
+  'ext-izq': 'ext-izq',
+  'ext-der': 'ext-der',
+  cornisa: 'ext-sup',
+  zocalo: 'ext-inf',
 };
 
 /** One row of the property grid: name on the left, value on the right (like Polyboard's "Propiedades"). */
@@ -325,10 +333,18 @@ export function ModuleDesigner({ initial, title, cats, busy, onCancel, onSave, m
   const [d, setD] = useState<ModuleDraft>(initial);
   const [errs, setErrs] = useState<string[]>([]);
   const [picked, setPicked] = useState<BoardRole | null>(null);
-  const [open, setOpen] = useState<Record<string, boolean>>({ general: true, dim: true, paneles: true, techo: true, suelo: true, 'lat-der': true, 'lat-izq': true, trasera: true, frontal: true, interior: true, equipo: true, biblioteca: mode === 'library', coste: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ general: true, dim: true, paneles: true, techo: true, suelo: true, 'lat-der': true, 'lat-izq': true, trasera: true, frontal: true, ext: true, 'ext-sup': true, 'ext-inf': true, 'ext-izq': true, 'ext-der': true, interior: true, equipo: true, biblioteca: mode === 'library', coste: true });
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
   const set = (patch: Partial<ModuleDraft>) => setD((x) => ({ ...x, ...patch }));
   const setB = (patch: Partial<ModuleBuild>) => setD((x) => ({ ...x, build: { ...x.build, ...patch } }));
+  const ext: ModuleExt = d.build.ext ?? {};
+  /** One exterior zone; 'ninguno' / 'proyecto' (the default) removes it. */
+  const setExt = <K extends keyof ModuleExt>(k: K, v: ModuleExt[K] | undefined) =>
+    setD((x) => {
+      const next = { ...(x.build.ext ?? {}), [k]: v };
+      if (!v || (v.t === 'ninguno' && k !== 'bottom') || v.t === 'proyecto') delete next[k];
+      return { ...x, build: { ...x.build, ext: Object.keys(next).length ? next : undefined } };
+    });
   const cover = d.montaje === 'cover';
   const type = typeOf(d);
   const lib = mode === 'library';
@@ -352,8 +368,8 @@ export function ModuleDesigner({ initial, title, cats, busy, onCancel, onSave, m
     [d, type],
   );
   const b = buildOf(inst);
-  const boards = useMemo(() => (cover ? [{ n: 'Cubre falta superior', role: 'frontal' as const, box: [0, d.defW * 10, d.fixedD * 10 - 18, d.fixedD * 10, 0, d.fixedH * 10] as [number, number, number, number, number, number], L: 0, A: 0, esp: 18, slot: 'frentes' as const, veta: '', cantos: '', grp: 'door' as const }] : moduleBoards(inst)), [inst, cover, d.defW, d.fixedD, d.fixedH]);
-  const pieces = useMemo(() => parts(inst, PREVIEW_MATS, PREVIEW_MATERIALS), [inst]);
+  const boards = useMemo(() => (cover ? [{ n: 'Cubre falta superior', role: 'frontal' as const, box: [0, d.defW * 10, d.fixedD * 10 - 18, d.fixedD * 10, 0, d.fixedH * 10] as [number, number, number, number, number, number], L: 0, A: 0, esp: 18, slot: 'frentes' as const, veta: '', cantos: '', grp: 'door' as const }] : moduleBoards(inst, 18, 18, 4, standOf(inst, 10).h * 10)), [inst, cover, d.defW, d.fixedD, d.fixedH]);
+  const pieces = useMemo(() => parts(inst, PREVIEW_MATS, PREVIEW_MATERIALS, 4, 10), [inst]);
   const area = pieces.reduce((a, p) => a + (p.cant * p.L * p.A) / 1e6, 0);
   const counts = frontCounts(inst);
   const hinges = counts.doors * 2 + counts.tallDoors;
@@ -400,6 +416,31 @@ export function ModuleDesigner({ initial, title, cats, busy, onCancel, onSave, m
   const sidePos = b.topPos === 'entre' && b.bottomPos === 'entre' ? 'total' : b.topPos === 'total' && b.bottomPos === 'total' ? 'entre' : 'mixta';
   const setSidePos = (v: string) => (v === 'total' ? setB({ topPos: 'entre', bottomPos: 'entre' }) : setB({ topPos: 'total', bottomPos: 'total' }));
 
+  const extSide = (id: 'ext-izq' | 'ext-der', title: string, k: 'left' | 'right') => {
+    const z = ext[k];
+    return (
+      <Group id={id} title={title} open={open[id]!} onToggle={toggle} active={picked === id} level={1}>
+        <Row label="Tipo" hint="Costado exterior: un tablero visto en el color de los frentes, al ras de las puertas">
+          <select className="input" aria-label={`${title}: tipo`} value={z?.t ?? 'ninguno'} onChange={(e) => setExt(k, e.target.value === 'panel' ? { t: 'panel', esp: 18 } : undefined)} style={sel}>
+            <option value="ninguno">Ninguno</option>
+            <option value="panel">Costado exterior</option>
+          </select>
+        </Row>
+        {z?.t === 'panel' && (
+          <>
+            <Row label="Espesor">
+              <Mm label={`${title}: espesor`} cm={(z.esp ?? 18) / 10} min={0.3} max={6} onChange={(cm) => setExt(k, { ...z, esp: Math.round(cm * 10) })} />
+            </Row>
+            {type !== 'upper' && (
+              <Row label="Hasta el piso" hint="Baja hasta el piso tapando el zócalo">
+                <YesNo label={`${title}: hasta el piso`} value={!!z.floor} onChange={(v) => setExt(k, { ...z, floor: v ? 1 : 0 })} />
+              </Row>
+            )}
+          </>
+        )}
+      </Group>
+    );
+  };
   const panel = (id: 'lat-der' | 'lat-izq', title: string, key: 'right' | 'left') => (
     <Group id={id} title={title} open={open[id]!} onToggle={toggle} active={picked === id} level={1}>
       <Row label="Presente">
@@ -565,6 +606,62 @@ export function ModuleDesigner({ initial, title, cats, busy, onCancel, onSave, m
                     <span style={{ fontSize: 13, color: MUTED }}>Total</span>
                   </Row>
                 </Group>
+              </Group>
+            )}
+
+            {!cover && (
+              <Group id="ext" title="Zonas exteriores" open={open.ext!} onToggle={toggle}>
+                <Group id="ext-sup" title="Superior" open={open['ext-sup']!} onToggle={toggle} active={picked === 'cornisa'} level={1}>
+                  <Row label="Tipo" hint="Cornisa o tapa: un tablero sobre el mueble, en el color de los frentes">
+                    <select className="input" aria-label="Zona superior: tipo" value={ext.top?.t ?? 'ninguno'} onChange={(e) => setExt('top', e.target.value === 'cornisa' ? { t: 'cornisa', h: 30, over: 20 } : undefined)} style={sel}>
+                      <option value="ninguno">Ninguno</option>
+                      <option value="cornisa">Cornisa / tapa</option>
+                    </select>
+                  </Row>
+                  {ext.top?.t === 'cornisa' && (
+                    <>
+                      <Row label="Espesor">
+                        <Mm label="Cornisa: espesor" cm={(ext.top.h ?? 30) / 10} min={0.3} max={15} onChange={(cm) => setExt('top', { ...ext.top!, h: Math.round(cm * 10) })} />
+                      </Row>
+                      <Row label="Vuelo" hint="Cuánto sobresale al frente y a los lados">
+                        <Mm label="Cornisa: vuelo" cm={(ext.top.over ?? 0) / 10} min={0} max={20} onChange={(cm) => setExt('top', { ...ext.top!, over: Math.round(cm * 10) })} />
+                      </Row>
+                    </>
+                  )}
+                </Group>
+                {type !== 'upper' && (
+                  <Group id="ext-inf" title="Inferior" open={open['ext-inf']!} onToggle={toggle} active={picked === 'zocalo'} level={1}>
+                    <Row label="Tipo">
+                      <select
+                        className="input"
+                        aria-label="Zona inferior: tipo"
+                        value={ext.bottom?.t ?? 'proyecto'}
+                        onChange={(e) => {
+                          const t = e.target.value as NonNullable<ModuleExt['bottom']>['t'];
+                          setExt('bottom', t === 'proyecto' ? undefined : t === 'ninguno' ? { t } : { t, h: ext.bottom?.h ?? 100, ...(t === 'zocalo' ? { set: ext.bottom?.set ?? 50 } : {}) });
+                        }}
+                        style={sel}
+                      >
+                        <option value="proyecto">Zócalo del proyecto</option>
+                        <option value="zocalo">Zócalo propio</option>
+                        <option value="patas">Patas</option>
+                        <option value="ninguno">Ninguno (al piso)</option>
+                      </select>
+                    </Row>
+                    {(ext.bottom?.t === 'zocalo' || ext.bottom?.t === 'patas') && (
+                      <Row label="Altura">
+                        <Mm label="Zona inferior: altura" cm={(ext.bottom.h ?? 100) / 10} min={0} max={40} onChange={(cm) => setExt('bottom', { ...ext.bottom!, h: Math.round(cm * 10) })} />
+                      </Row>
+                    )}
+                    {ext.bottom?.t === 'zocalo' && (
+                      <Row label="Retranqueo" hint="Cuánto se mete el zócalo desde el frente del mueble">
+                        <Mm label="Zócalo: retranqueo" cm={(ext.bottom.set ?? 50) / 10} min={0} max={20} onChange={(cm) => setExt('bottom', { ...ext.bottom!, set: Math.round(cm * 10) })} />
+                      </Row>
+                    )}
+                  </Group>
+                )}
+                {extSide('ext-izq', 'Izquierda', 'left')}
+                {extSide('ext-der', 'Derecha', 'right')}
               </Group>
             )}
 

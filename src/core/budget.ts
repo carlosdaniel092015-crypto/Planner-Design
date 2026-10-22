@@ -3,6 +3,7 @@
 // hardware, labour) plus waste, margin and tax (ITBIS) from the organisation's settings.
 // Manual amounts stored in the project (pOv, pBase, priceAdj.counter/final) are in the organisation's base currency.
 // Tax: priceAdj.taxRate overrides the organisation rate for one project (0 = sin ITBIS).
+import { standOf, zocaloCm } from './geometry';
 import { frontCounts, parts } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { Currency, PricingContext, Rounding } from './types';
@@ -39,7 +40,7 @@ export function hardwareFor(m: ModuleInstance, project: ProjectData): HardwareUs
   if (apertura === 'Jaladera') add(`JALADERA-${project.mats.jaladeras.toUpperCase()}`, fronts);
   else if (apertura === 'Push') add('PUSH', fronts);
   else add('PERFIL-GOLA', (m.w / 100) * m.fr.filter((f) => f.t === 'door' || f.t === 'drawer').length);
-  if ((m.type === 'base' || m.type === 'tall') && !m.appl) add('PATA', 4);
+  if ((m.type === 'base' || m.type === 'tall') && !m.appl && standOf(m, 1).kind !== 'ninguno') add('PATA', 4);
   add('TUBO-COLGADOR', rods);
   return out;
 }
@@ -107,7 +108,7 @@ export function computeEstimate(project: ProjectData, ctx: PricingContext, curre
       return { ...base, basis: def ? 'catalogo' : 'sin_precio', materials: 0, hardware: 0, labor, total: labor };
     }
     let materials = 0;
-    for (const p of parts(m, project.mats, ctx.materials, project.prefs.junta)) {
+    for (const p of parts(m, project.mats, ctx.materials, project.prefs.junta, zocaloCm(project.prefs.zocalo))) {
       const mat = ctx.materials[p.matCode];
       if (!mat) continue;
       materials += ((p.cant * p.L * p.A) / 1e6) * waste * conv(mat.priceM2, mat.priceCurrency);
