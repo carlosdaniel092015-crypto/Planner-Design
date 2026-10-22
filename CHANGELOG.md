@@ -14,6 +14,18 @@ Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la vers
 - Al generar la distribución propuesta se pone **un cubre falta sobre cada tramo de alacenas y columnas**, del mismo ancho (los tramos de más de 4 m se parten en dos). Si en algún lugar no cabe, no se pone, y si no cabe en ninguno te lo avisa.
 - Sale en el **Resumen** del paso 6. En el editor, «Ajustar hasta el techo» y los cubre faltas nuevos usan también estas medidas.
 
+### Diseñador de módulos como Polyboard y SketchUp
+- El diseñador (Bibliotecas → Módulos → «Crear módulo» o «Editar en el diseñador») ahora trabaja **panel por panel**, como Polyboard:
+  - **Propiedades** a la izquierda, por grupos que se abren y cierran: **Dimensiones en mm** (altura, anchura, profundidad, anchura mínima y máxima), **Paneles** (Techo, Suelo, Lateral derecho, Lateral izquierdo, Trasera y Frontal) con **«Presente»** y **«Posición»**, Interior, Equipamiento, Biblioteca y **Coste**.
+  - **Techo:** sí, **travesaños** (con su ancho) o no. **Techo y suelo:** «Total» (sobre los laterales, de lado a lado) o «Entre laterales». **Laterales:** «Total» (de piso a techo) o «Entre techo y suelo».
+  - **Trasera:** «Ranurada», «Total» (atornillada sobre toda la parte de atrás) o «Entre laterales», de **6 mm o 18 mm**. **Frontal:** un tablero fijo que cierra todo el frente.
+  - Cada cambio recalcula al momento la **lista de corte**: laterales más cortos, techo de lado a lado, paneles menos profundos detrás de una trasera de 18 mm…
+- **Vista 3D como SketchUp:** **arrastra para girar**, usa la rueda para acercar y cambia a frente, lateral, planta o isométrica. Hay modo **alambre** y **cotas en mm**. Debajo están las vistas de frente, lateral y planta.
+- **Haz clic en una pieza** del 3D: se marca, se abren sus propiedades y se resalta en la lista de corte.
+- **«¿Qué es?»:** eliges qué mueble es (bajo, cajonera, bajo fregadero, bajo parrilla, esquinero, alacena, alacena sobre nevera, columna horno, despensa, mueble para nevera, lavadora, microondas o extractor, cubre falta, colgado, cajonera o zapatero de closet, consola o torre de TV…). Pone su montaje, categoría, ubicación predeterminada y unos frentes para empezar, y queda guardado con el módulo.
+- **En el proyecto:** en las propiedades de un módulo colocado está **«Editar en el diseñador»**. Cambia solo esa pieza del proyecto, no la de la biblioteca.
+- El 3D del editor dibuja los mismos tableros que salen en el despiece.
+
 ## 1.33.0 · 2026-10-21
 
 ### Cubre falta superior

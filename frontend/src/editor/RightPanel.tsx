@@ -51,6 +51,8 @@ export function RightPanel(props: {
   onDuplicate: () => void;
   onReplace: () => void;
   onRemove: () => void;
+  /** Opens the module designer on this module (parametric furniture only). */
+  onDesign?: () => void;
   onMove: (to: Place) => void;
   /** Moves the module up or down: its bottom at this height (cm from the floor); null = back on the plinth / 150 cm line. */
   onLift: (z: number | null) => void;
@@ -140,6 +142,13 @@ export function RightPanel(props: {
         </div>
 
         <Ubicacion sel={sel} data={data} readOnly={readOnly} onMove={props.onMove} onLift={props.onLift} onFitCover={props.onFitCover} onTurn={props.onTurn} onRot={props.onRot} />
+
+        {props.onDesign && buildable && !sel.glb && !sel.range && !sel.appl && !readOnly && (
+          <button type="button" className="btn btn-secondary" onClick={props.onDesign} style={{ justifyContent: 'flex-start' }}>
+            <Icon name="box" size={15} />
+            Editar en el diseñador (paneles, medidas en mm)
+          </button>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, borderTop: '2px solid var(--color-divider)' }}>
           <h6 style={{ margin: 0 }}>Medidas</h6>

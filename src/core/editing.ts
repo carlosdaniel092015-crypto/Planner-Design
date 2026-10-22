@@ -94,6 +94,7 @@ export function templateOf(def: ModuleDefinition): ModuleShape & { moduleVersion
     ...(def.shelves != null ? { shelves: def.shelves } : {}),
     ...(def.div ? { div: def.div } : {}),
     ...(def.back === 0 ? { back: 0 } : {}),
+    ...(def.build ? { build: clone(def.build) } : {}),
     moduleVersion: def.version,
   };
 }

@@ -39,6 +39,21 @@ const buildFields = {
   div: z.number().int().min(0).max(6).optional(),
   /** 0 = no back panel. */
   back: z.union([z.literal(0), z.literal(1)]).optional(),
+  /** Panel by panel construction (top, bottom, sides, back and how they meet). */
+  build: z
+    .object({
+      top: z.enum(['completo', 'travesanos', 'no']).optional(),
+      topPos: z.enum(['entre', 'total']).optional(),
+      bottom: z.union([z.literal(0), z.literal(1)]).optional(),
+      bottomPos: z.enum(['entre', 'total']).optional(),
+      left: z.union([z.literal(0), z.literal(1)]).optional(),
+      right: z.union([z.literal(0), z.literal(1)]).optional(),
+      backT: z.union([z.literal(6), z.literal(18)]).optional(),
+      backPos: z.enum(['ranura', 'total', 'entre']).optional(),
+      front: z.union([z.literal(0), z.literal(1)]).optional(),
+      rail: z.number().int().min(40).max(300).optional(),
+    })
+    .optional(),
 };
 /** How an uploaded model is drawn: as a native module (fronts that open) or as its own 3D model. */
 const drawField = z.enum(['nativo', 'modelo']).optional();

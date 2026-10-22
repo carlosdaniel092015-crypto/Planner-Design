@@ -46,6 +46,7 @@ import { RightPanel, RotateControl } from '../editor/RightPanel';
 import { Viewer3D } from '../editor/Viewer3D';
 import { ApprovalView } from '../approval/ApprovalView';
 import { LibraryDialog } from '../library/LibraryDialog';
+import { draftOfInstance, draftToInstancePatch, ModuleDesigner } from '../library/ModuleDesigner';
 import { SpecWizard } from '../spec/SpecWizard';
 import { SyncBadge, useSyncStatus } from '../offline/SyncBadge';
 import { clearDraft, flushProject, getCatalog, getProject, type LocalSave, onSyncEvent, type SyncEvent, saveProject, stashDraft } from '../offline/sync';
@@ -90,6 +91,8 @@ export function EditorPage() {
   const [genStep, setGenStep] = useState<number | null>(null);
   const [suggest, setSuggest] = useState(false);
   const [libTab, setLibTab] = useState<'tex' | 'mod' | null>(null);
+  // Module designer open on a placed module (its id).
+  const [designId, setDesignId] = useState<number | null>(null);
   const [cotas, setCotas] = useState(true);
   const [altos, setAltos] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -1129,6 +1132,7 @@ export function EditorPage() {
                 commit(next);
                 flash('Cubre falta ajustado hasta el techo');
               }}
+              onDesign={() => sel && setDesignId(sel)}
               onRemove={() => {
                 if (!sel) return;
                 commit(removeModule(data, sel));
@@ -1285,6 +1289,20 @@ export function EditorPage() {
             ))}
           </div>
         </Dialog>
+      )}
+      {designId != null && data.mods.some((m) => m.id === designId) && (
+        <ModuleDesigner
+          mode="project"
+          initial={draftOfInstance(data.mods.find((m) => m.id === designId)!)}
+          title={`Módulo ${designId} · ${data.mods.find((m) => m.id === designId)!.name}`}
+          cats={[]}
+          onCancel={() => setDesignId(null)}
+          onSave={(d) => {
+            commit(updateModule(data, designId, draftToInstancePatch(d)));
+            setDesignId(null);
+            flash(`Módulo ${designId} actualizado`);
+          }}
+        />
       )}
       {libTab && (
         <LibraryDialog

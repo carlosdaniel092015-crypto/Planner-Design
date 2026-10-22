@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   addCover,
+  moduleBoards,
   addCovers,
   generateDesign,
   newProject,
@@ -186,6 +187,17 @@ describe('API de la biblioteca', () => {
     const bad = await t.req('POST', '/library/modules', { user: t.adminA, body: { ...body, recipe: { fr: [], div: 9 } } });
     expect(bad.status).toBe(422);
   });
+
+  it('guarda qué es el mueble y su construcción por paneles', async () => {
+    const body = { name: 'MB 2 puertas', kind: 'fregadero', type: 'base', category: 'Bajos', minW: 30, maxW: 120, defW: 95, fixedH: 77, fixedD: 64, recipe: { fr: [{ t: 'door', n: 2, f: 1 }], sink: 1, build: { top: 'travesanos', bottomPos: 'total', backPos: 'total', backT: 18 } } };
+    const created = await t.req('POST', '/library/modules', { user: t.adminA, body });
+    expect(created.status).toBe(201);
+    expect(created.data.module).toMatchObject({ kind: 'fregadero', recipe: { build: { top: 'travesanos', bottomPos: 'total', backPos: 'total', backT: 18 } } });
+    const cat = await t.req('GET', '/catalog', { user: t.adminA });
+    expect(cat.data.context.modules[created.data.module.code].build).toMatchObject({ bottomPos: 'total', backT: 18 });
+    const bad = await t.req('POST', '/library/modules', { user: t.adminA, body: { ...body, recipe: { fr: [], build: { top: 'tal vez' } } } });
+    expect(bad.status).toBe(422);
+  });
 });
 
 describe('cubre falta en Especificaciones → Preferencias', () => {
@@ -246,5 +258,55 @@ describe('cubre falta en Especificaciones → Preferencias', () => {
     const covers = once.mods.filter((m) => m.cover);
     expect(covers.map((c) => [c.pos, c.w])).toEqual([[0, 400], [400, 60]]);
     expect(addCovers(once).mods.filter((m) => m.cover)).toHaveLength(2);
+  });
+});
+
+describe('construcción por paneles (como Polyboard)', () => {
+  const base = () => place('B-2P', 1, 0, { w: 95, h: 77, d: 64 });
+  const cut = (m: ModuleInstance) => Object.fromEntries(parts(m, DEFAULT_KITCHEN.mats, ctx.materials).map((p) => [p.pieza, p]));
+
+  it('sin cambios es la caja de siempre', () => {
+    const c = cut(base());
+    expect(c.Lateral).toMatchObject({ cant: 2, L: 770, A: 640 });
+    expect(c.Base).toMatchObject({ L: 950 - 36, A: 640 });
+    expect(c['Travesaño']).toMatchObject({ cant: 2, L: 950 - 36, A: 100 });
+    expect(c.Trasera).toMatchObject({ L: 946, A: 766, esp: 6 });
+  });
+
+  it('techo y suelo «Total» sobre los laterales: laterales más cortos, techo y suelo de lado a lado', () => {
+    const c = cut({ ...base(), build: { top: 'completo', topPos: 'total', bottomPos: 'total' } });
+    expect(c.Lateral).toMatchObject({ cant: 2, L: 770 - 36 });
+    expect(c.Techo).toMatchObject({ L: 950, A: 640 });
+    expect(c.Base).toMatchObject({ L: 950 });
+    expect(c['Travesaño']).toBeUndefined();
+  });
+
+  it('sin techo, sin lateral derecho, trasera de 18 mm entre laterales y frontal fijo', () => {
+    const m = { ...base(), build: { top: 'no' as const, right: 0 as const, backT: 18 as const, backPos: 'entre' as const, front: 1 as const } };
+    const c = cut(m);
+    expect(c.Techo).toBeUndefined();
+    expect(c['Travesaño']).toBeUndefined();
+    expect(c.Lateral).toMatchObject({ cant: 1 });
+    expect(c.Trasera).toMatchObject({ esp: 18, slot: 'cuerpo', L: 950 - 18, A: 770 - 18 });
+    // The bottom sits in front of the back.
+    expect(c.Base).toMatchObject({ L: 950 - 18, A: 640 - 18 });
+    expect(c.Frontal).toMatchObject({ cant: 1, L: 770 - 4, A: 950 - 4, slot: 'frentes' });
+    expect(c.Puerta).toBeUndefined();
+  });
+
+  it('trasera «Total» atornillada atrás: cubre todo y los demás paneles quedan menos profundos', () => {
+    const c = cut({ ...base(), build: { backPos: 'total', backT: 18 } });
+    expect(c.Trasera).toMatchObject({ L: 950, A: 770, esp: 18 });
+    expect(c.Lateral).toMatchObject({ A: 640 - 18 });
+  });
+
+  it('cada tablero sabe dónde va (para el 3D y el diseñador)', () => {
+    const bs = moduleBoards({ ...base(), build: { topPos: 'total', top: 'completo' } });
+    const left = bs.find((b) => b.role === 'lat-izq')!;
+    const top = bs.find((b) => b.role === 'techo')!;
+    expect(left.box).toEqual([0, 18, 0, 640, 0, 770 - 18]);
+    expect(top.box).toEqual([0, 950, 0, 640, 752, 770]);
+    expect(bs.filter((b) => b.role === 'puerta')).toHaveLength(2);
+    expect(projectDataSchema.parse({ ...DEFAULT_KITCHEN, mods: [{ ...base(), build: { top: 'no', backPos: 'total' } }] }).mods[0]!.build).toEqual({ top: 'no', backPos: 'total' });
   });
 });
