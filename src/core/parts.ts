@@ -1,4 +1,5 @@
 // Board parts per module — ported 1:1 from the prototype's parts() (millimetres).
+import { standOf } from './geometry';
 import { BACK_PANEL_MATERIAL, materialLabel } from './materials';
 import type { ModelPanel, ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
@@ -219,8 +220,11 @@ export function frontsFromPanels(m: Pick<ModuleInstance, 'w' | 'h' | 'panels' | 
 /** Thickness (mm) of the pieces cut from a material: the board's own, else the usual 18 mm. */
 export const boardThick = (mat?: Pick<MaterialDefinition, 'thick'>) => (mat?.thick && mat.thick >= 3 && mat.thick <= 60 ? mat.thick : 18);
 
-/** `junta`: gap between doors and drawers (mm), what each front is cut short of its opening (4 mm unless set). */
-export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>, junta?: number): Part[] {
+/**
+ * `junta`: gap between doors and drawers (mm), what each front is cut short of its opening (4 mm unless set).
+ * `zoc`: the project's plinth (cm), for exterior side panels that go down to the floor (10 cm unless given).
+ */
+export function parts(m: ModuleLike, mats: Mats, materials: Record<string, MaterialDefinition>, junta?: number, zoc = 10): Part[] {
   const J = junta != null && junta >= 0 && junta <= 10 ? junta : 4;
   const W = m.w * 10;
   const H = m.h * 10;
@@ -260,12 +264,12 @@ export function parts(m: ModuleLike, mats: Mats, materials: Record<string, Mater
     add('Panel frontal', 1, H - J, W - J, tf, 'frentes', 'Vertical', '4L', 'door');
     return P.map((p, i) => ({ ...p, ref: i + 1 }));
   }
-  for (const b of moduleBoards(m, t, tf, J)) add(b.n, 1, b.L, b.A, b.esp, b.slot, b.veta, b.cantos, b.grp);
+  for (const b of moduleBoards(m, t, tf, J, standOf(m, zoc).h * 10)) add(b.n, 1, b.L, b.A, b.esp, b.slot, b.veta, b.cantos, b.grp);
   return mergeParts(P);
 }
 
 /** Which panel of the module a board is (the designer selects and edits them by this). */
-export type BoardRole = 'techo' | 'travesano' | 'suelo' | 'lat-izq' | 'lat-der' | 'trasera' | 'frontal' | 'division' | 'entrepano' | 'divisor' | 'puerta' | 'cajon' | 'horno';
+export type BoardRole = 'techo' | 'travesano' | 'suelo' | 'lat-izq' | 'lat-der' | 'trasera' | 'frontal' | 'division' | 'entrepano' | 'divisor' | 'puerta' | 'cajon' | 'horno' | 'ext-izq' | 'ext-der' | 'cornisa' | 'zocalo';
 
 /** One board of a parametric module where it stands: box in mm (x from the left, y from the back, z from its bottom). */
 export interface Board {
@@ -306,13 +310,66 @@ export function buildOf(m: Pick<ModuleInstance, 'type' | 'back' | 'build'>) {
   } as const;
 }
 
+/** Exterior zones of a module in mm: side panels and cornice (inside its width and height), its own plinth board. */
+export function extOf(m: Pick<ModuleInstance, 'type' | 'build'>) {
+  const e = m.build?.ext ?? {};
+  const side = (s?: { t: string; esp?: number }) => (s?.t === 'panel' ? (s.esp ?? 18) : 0);
+  const floor = m.type === 'base' || m.type === 'tall';
+  return {
+    left: side(e.left),
+    right: side(e.right),
+    leftFloor: !!e.left?.floor && floor,
+    rightFloor: !!e.right?.floor && floor,
+    top: e.top?.t === 'cornisa' ? (e.top.h ?? 30) : 0,
+    over: e.top?.t === 'cornisa' ? (e.top.over ?? 0) : 0,
+    plinth: floor && e.bottom?.t === 'zocalo' ? { h: e.bottom.h ?? 100, set: e.bottom.set ?? 50 } : null,
+  };
+}
+
+type BoardsOf = Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'glb' | 'panels' | 'pdim' | 'shelves' | 'div' | 'back' | 'build'>;
+
 /**
- * The boards of a parametric module, panel by panel, where they stand (mm). Built like Polyboard: each panel present
+ * The boards of a parametric module where they stand (mm), with its exterior zones (Polyboard's «Zonas exteriores»):
+ * side panels and a cornice take their room inside the module's width and height and the box (with its fronts) fits
+ * in what is left; its own plinth board goes under it, `standH` mm high when it reaches the floor.
+ */
+export function moduleBoards(m: BoardsOf, t = 18, tf = 18, J = 4, standH = 0): Board[] {
+  const x = extOf(m);
+  if (!x.left && !x.right && !x.top && !x.plinth) return boxBoards(m, t, tf, J);
+  const W = m.w * 10;
+  const H = m.h * 10;
+  const D = m.d * 10;
+  const inner = { ...m, w: Math.max(1, W - x.left - x.right) / 10, h: Math.max(1, H - x.top) / 10 };
+  const out = boxBoards(inner, t, tf, J).map((b) => ({ ...b, box: [b.box[0] + x.left, b.box[1] + x.left, b.box[2], b.box[3], b.box[4], b.box[5]] as Board['box'] }));
+  const bd = (n: string, role: BoardRole, box: Board['box'], L: number, A: number, esp: number, slot: PartSlot, veta: string, cantos: string, grp: PartGroup): Board => ({ n, role, box, L: Math.round(L), A: Math.round(A), esp, slot, veta, cantos, grp });
+  const plinthH = x.plinth ? x.plinth.h : standH;
+  // Exterior side panels in the fronts' finish, flush with the doors; down to the floor if asked.
+  if (x.left) {
+    const z0 = x.leftFloor ? -plinthH : 0;
+    out.push(bd('Costado exterior', 'ext-izq', [0, x.left, 0, D + tf, z0, H], H - z0, D + tf, x.left, 'frentes', 'Vertical', '4L', 'lat'));
+  }
+  if (x.right) {
+    const z0 = x.rightFloor ? -plinthH : 0;
+    out.push(bd('Costado exterior', 'ext-der', [W - x.right, W, 0, D + tf, z0, H], H - z0, D + tf, x.right, 'frentes', 'Vertical', '4L', 'lat'));
+  }
+  if (x.top) out.push(bd('Cornisa', 'cornisa', [-x.over, W + x.over, 0, D + tf + x.over, H - x.top, H], W + 2 * x.over, D + tf + x.over, x.top, 'frentes', 'Horizontal', '4L', 'top'));
+  if (x.plinth) {
+    // Plinth board set back under the box, between the side panels that go down to the floor.
+    const x0 = x.leftFloor ? x.left : 0;
+    const x1 = W - (x.rightFloor ? x.right : 0);
+    const y1 = D - x.plinth.set;
+    out.push(bd('Zócalo', 'zocalo', [x0, x1, y1 - t, y1, -x.plinth.h, 0], x1 - x0, x.plinth.h, t, 'cuerpo', 'Horizontal', '1L', 'base'));
+  }
+  return out;
+}
+
+/**
+ * The boards of a parametric box, panel by panel, where they stand (mm). Built like Polyboard: each panel present
  * or not, top and bottom over the sides ('total') or between them ('entre'), the back in a groove, over the whole back
  * or between the sides, and an optional fixed front. `t` body thickness, `tf` fronts thickness, `J` gap between fronts.
  * The despiece, the 3D and the designer's views all come from here.
  */
-export function moduleBoards(m: Pick<ModuleInstance, 'w' | 'h' | 'd' | 'type' | 'fr' | 'glb' | 'panels' | 'pdim' | 'shelves' | 'div' | 'back' | 'build'>, t = 18, tf = 18, J = 4): Board[] {
+function boxBoards(m: BoardsOf, t: number, tf: number, J: number): Board[] {
   const W = m.w * 10;
   const H = m.h * 10;
   const D = m.d * 10;

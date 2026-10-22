@@ -1,7 +1,7 @@
 // Isometric scene as a JSON draw list — ported 1:1 from the prototype's iso() (planner-engine.js).
 // Used for thumbnails and as a lightweight fallback when WebGL is not available.
 import { burnerSpots, type DrawItem, type Drawing } from './drawing';
-import { geo, shade, zocaloCm, zr } from './geometry';
+import { geo, shade, standOf, zocaloCm, zr } from './geometry';
 import { bodyMaterialOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition } from './types';
@@ -143,9 +143,10 @@ export function iso(p: ProjectData, materials: Record<string, MaterialDefinition
       L(0.1, 0.66, 0.1, 0.8, '#6f7374', 2.2);
       continue;
     }
-    if (m.type !== 'upper' && m.z == null && zoc > 0) {
-      if (isB) box(g.x0, g.x1 - 5, g.y0, g.y1, 0, zoc, '#3b3936');
-      else box(g.x0, g.x1, g.y0 + (m.wall === 'F' ? 5 : 0), g.y1 - 5, 0, zoc, '#3b3936');
+    const sh = standOf(m, zoc);
+    if (m.type !== 'upper' && m.z == null && sh.kind === 'zocalo' && sh.h > 0) {
+      if (isB) box(g.x0, g.x1 - 5, g.y0, g.y1, 0, sh.h, '#3b3936');
+      else box(g.x0, g.x1, g.y0 + (m.wall === 'F' ? 5 : 0), g.y1 - 5, 0, sh.h, '#3b3936');
     }
     box(g.x0, g.x1, g.y0, g.y1, z0, z1, C.b, ex);
     const fh = z1 - z0;

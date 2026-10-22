@@ -1,6 +1,6 @@
 // Bridges the React editor with the prototype's 3D renderer (public/planner-3d.js) and builds
 // small drawings (module front thumbnails) from the shared core.
-import { bodyMaterialOf, type CameraState, type Drawing, type DrawItem, drawsNative, front2D, frontsOf, geo, isLooseFrontBoard, type ModuleInstance, moduleBoards, type ProjectData, zocaloCm, zr } from '@core';
+import { bodyMaterialOf, type CameraState, type Drawing, type DrawItem, drawsNative, extOf, front2D, frontsOf, geo, isLooseFrontBoard, type ModuleInstance, moduleBoards, type ProjectData, standOf, zocaloCm, zr } from '@core';
 import type { CatalogMaterial } from '../api';
 
 /** three.js files vendored in public/vendor (the renderer loads unpkg otherwise). */
@@ -148,7 +148,7 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
           ? { ...m, cue: bodyMaterialOf(m, p.mats) }
           : // Built panel by panel in the designer: the 3D draws the same boards as the despiece (fronts apart).
             m.build && !m.glb
-            ? { ...m, carcass: moduleBoards(m, 18, 18, p.prefs.junta ?? 4).filter((b) => b.slot !== 'frentes' || b.role === 'frontal') }
+            ? withExt(m, p)
             : m,
     ),
     mats: p.mats,
@@ -166,6 +166,21 @@ export function sceneCfg(p: ProjectData, extra: { sel: number | null; sels?: num
     cotas: extra.cotas,
     altos: extra.altos,
     bg: extra.dark ? '#131211' : '#d3cec6',
+  };
+}
+
+/** A module built panel by panel: its boards for the 3D, what it stands on, and where its fronts fit (exterior zones). */
+function withExt(m: ModuleInstance, p: ProjectData) {
+  const stand = standOf(m, zocaloCm(p.prefs.zocalo));
+  const x = extOf(m);
+  const keep = new Set(['frontal', 'ext-izq', 'ext-der', 'cornisa']);
+  return {
+    ...m,
+    stand: stand.kind,
+    fx0: x.left,
+    fx1: x.right,
+    ftop: x.top,
+    carcass: moduleBoards(m, 18, 18, p.prefs.junta ?? 4, stand.h * 10).filter((b) => b.slot !== 'frentes' || keep.has(b.role)),
   };
 }
 

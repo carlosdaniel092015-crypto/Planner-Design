@@ -1,5 +1,5 @@
 // Plan/elevation geometry — ported 1:1 from the prototype (planner-engine.js geo, zr, wallPt, shade).
-import type { ModuleType, WallId } from './types';
+import type { ModuleBuild, ModuleType, WallId } from './types';
 
 interface Placeable {
   wall: WallId;
@@ -14,6 +14,19 @@ interface Placeable {
   z?: number;
   /** Free module turned (degrees, any angle): 0 faces wall D, 90 wall C, 180 wall A, 270 wall B. x/y = corner of the box it takes. */
   rot?: number;
+  build?: ModuleBuild;
+}
+
+/**
+ * What a floor module stands on (cm): its own exterior zone (a plinth or legs of its height, or nothing) or the
+ * project's plinth.
+ */
+export function standOf(m: { build?: ModuleBuild }, zoc: number): { h: number; kind: 'zocalo' | 'patas' | 'ninguno' } {
+  const b = m.build?.ext?.bottom;
+  if (!b || b.t === 'proyecto') return { h: zoc, kind: zoc > 0 ? 'zocalo' : 'ninguno' };
+  if (b.t === 'ninguno') return { h: 0, kind: 'ninguno' };
+  const h = (b.h ?? 100) / 10;
+  return { h, kind: h > 0 ? b.t : 'ninguno' };
 }
 
 /** An island turned 90° or 270° takes its depth along x and its width along y. */
@@ -62,20 +75,21 @@ export function geo(m: Placeable, room?: RoomSize) {
 export const wallLength = (wall: 'A' | 'B' | 'C' | 'D', room: RoomSize) => (wall === 'A' || wall === 'D' ? room.A : room.B);
 
 /** Vertical range [z0, z1] in cm; `zoc` is the plinth height. */
-export function zr(m: Pick<Placeable, 'type' | 'h' | 'z'>, zoc: number): [number, number] {
+export function zr(m: Pick<Placeable, 'type' | 'h' | 'z' | 'build'>, zoc: number): [number, number] {
   if (m.type === 'upper') return [m.z ?? 150, (m.z ?? 150) + m.h];
   if (m.type === 'fridge') return [0, m.h];
   if (m.type === 'hood') return [m.z ?? 150, (m.z ?? 150) + m.h];
   // A floor module moved up or down floats at its own height (no plinth under it).
   if (m.z != null) return [m.z, m.z + m.h];
-  return [zoc, zoc + m.h];
+  const s = standOf(m, zoc).h;
+  return [s, s + m.h];
 }
 
 /** Floor modules that can be moved up or down (appliances that stand on the floor can't). */
 export const liftable = (m: { type: ModuleType; range?: number | boolean }) => m.type !== 'fridge' && !m.range;
 
 /** A floor module standing on the plinth (not raised or lowered by hand). */
-export const onPlinth = (m: { type: ModuleType; z?: number; range?: number | boolean }) => (m.type === 'base' || m.type === 'tall') && m.z == null && !m.range;
+export const onPlinth = (m: { type: ModuleType; z?: number; range?: number | boolean; build?: ModuleBuild }) => (m.type === 'base' || m.type === 'tall') && m.z == null && !m.range && standOf(m, 1).kind === 'zocalo';
 
 /** Point along a wall at distance t, n cm into the room. */
 export function wallPt(wall: WallId, t: number, n: number, A: number, B: number): [number, number] {

@@ -1,7 +1,7 @@
 // Vector drawings as JSON draw lists (plan and wall elevations) — ported from the prototype's
 // plan()/elev()/front2D() without the click handlers. The frontend renders `items` into an <svg viewBox={vb}>.
-import { corners, geo, onPlinth, shade, wallPt, zocaloCm, zr } from './geometry';
-import { bodyMaterialOf, frontsOf } from './parts';
+import { corners, geo, onPlinth, shade, standOf, wallPt, zocaloCm, zr } from './geometry';
+import { bodyMaterialOf, extOf, frontsOf } from './parts';
 import type { ModuleInstance, ProjectData } from './schema';
 import type { MaterialDefinition, WallId } from './types';
 
@@ -338,8 +338,19 @@ export function elev(p: ProjectData, wall: 'A' | 'B' | 'C' | 'D', materials: Rec
     const x0 = X(m.pos!, m.w);
     // A freestanding range stands on the floor (no plinth) up to the worktop, with its own top.
     const z0 = m.range ? 0 : z0r;
-    if (onPlinth(m) && zoc > 0) rect(x0, Y(zoc), m.w, zoc, '#3b3936', 'none', 0);
-    front2D({ ...m, fr: frontsOf(m) }, x0, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id, p.prefs.junta);
+    // What it stands on (its own exterior zone or the project's plinth), its side panels and cornice; the fronts fit inside.
+    const st = standOf(m, zoc);
+    const ex = extOf(m);
+    const [l, r, cor, over] = [ex.left / 10, ex.right / 10, ex.top / 10, ex.over / 10];
+    if (onPlinth(m) && st.h > 0) rect(x0 + (ex.leftFloor ? l : 0), Y(st.h), m.w - (ex.leftFloor ? l : 0) - (ex.rightFloor ? r : 0), st.h, '#3b3936', 'none', 0);
+    if (st.kind === 'patas' && m.z == null && (m.type === 'base' || m.type === 'tall'))
+      for (const lx of [x0 + 3, x0 + m.w - 6]) rect(lx, Y(st.h), 3, st.h, '#9ea2a3', '#6b6f72', 0.4);
+    if (l || r || cor) {
+      if (l) rect(x0, Y(z1), l, z1 - z0 + (ex.leftFloor ? st.h : 0), C.f);
+      if (r) rect(x0 + m.w - r, Y(z1), r, z1 - z0 + (ex.rightFloor ? st.h : 0), C.f);
+      if (cor) rect(x0 - over, Y(z1), m.w + 2 * over, cor, C.f);
+      front2D({ ...m, w: m.w - l - r, fr: frontsOf(m) }, x0 + l, Y(z1 - cor), m.w - l - r, z1 - z0 - cor, C, hstyle, it, m.id, p.prefs.junta);
+    } else front2D({ ...m, fr: frontsOf(m) }, x0, Y(z1), m.w, z1 - z0, C, hstyle, it, m.id, p.prefs.junta);
     if (m.type === 'hood') rect(x0 + m.w / 2 - 15, 0, 30, Y(z1), '#d0d3d4', '#8f9394', 0.6);
     if (m.type === 'base' && !m.range) rect(x0, Y(z1 + 4), m.w, 4, C.c, shade(C.c, -0.3), 0.6);
     if (m.range) rect(x0, Y(z1 + 2), m.w, 2, '#2a2928', '#1d1c1b', 0.4);

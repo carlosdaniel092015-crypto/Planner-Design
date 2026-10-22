@@ -218,7 +218,10 @@ function buildModule(m, ctx) {
   let seed = m.id * 97 + Math.round(m.pos || m.x || 0);
   // Uploaded modules stand on the plinth like the parametric ones (recessed 6 cm; islands on both faces).
   // A floor module moved up or down (m.z) floats: no plinth under it.
-  const plinth = () => { if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && m.z == null && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
+  // m.stand (exterior zone under the module): 'patas' legs, 'ninguno' nothing; its own plinth board comes in m.carcass.
+  const ownPlinth = m.carcass && m.carcass.some(b => b.role === 'zocalo');
+  const legs = () => { if (m.stand === 'patas' && m.z == null && yb > 0) [[.05, .05], [W - .05, .05], [.05, D - .08], [W - .05, D - .08]].forEach(([x, z]) => { const l = new T.Mesh(new T.CylinderGeometry(.018, .022, yb, 16), mats.chrome()); l.position.set(x, yb / 2, z); l.castShadow = true; g.add(l); }); };
+  const plinth = () => { legs(); if (m.type !== 'upper' && m.type !== 'fridge' && m.type !== 'hood' && m.z == null && m.stand !== 'patas' && m.stand !== 'ninguno' && !ownPlinth && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, D - .018 - .06 - rz, mats.plinth(), .002, 0, rz); } };
   if (m.boards && m.boards.length) {
     plinth();
     // Uploaded model built from boards: each board where it is, in the project's body / front material.
@@ -314,7 +317,8 @@ function buildModule(m, ctx) {
     return g;
   }
   const FT = .018, TT = .018, gap = (ctx.junta != null ? ctx.junta : 4) / 2000, cd = D - FT, hh = yt - yb;
-  if (m.type !== 'upper' && m.z == null && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
+  legs();
+  if (m.type !== 'upper' && m.z == null && m.stand !== 'patas' && m.stand !== 'ninguno' && !ownPlinth && ctx.zoc > 0) { const rz = m.wall === 'F' ? .06 : 0; bx(g, W - .004, yb, cd - .06 - rz, mats.plinth(), .002, 0, rz); }
   const body = (w, h) => texMat(bodyId, w, h, false, seed++);
   const nDiv = Math.max(0, Math.min(6, m.div || 0)), cw = (W - 2 * TT - nDiv * TT) / (nDiv + 1);
   if (m.carcass) {
@@ -324,6 +328,8 @@ function buildModule(m, ctx) {
     m.carcass.forEach(bd => {
       const [x0, x1, y0, y1, z0, z1] = bd.box.map(v => v / 1000), w = x1 - x0, h = z1 - z0;
       if (bd.role === 'frontal') bx(g, w, h, FT, texMat(frId, w, h, false, seed++), x0, yb + z0, cd, { round: 1 });
+      // Exterior zones: side panels and cornice in the fronts' finish (they reach the doors' face).
+      else if (bd.role === 'ext-izq' || bd.role === 'ext-der' || bd.role === 'cornisa') bx(g, w, h, (y1 - y0) * k, texMat(frId, bd.role === 'cornisa' ? w : y1 - y0, h, bd.role === 'cornisa', seed++), x0, yb + z0, y0 * k);
       else bx(g, w, h, (y1 - y0) * k, body(Math.max(w, y1 - y0), h), x0, yb + z0, y0 * k);
     });
   } else {
@@ -335,6 +341,10 @@ function buildModule(m, ctx) {
     if (m.shelves != null) for (let c = 0; c <= nDiv; c++) for (let i = 1; i <= m.shelves; i++) bx(g, cw, TT, cd - .02, body(cw, cd), TT + c * (cw + TT), yb + TT + (hh - 2 * TT) * i / (m.shelves + 1), .006);
   }
   if (m.type === 'upper') bx(g, W - .04, .004, .012, mats.led(), .02, yb - .004, cd - .06, { noCast: 1 });
+  // Fronts fit inside the exterior side panels and under the cornice (m.fx0 / m.fx1 / m.ftop, mm).
+  const fx0 = (m.fx0 || 0) / 1000, fg = fx0 ? new T.Group() : g;
+  if (fx0) { fg.position.x = fx0; g.add(fg); }
+  ((g, W, hh) => {
   let v = 0;
   m.fr.forEach(seg => {
     const s0 = yb + v * hh, s1 = yb + (v + seg.f) * hh, sh = s1 - s0; v += seg.f;
@@ -397,6 +407,7 @@ function buildModule(m, ctx) {
     if (seg.t === 'niche') nicheAppl(g, seg.ap || 'nevera', W, s0, s1, cd, TT, v < .999 ? body(W, cd) : null);
     if (gc) bx(g, W, gc, .03, mats.gola(), 0, s1 - gc, cd - .012);
   });
+  })(fg, W - ((m.fx0 || 0) + (m.fx1 || 0)) / 1000, hh - (m.ftop || 0) / 1000);
   return g;
 }
 /** Appliance standing in a housing niche (fridge, washer, microwave, slide-out extractor), plus the divider above it. */

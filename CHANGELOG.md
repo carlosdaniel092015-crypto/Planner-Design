@@ -3,6 +3,21 @@
 Formato: versión (semver) · fecha. Cada cambio que llega a `main` sube la versión en `package.json` y añade su entrada aquí:
 **parche** (1.0.x) para correcciones, **menor** (1.x.0) para funciones nuevas, **mayor** (x.0.0) para cambios que rompen algo.
 
+## 1.35.0 · 2026-10-22
+
+### Zonas exteriores en el diseñador de módulos
+- En el panel **Propiedades** del diseñador hay un grupo nuevo, **«Zonas exteriores»**, como en Polyboard, con lo que va alrededor del mueble:
+  - **Superior:** **cornisa / tapa**, con su **espesor** y su **vuelo** (lo que sobresale al frente y a los lados).
+  - **Inferior** (bajos y columnas):
+    - **Zócalo del proyecto**, como hasta ahora.
+    - **Zócalo propio**, con su altura y su **retranqueo**. Sale como pieza en la lista de corte.
+    - **Patas**, con su altura.
+    - **Ninguno**: el mueble se apoya en el piso.
+  - **Izquierda y derecha:** **costado exterior**, un tablero visto en el color de los frentes y al ras de las puertas, con su espesor y la opción **«Hasta el piso»** para tapar el zócalo.
+- Los costados y la cornisa van **dentro de la medida del mueble**: la caja y las puertas se acomodan a lo que queda. Así el ancho y el alto en el proyecto siguen siendo los del mueble completo.
+- Todo se ve en el 3D del diseñador y del proyecto: las patas, el zócalo propio, los costados y la cornisa. También en el alzado y en la **lista de corte**, con piezas como «Costado exterior», «Cornisa» y «Zócalo». Con «Ninguno» el mueble no lleva patas niveladoras en el presupuesto.
+- En las propiedades del módulo, «Altura desde el piso» dice si está sobre el zócalo, sobre patas o en el piso.
+
 ## 1.34.0 · 2026-10-22
 
 ### Cubre falta superior en Especificaciones

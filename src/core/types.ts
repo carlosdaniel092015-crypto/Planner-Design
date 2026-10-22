@@ -90,6 +90,22 @@ export interface ModuleBuild {
   front?: 0 | 1;
   /** Width of the top rails (mm). */
   rail?: number;
+  /** Exterior zones (Polyboard's «Zonas exteriores»): what goes around the box. */
+  ext?: ModuleExt;
+}
+
+/**
+ * Exterior zones, in mm. The side panels and the cornice are inside the module's width and height (the box gets
+ * narrower / lower); the plinth or legs go under it like the project's plinth.
+ */
+export interface ModuleExt {
+  /** Under the module: the project's plinth (default), its own plinth board, legs, or nothing (on the floor). */
+  bottom?: { t: 'proyecto' | 'zocalo' | 'patas' | 'ninguno'; h?: number; set?: number };
+  /** On top: a cornice / top board, overhanging `over` mm at the front and sides. */
+  top?: { t: 'ninguno' | 'cornisa'; h?: number; over?: number };
+  /** Exterior side panels (costado visto): thickness, and down to the floor over the plinth. */
+  left?: { t: 'ninguno' | 'panel'; esp?: number; floor?: 0 | 1 };
+  right?: { t: 'ninguno' | 'panel'; esp?: number; floor?: 0 | 1 };
 }
 
 export interface MaterialDefinition {

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   addCover,
+  hardwareFor,
+  standOf,
   moduleBoards,
   addCovers,
   generateDesign,
@@ -308,5 +310,48 @@ describe('construcción por paneles (como Polyboard)', () => {
     expect(top.box).toEqual([0, 950, 0, 640, 752, 770]);
     expect(bs.filter((b) => b.role === 'puerta')).toHaveLength(2);
     expect(projectDataSchema.parse({ ...DEFAULT_KITCHEN, mods: [{ ...base(), build: { top: 'no', backPos: 'total' } }] }).mods[0]!.build).toEqual({ top: 'no', backPos: 'total' });
+  });
+});
+
+describe('zonas exteriores (como Polyboard)', () => {
+  const base = (build: ModuleInstance['build']) => ({ ...place('B-2P', 1, 0, { w: 95, h: 77, d: 64 }), build }) as ModuleInstance;
+  const cut = (m: ModuleInstance) => Object.fromEntries(parts(m, DEFAULT_KITCHEN.mats, ctx.materials).map((p) => [p.pieza, p]));
+
+  it('costados exteriores: dentro del ancho, al ras de las puertas; la caja y los frentes quedan más angostos', () => {
+    const c = cut(base({ ext: { left: { t: 'panel', esp: 18 }, right: { t: 'panel', esp: 18 } } }));
+    expect(c['Costado exterior']).toMatchObject({ cant: 2, L: 770, A: 640 + 18, slot: 'frentes' });
+    expect(c.Base).toMatchObject({ L: 950 - 36 - 36 });
+    expect(c.Puerta).toMatchObject({ cant: 2, A: Math.round((950 - 36) / 2 - 4) });
+  });
+
+  it('un costado hasta el piso tapa el zócalo', () => {
+    const bs = moduleBoards(base({ ext: { left: { t: 'panel', floor: 1 } } }), 18, 18, 4, 100);
+    expect(bs.find((b) => b.role === 'ext-izq')).toMatchObject({ L: 870, box: [0, 18, 0, 658, -100, 770] });
+    // The cut list knows the project's plinth (and the module's own legs).
+    expect(parts(base({ ext: { left: { t: 'panel', floor: 1 } } }), DEFAULT_KITCHEN.mats, ctx.materials, 4, 15).find((p) => p.pieza === 'Costado exterior')).toMatchObject({ L: 920 });
+    expect(parts(base({ ext: { left: { t: 'panel', floor: 1 }, bottom: { t: 'patas', h: 120 } } }), DEFAULT_KITCHEN.mats, ctx.materials).find((p) => p.pieza === 'Costado exterior')).toMatchObject({ L: 890 });
+  });
+
+  it('cornisa con vuelo: más ancha que el mueble y la caja más baja', () => {
+    const c = cut(base({ ext: { top: { t: 'cornisa', h: 30, over: 20 } } }));
+    expect(c.Cornisa).toMatchObject({ L: 950 + 40, A: 640 + 18 + 20, esp: 30 });
+    expect(c.Lateral).toMatchObject({ L: 770 - 30 });
+  });
+
+  it('zona inferior: zócalo propio (con su pieza), patas o nada', () => {
+    const own = base({ ext: { bottom: { t: 'zocalo', h: 150, set: 50 } } });
+    expect(zr(own, 10)).toEqual([15, 92]);
+    expect(cut(own)['Zócalo']).toMatchObject({ L: 950, A: 150 });
+    const legs = base({ ext: { bottom: { t: 'patas', h: 120 } } });
+    expect(standOf(legs, 10)).toEqual({ h: 12, kind: 'patas' });
+    expect(hardwareFor(legs, DEFAULT_KITCHEN).find((h) => h.code === 'PATA')).toBeTruthy();
+    const floor = base({ ext: { bottom: { t: 'ninguno' } } });
+    expect(zr(floor, 10)).toEqual([0, 77]);
+    expect(hardwareFor(floor, DEFAULT_KITCHEN).find((h) => h.code === 'PATA')).toBeUndefined();
+    // No plinth in the elevation for legs or nothing.
+    const plinths = (m: ModuleInstance) => elev(kitchen([m]), 'A', ctx.materials).items.filter((i) => i.fill === '#3b3936').length;
+    expect(plinths(legs)).toBe(plinths(base(undefined)) - 1);
+    expect(plinths(floor)).toBe(plinths(base(undefined)) - 1);
+    expect(projectDataSchema.parse({ ...DEFAULT_KITCHEN, mods: [own] }).mods[0]!.build?.ext?.bottom).toEqual({ t: 'zocalo', h: 150, set: 50 });
   });
 });
